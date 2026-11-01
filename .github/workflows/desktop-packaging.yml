@@ -1,0 +1,306 @@
+name: Desktop CI and Release
+
+on:
+  pull_request:
+    branches: [public, develop, main]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer with optional leading v (defaults to tag or wails.json)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  self-hosted-changes:
+    name: Detect self-hosted PR changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.paths.outputs.self-hosted }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The synthetic merge's first parent is the PR base. Compare the full
+          # PR, including deletions/renames, without fetching repository history.
+          fetch-depth: 2
+      - name: Test PR path selection
+        run: python3 scripts/ci/test_self_hosted_changes.py
+      - name: Select self-hosted validation
+        id: paths
+        run: git diff --name-only --no-renames -z HEAD^1 HEAD | python3 scripts/ci/self_hosted_changes.py >> "$GITHUB_OUTPUT"
+
+  quality:
+    uses: ./.github/workflows/ci-pr.yml
+
+  browser-quality:
+    needs: quality
+    uses: ./.github/workflows/browser-quality.yml
+
+  package-desktop-linux:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'public'))
+    name: Build and test Linux
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: |
+            apps/api/go.sum
+            apps/desktop/go.sum
+      - name: Install desktop build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config xvfb curl
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-frontend
+          path: apps/desktop/frontend/dist
+      - name: Build desktop using the tested frontend
+        working-directory: apps/desktop
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+        run: node scripts/build.mjs -s -platform linux/amd64 -tags webkit2_41
+      - name: Package Linux archive
+        working-directory: apps/desktop
+        run: |
+          mkdir -p build/releases/maker-track-studio-linux-amd64-${RELEASE_ID}
+          cp "build/bin/Maker Track Studio" build/releases/maker-track-studio-linux-amd64-${RELEASE_ID}/
+          cp ../../LICENSE build/releases/maker-track-studio-linux-amd64-${RELEASE_ID}/
+          cp ../../THIRD_PARTY_FONTS_OFL-1.1.txt build/releases/maker-track-studio-linux-amd64-${RELEASE_ID}/
+          cp README-DISTRIBUTION.md build/releases/maker-track-studio-linux-amd64-${RELEASE_ID}/README.md
+          tar -czf build/releases/maker-track-studio-linux-amd64-${RELEASE_ID}.tar.gz -C build/releases maker-track-studio-linux-amd64-${RELEASE_ID}
+      - name: Test packaged application
+        working-directory: apps/desktop
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: >
+          timeout --kill-after=5s 90s xvfb-run
+          --auto-servernum
+          --server-args="-screen 0 1280x800x24 -ac"
+          bash scripts/smoke-test-linux-bundle.sh
+          "build/releases/maker-track-studio-linux-amd64-${RELEASE_ID}.tar.gz"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-linux
+          path: apps/desktop/build/releases/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  package-desktop-windows:
+    name: Build and test Windows
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'public'))
+    needs: quality
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: |
+            apps/api/go.sum
+            apps/desktop/go.sum
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-frontend
+          path: apps/desktop/frontend/dist
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.12.0 -y --no-progress
+
+          $nsisPathCandidates = @(
+            "$env:ProgramFiles\NSIS",
+            "$env:ProgramFiles\NSIS\Bin",
+            "${env:ProgramFiles(x86)}\NSIS",
+            "${env:ProgramFiles(x86)}\NSIS\Bin",
+            "C:\ProgramData\chocolatey\bin"
+          )
+
+          $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+          if (-not $makensis) {
+            foreach ($candidate in $nsisPathCandidates) {
+              if ($candidate -and (Test-Path (Join-Path $candidate 'makensis.exe'))) {
+                $candidate | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+                $env:PATH = "$candidate;$env:PATH"
+                $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+                break
+              }
+            }
+          }
+
+          if (-not $makensis) { throw 'makensis.exe not found after installing NSIS' }
+          makensis.exe -VERSION
+
+      - name: Test diagnostic storage on Windows
+        working-directory: apps/api
+        run: go test ./diagnostics
+      - name: Build desktop and installer using the tested frontend
+        working-directory: apps/desktop
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+        run: node scripts/build.mjs -s -platform windows/amd64 -nsis
+      - name: Locate NSIS installer
+        id: locate_installer
+        shell: pwsh
+        working-directory: apps/desktop
+        run: |
+          $installer = Get-ChildItem -Path build/bin -Recurse -Filter '*installer*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $installer) {
+            Get-ChildItem -Path build -Recurse | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize | Out-String -Width 240
+            throw 'NSIS installer not found in build/bin'
+          }
+          "installer_path=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Check Windows signing inputs
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        id: signing_inputs
+        shell: pwsh
+        env:
+          WINDOWS_SIGN_PFX_BASE64: ${{ secrets.WINDOWS_SIGN_PFX_BASE64 }}
+          WINDOWS_SIGN_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGN_PFX_PASSWORD }}
+        run: |
+          $enabled = [bool]($env:WINDOWS_SIGN_PFX_BASE64 -and $env:WINDOWS_SIGN_PFX_PASSWORD)
+          "enabled=$($enabled.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Optional code sign Windows artifacts
+        if: ${{ steps.signing_inputs.outputs.enabled == 'true' }}
+        shell: pwsh
+        working-directory: apps/desktop
+        env:
+          WINDOWS_SIGN_PFX_BASE64: ${{ secrets.WINDOWS_SIGN_PFX_BASE64 }}
+          WINDOWS_SIGN_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGN_PFX_PASSWORD }}
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_SIGN_PFX_BASE64))
+
+          $binaryPath = Resolve-Path 'build/bin/Maker Track Studio.exe'
+          $installerPath = '${{ steps.locate_installer.outputs.installer_path }}'
+
+          signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfxPath /p $env:WINDOWS_SIGN_PFX_PASSWORD $binaryPath
+          signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfxPath /p $env:WINDOWS_SIGN_PFX_PASSWORD $installerPath
+
+      - name: Package Windows artifacts after optional signing
+        working-directory: apps/desktop
+        env:
+          INSTALLER_PATH: ${{ steps.locate_installer.outputs.installer_path }}
+        run: |
+          $bundleDir = "build/releases/maker-track-studio-windows-amd64-$env:RELEASE_ID"
+          New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
+          Copy-Item -LiteralPath 'build/bin/Maker Track Studio.exe' -Destination $bundleDir
+          Copy-Item -LiteralPath '../../LICENSE' -Destination $bundleDir
+          Copy-Item -LiteralPath '../../THIRD_PARTY_FONTS_OFL-1.1.txt' -Destination $bundleDir
+          Copy-Item -LiteralPath 'README-DISTRIBUTION.md' -Destination "$bundleDir/README.md"
+          Compress-Archive -Path $bundleDir -DestinationPath "build/releases/maker-track-studio-windows-amd64-$env:RELEASE_ID.zip"
+          Copy-Item -LiteralPath $env:INSTALLER_PATH -Destination "build/releases/maker-track-studio-windows-amd64-$env:RELEASE_ID-installer.exe"
+          Copy-Item -LiteralPath 'README-DISTRIBUTION.md' -Destination 'build/releases/README.md'
+      - name: Test Windows archive
+        run: ./apps/desktop/scripts/smoke-test-windows-bundle.ps1 -ArchivePath apps/desktop/build/releases/maker-track-studio-windows-amd64-$env:RELEASE_ID.zip
+      - name: Test Windows installer
+        run: ./apps/desktop/scripts/smoke-test-windows-installer.ps1 -InstallerPath apps/desktop/build/releases/maker-track-studio-windows-amd64-$env:RELEASE_ID-installer.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-windows
+          path: |
+            apps/desktop/build/releases/*.zip
+            apps/desktop/build/releases/*-installer.exe
+            apps/desktop/build/releases/README.md
+          if-no-files-found: error
+          retention-days: 14
+
+  self-hosted:
+    if: >-
+      always() && !cancelled() && needs.quality.result == 'success' &&
+      ((github.event_name == 'pull_request' && needs.self-hosted-changes.result == 'success' && needs.self-hosted-changes.outputs.required == 'true') ||
+       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.PUBLIC_RELEASE_REPOSITORY != '' && github.repository == vars.PUBLIC_RELEASE_REPOSITORY))
+    needs: [quality, self-hosted-changes]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/self-hosted.yml
+
+  publish-self-hosted-image:
+    if: >-
+      always() && !cancelled() && needs.quality.result == 'success' && needs.self-hosted.result == 'success' &&
+      needs.browser-quality.result == 'success' && needs.package-desktop-linux.result == 'success' &&
+      needs.package-desktop-windows.result == 'success' &&
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.PUBLIC_RELEASE_REPOSITORY != '' && github.repository == vars.PUBLIC_RELEASE_REPOSITORY
+    needs: [quality, browser-quality, self-hosted, package-desktop-linux, package-desktop-windows]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/self-hosted-publish.yml
+
+  publish-desktop-release:
+    name: Publish tagged desktop release
+    if: >-
+      always() && !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') &&
+      needs.quality.result == 'success' && needs.browser-quality.result == 'success' &&
+      needs.package-desktop-linux.result == 'success' &&
+      needs.package-desktop-windows.result == 'success' && needs.publish-self-hosted-image.result == 'success'
+    needs: [quality, browser-quality, package-desktop-linux, package-desktop-windows, publish-self-hosted-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: release-artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          name: self-hosted-release-evidence
+          path: self-hosted-evidence
+      - name: Package self-hosted execution evidence
+        run: |
+          tar -czf release-artifacts/self-hosted-execution-evidence.tar.gz -C self-hosted-evidence .
+          cp self-hosted-evidence/image-reference.txt release-artifacts/self-hosted-image.txt
+      - name: Prepare release qualification notes
+        run: |
+          {
+            printf '%s\n\n' 'Self-hosted: trusted LAN use only. Installation on devices is manual. No public port forwarding.'
+            printf '%s\n' 'Pinned multi-platform image (Linux AMD64 and ARM64):'
+            cat self-hosted-evidence/image-reference.txt
+            printf '\n%s\n' 'Execution results (NOT_EXECUTED means no previous published baseline was supplied):'
+            find self-hosted-evidence/runtime-evidence -name result.txt -print -exec cat {} \;
+            printf '\n%s\n' 'Broader browser coverage, physical LAN acceptance and clean staging verification require recorded release qualification evidence. See docs/SELF_HOSTED.md.'
+          } > self-hosted-release-notes.md
+      - name: Checksum release assets
+        run: |
+          cd release-artifacts
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*-installer.exe' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          test -s SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body_path: self-hosted-release-notes.md
+          files: |
+            release-artifacts/SHA256SUMS
+            release-artifacts/self-hosted-execution-evidence.tar.gz
+            release-artifacts/self-hosted-image.txt
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.zip
+            release-artifacts/**/*-installer.exe
+            release-artifacts/**/*.md
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

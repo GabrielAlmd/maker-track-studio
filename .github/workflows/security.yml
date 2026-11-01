@@ -1,0 +1,102 @@
+name: Dependency Security
+
+on:
+  workflow_call:
+    inputs:
+      report-prefix:
+        type: string
+        default: dependency
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go-vulnerability-scan:
+    name: Go vulnerabilities - ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: ${{ github.event_name == 'pull_request' }}
+      matrix:
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+            desktop: true
+            tags: webkit2_41
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+            desktop: false
+            tags: ''
+          - target: windows-amd64
+            runner: windows-2025
+            desktop: true
+            tags: ''
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: |
+            apps/api/go.sum
+            apps/desktop/go.sum
+      - name: Install Linux desktop source analysis libraries
+        if: matrix.target == 'linux-amd64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+      - name: Prepare source analysis and report directories
+        run: |
+          mkdir -p apps/desktop/frontend/dist security-reports
+          printf '<!doctype html>' > apps/desktop/frontend/dist/index.html
+      - name: Install pinned Go vulnerability scanner
+        id: scanner
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+      - name: Test vulnerability exit-code gate
+        if: matrix.target == 'linux-amd64'
+        run: python3 scripts/ci/test_scan_go.py
+      - name: Scan API dependencies for the native target
+        working-directory: apps/api
+        run: bash ../../scripts/ci/scan-go.sh ../../security-reports/api
+      - name: Scan desktop dependencies for the native target
+        if: >-
+          !cancelled() && steps.scanner.outcome == 'success' && matrix.desktop &&
+          (github.event_name != 'pull_request' || success())
+        working-directory: apps/desktop
+        env:
+          SCAN_TAGS: ${{ matrix.tags }}
+        run: bash ../../scripts/ci/scan-go.sh ../../security-reports/desktop -tags "$SCAN_TAGS"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ inputs.report-prefix || 'dependency' }}-go-security-${{ matrix.target }}
+          path: security-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  npm-vulnerability-scan:
+    name: Locked npm dependencies - high and critical
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Audit all locked frontend dependencies
+        working-directory: apps/web
+        run: npm audit --package-lock-only --audit-level=high --json > npm-audit.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ inputs.report-prefix || 'dependency' }}-npm-security
+          path: apps/web/npm-audit.json
+          if-no-files-found: warn
+          retention-days: 14

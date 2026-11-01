@@ -1,0 +1,73 @@
+name: Publish scanned self-hosted images
+
+# The sole caller gates this workflow on quality/security and native validation.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.PUBLIC_RELEASE_REPOSITORY != '' && github.repository == vars.PUBLIC_RELEASE_REPOSITORY
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4.4.1
+      - name: Install OCI image transfer tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: scanned-image-*
+          path: scanned-images
+      - name: Publish scanned OCI archives without rebuilding
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$REGISTRY_TOKEN" | skopeo login --authfile "${{ runner.temp }}/registry-auth.json" --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          image="ghcr.io/gabrielalmd/maker-track-studio:$GITHUB_REF_NAME"
+          for arch in amd64 arm64; do
+            skopeo copy --all --preserve-digests --authfile "${{ runner.temp }}/registry-auth.json" "oci-archive:scanned-images/scanned-image-$arch/image.tar" "docker://$image-$arch"
+          done
+      - uses: docker/login-action@v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assemble versioned multi-platform manifest
+        run: |
+          image="ghcr.io/gabrielalmd/maker-track-studio:$GITHUB_REF_NAME"
+          docker buildx imagetools create --tag "$image" "$image-amd64" "$image-arm64"
+      - name: Verify published manifest
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          docker buildx imagetools inspect ghcr.io/gabrielalmd/maker-track-studio:${GITHUB_REF_NAME} --raw > manifest.json
+          jq -e '[.manifests[].platform | .os + "/" + .architecture] | index("linux/amd64") != null and index("linux/arm64") != null' manifest.json
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: self-hosted-runtime-*
+          path: runtime-evidence
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*security*'
+          path: security-evidence
+      - name: Record immutable image reference
+        run: |
+          digest=$(docker buildx imagetools inspect "ghcr.io/gabrielalmd/maker-track-studio:$GITHUB_REF_NAME" --format '{{json .Manifest}}' | jq -er '.digest')
+          printf 'ghcr.io/gabrielalmd/maker-track-studio:%s@%s\n' "$GITHUB_REF_NAME" "$digest" > image-reference.txt
+          cat image-reference.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: self-hosted-release-evidence
+          path: |
+            manifest.json
+            image-reference.txt
+            runtime-evidence/
+            security-evidence/
+          if-no-files-found: error

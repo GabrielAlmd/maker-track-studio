@@ -1,0 +1,46 @@
+worker_processes auto;
+pid /tmp/nginx/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 1024; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log off;
+    server_tokens off;
+    client_body_temp_path /tmp/nginx/body;
+    proxy_temp_path /tmp/nginx/proxy;
+    fastcgi_temp_path /tmp/nginx/fastcgi;
+    uwsgi_temp_path /tmp/nginx/uwsgi;
+    scgi_temp_path /tmp/nginx/scgi;
+    server {
+        listen 8443 ssl default_server;
+        server_name @@HOST@@;
+        ssl_certificate @@TLS@@/server.pem;
+        ssl_certificate_key @@TLS@@/server.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        if ($http_host != "@@AUTHORITY@@") { return 421; }
+        auth_basic "Maker Track";
+        auth_basic_user_file /etc/maker-track/auth.htpasswd;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Referrer-Policy same-origin always;
+        add_header Cache-Control no-store always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        client_max_body_size 0;
+        location /api/ {
+            proxy_pass http://127.0.0.1:8080/;
+            proxy_request_buffering off;
+            proxy_buffering off;
+            proxy_set_header Authorization "";
+            proxy_set_header Host "@@AUTHORITY@@";
+            proxy_set_header X-Maker-Proxy-Key "@@KEY@@";
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Forwarded-Host "@@AUTHORITY@@";
+            proxy_set_header X-Forwarded-For $remote_addr;
+        }
+        location / {
+            root /srv/maker-track/web;
+            try_files $uri /index.html;
+        }
+    }
+}

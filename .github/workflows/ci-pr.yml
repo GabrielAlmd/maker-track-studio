@@ -1,0 +1,71 @@
+name: Shared Preflight
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-security:
+    uses: ./.github/workflows/security.yml
+
+  api-quality:
+    name: Backend - vet and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+  frontend-quality:
+    name: Frontend - lint, tests and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: Lint frontend
+        run: npm run lint
+      - name: Test frontend
+        run: npm test
+      - name: Test screenshot artifact selection
+        run: node --test visual/playwright-config.test.mjs
+      - name: Build web frontend
+        env:
+          VITE_RUNTIME_MODE: web
+        run: npm run build
+      - name: Share web frontend with browser checks
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-frontend
+          path: apps/web/dist/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Build desktop frontend
+        run: node ../desktop/scripts/build-frontend.mjs
+      - name: Test desktop build metadata
+        working-directory: .
+        run: node --test apps/desktop/scripts/build-metadata.test.mjs
+      - name: Share desktop frontend with native packaging
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-frontend
+          path: apps/desktop/frontend/dist/
+          if-no-files-found: error
+          retention-days: 1

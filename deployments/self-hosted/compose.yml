@@ -1,0 +1,41 @@
+name: maker-track
+services:
+  studio:
+    image: ghcr.io/gabrielalmd/maker-track-studio:${MAKER_TRACK_VERSION:?Set an explicit release version or version@sha256 digest}
+    build:
+      context: ../..
+      dockerfile: deployments/self-hosted/Dockerfile
+    ports:
+      - "${LAN_IP:?Set the server LAN IPv4 address}:${HTTPS_PORT:-8443}:8443"
+    environment:
+      API_PUBLIC_ORIGIN: ${API_PUBLIC_ORIGIN:?Set the exact HTTPS origin}
+      API_PROXY_SECRET_FILE: /etc/maker-track/proxy.key
+      API_TRUSTED_PROXIES: 127.0.0.1/32
+      API_SQLITE_PATH: /workspace/server.db
+      API_DIAGNOSTICS_DIR: /diagnostics
+      API_BACKUP_DIR: /backups
+      API_BACKUP_RETENTION: ${API_BACKUP_RETENTION:-14}
+      API_BACKUP_TIME_UTC: ${API_BACKUP_TIME_UTC:-03:00}
+    volumes:
+      - workspace:/workspace
+      - diagnostics:/diagnostics
+      - backups:/backups
+      - tls-data:/data/tls
+      - ./secrets:/etc/maker-track:ro
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+volumes:
+  workspace:
+  diagnostics:
+  backups:
+  tls-data:

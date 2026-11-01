@@ -1,0 +1,107 @@
+name: Self-hosted native validation
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      baseline-image:
+        description: 'Previous published image tag/digest for upgrade and cold-volume rollback (optional for first release)'
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  # PR/tag callers complete preflight before calling this workflow. Manual
+  # validation owns that prerequisite and browser checks here.
+  quality:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ci-pr.yml
+
+  browser-quality:
+    if: github.event_name == 'workflow_dispatch'
+    needs: quality
+    uses: ./.github/workflows/browser-quality.yml
+
+  validate:
+    needs: quality
+    if: >-
+      always() && !cancelled() &&
+      ((github.event_name == 'workflow_dispatch' && needs.quality.result == 'success') ||
+       (github.event_name != 'workflow_dispatch' && needs.quality.result == 'skipped'))
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: ${{ github.event_name == 'pull_request' }}
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4.4.1
+      - name: Install OCI image transfer tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+          mkdir -p "${{ runner.temp }}/scanned-image"
+      - uses: docker/build-push-action@v7.4.0
+        id: build
+        with:
+          context: .
+          file: deployments/self-hosted/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          pull: true
+          # Refresh OS security packages without recompiling cached Go/Node stages.
+          no-cache-filters: runtime
+          outputs: type=oci,dest=${{ runner.temp }}/scanned-image/image.tar
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=self-hosted-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=self-hosted-${{ matrix.arch }}
+
+      - name: Scan final OCI image (OS and application dependencies)
+        run: bash scripts/ci/scan-image.sh "${{ runner.temp }}/scanned-image/image.tar" "${{ runner.temp }}/image-security" "${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: image-security-${{ matrix.arch }}
+          path: ${{ runner.temp }}/image-security/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Load the scanned image for runtime tests
+        run: skopeo copy --override-arch "${{ matrix.arch }}" oci-archive:"${{ runner.temp }}/scanned-image/image.tar" docker-daemon:maker-track:ci
+      - name: Load previous release for upgrade checks
+        env:
+          BASELINE_IMAGE: ${{ inputs.baseline-image || vars.SELF_HOSTED_BASELINE_IMAGE }}
+        run: |
+          if [ -n "$BASELINE_IMAGE" ]; then
+            docker pull "$BASELINE_IMAGE"
+            docker tag "$BASELINE_IMAGE" maker-track:baseline
+            echo 'SMOKE_BASELINE=maker-track:baseline' >> "$GITHUB_ENV"
+          fi
+      - name: Smoke test Compose (native execution)
+        id: smoke
+        run: bash scripts/ci/self-hosted-smoke.sh maker-track:ci "${SMOKE_BASELINE:-}"
+      - name: Summarize execution results
+        if: always() && steps.smoke.outputs.evidence != ''
+        env:
+          EVIDENCE_DIR: ${{ steps.smoke.outputs.evidence }}
+        run: |
+          if [ -f "$EVIDENCE_DIR/result.txt" ]; then
+            cat "$EVIDENCE_DIR/result.txt" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always() && steps.smoke.outputs.evidence != ''
+        with:
+          name: self-hosted-runtime-${{ matrix.arch }}
+          path: ${{ steps.smoke.outputs.evidence }}
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: success() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.PUBLIC_RELEASE_REPOSITORY != '' && github.repository == vars.PUBLIC_RELEASE_REPOSITORY
+        with:
+          name: scanned-image-${{ matrix.arch }}
+          path: ${{ runner.temp }}/scanned-image/image.tar
+          compression-level: 0
+          retention-days: 1
