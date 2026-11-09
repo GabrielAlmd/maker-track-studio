@@ -1,3 +1,4 @@
+import { apiPage } from '../test/apiFixtures';
 vi.mock('../services/filamentTypeService', () => ({
   getFilamentTypes: vi.fn().mockResolvedValue(['PLA', 'PETG', 'Custom']),
   updateFilamentTypes: vi.fn().mockResolvedValue([]),
@@ -28,8 +29,23 @@ describe('Filaments page', () => {
     vi.clearAllMocks();
   });
 
+  it('requests the next server page and replaces the visible filaments (A05/B04)', async () => {
+    filamentService.getFilaments
+      .mockResolvedValueOnce(apiPage(Array.from({ length: 25 }, (_, index) => ({
+        id: `f${index}`, brand: `Brand ${index}`, type: 'PLA', color: 'Blue', avg_price: 20,
+      })), { total: 26 }))
+      .mockResolvedValueOnce(apiPage([{ id: 'last', brand: 'Last brand', type: 'PETG', color: 'Red', avg_price: 30 }], { total: 26, page: 2 }));
+    const user = userEvent.setup();
+    render(<Filaments />);
+    await screen.findByText('Brand 0');
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByText('Last brand')).toBeInTheDocument();
+    expect(screen.queryByText('Brand 0')).not.toBeInTheDocument();
+    expect(filamentService.getFilaments).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, pageSize: 25 }));
+  });
+
   it('loads filaments and renders table rows', async () => {
-    filamentService.getFilaments.mockResolvedValueOnce([
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([
       {
         id: 'f1',
         brand: 'Prusa',
@@ -39,7 +55,7 @@ describe('Filaments page', () => {
         personal_score: 5,
         times_used: 3,
       },
-    ]);
+    ]));
 
     render(<Filaments />);
 
@@ -48,12 +64,12 @@ describe('Filaments page', () => {
   });
 
   it('shows no purchase data instead of a made-up average price', async () => {
-    filamentService.getFilaments.mockResolvedValueOnce([
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([
       {
         id: 'f1', brand: 'Prusa', type: 'PLA', color: 'Orange', avg_price: 0,
         personal_score: 5, times_used: 3, purchases: [],
       },
-    ]);
+    ]));
 
     render(<Filaments />);
 
@@ -62,7 +78,7 @@ describe('Filaments page', () => {
   });
 
   it('shows validation errors when submitting empty filament form', async () => {
-    filamentService.getFilaments.mockResolvedValueOnce([]);
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([]));
     const user = userEvent.setup();
 
     render(<Filaments />);
@@ -76,9 +92,9 @@ describe('Filaments page', () => {
   });
 
   it('submits valid create filament form', async () => {
-    filamentService.getFilaments.mockResolvedValue([]);
+    filamentService.getFilaments.mockResolvedValue(apiPage([]));
     filamentService.createFilament.mockResolvedValueOnce({ id: 'new-id' });
-    filamentService.getFilaments.mockResolvedValueOnce([]);
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([]));
 
     const user = userEvent.setup();
     render(<Filaments />);
@@ -109,11 +125,11 @@ describe('Filaments page', () => {
   });
 
   it('edits an existing filament', async () => {
-    filamentService.getFilaments.mockResolvedValueOnce([
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([
       { id: 'f1', brand: 'Prusa', type: 'PLA', color: 'Orange', avg_price: 29.99, personal_score: 5, times_used: 3 },
-    ]);
+    ]));
     filamentService.updateFilament.mockResolvedValueOnce({});
-    filamentService.getFilaments.mockResolvedValueOnce([]);
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([]));
 
     const user = userEvent.setup();
     render(<Filaments />);
@@ -136,11 +152,11 @@ describe('Filaments page', () => {
   });
 
   it('deletes a filament after confirmation', async () => {
-    filamentService.getFilaments.mockResolvedValueOnce([
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([
       { id: 'f1', brand: 'Prusa', type: 'PLA', color: 'Orange', avg_price: 29.99, personal_score: 5, times_used: 3 },
-    ]);
+    ]));
     filamentService.deleteFilament.mockResolvedValueOnce({});
-    filamentService.getFilaments.mockResolvedValueOnce([]);
+    filamentService.getFilaments.mockResolvedValueOnce(apiPage([]));
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const user = userEvent.setup();

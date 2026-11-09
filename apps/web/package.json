@@ -12,7 +12,8 @@
     "screenshots:check": "playwright test --config playwright.screenshots.config.js --update-snapshots=none",
     "screenshots:install": "playwright install chromium",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:browser:cost-inputs": "node integration/cost-inputs.browser.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

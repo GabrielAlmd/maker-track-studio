@@ -1,3 +1,4 @@
+import { apiPage } from '../test/apiFixtures';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Models from './Models';
@@ -23,8 +24,23 @@ describe('Models page', () => {
     vi.clearAllMocks();
   });
 
+  it('requests the next server page and replaces the visible models (A05/B04)', async () => {
+    modelService.getModels
+      .mockResolvedValueOnce(apiPage(Array.from({ length: 25 }, (_, index) => ({
+        id: `m${index}`, name: `Model ${index}`, material_weight: 10, print_time: 60, waste_material: 0,
+      })), { total: 26 }))
+      .mockResolvedValueOnce(apiPage([{ id: 'm-last', name: 'Last model', material_weight: 20, print_time: 90, waste_material: 0 }], { total: 26, page: 2 }));
+    const user = userEvent.setup();
+    render(<Models />);
+    await screen.findByText('Model 0');
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByText('Last model')).toBeInTheDocument();
+    expect(screen.queryByText('Model 0')).not.toBeInTheDocument();
+    expect(modelService.getModels).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, pageSize: 25 }));
+  });
+
   it('loads models and renders table rows', async () => {
-    modelService.getModels.mockResolvedValueOnce([
+    modelService.getModels.mockResolvedValueOnce(apiPage([
       {
         id: 'm1',
         name: 'Benchy',
@@ -34,7 +50,7 @@ describe('Models page', () => {
         is_multicolor: false,
         print_jobs: [],
       },
-    ]);
+    ]));
 
     render(<Models />);
 
@@ -44,7 +60,7 @@ describe('Models page', () => {
   });
 
   it('shows validation errors when submitting empty model form', async () => {
-    modelService.getModels.mockResolvedValueOnce([]);
+    modelService.getModels.mockResolvedValueOnce(apiPage([]));
     const user = userEvent.setup();
 
     render(<Models />);
@@ -58,9 +74,9 @@ describe('Models page', () => {
   });
 
   it('submits valid create model form', async () => {
-    modelService.getModels.mockResolvedValue([]);
+    modelService.getModels.mockResolvedValue(apiPage([]));
     modelService.createModel.mockResolvedValueOnce({ id: 'new-model' });
-    modelService.getModels.mockResolvedValueOnce([]);
+    modelService.getModels.mockResolvedValueOnce(apiPage([]));
 
     const user = userEvent.setup();
     render(<Models />);
@@ -89,11 +105,11 @@ describe('Models page', () => {
   });
 
   it('edits an existing model', async () => {
-    modelService.getModels.mockResolvedValueOnce([
+    modelService.getModels.mockResolvedValueOnce(apiPage([
       { id: 'm1', name: 'Benchy', material_weight: 15.5, print_time: 90, waste_material: 1.2, is_multicolor: false, print_jobs: [] },
-    ]);
+    ]));
     modelService.updateModel.mockResolvedValueOnce({});
-    modelService.getModels.mockResolvedValueOnce([]);
+    modelService.getModels.mockResolvedValueOnce(apiPage([]));
 
     const user = userEvent.setup();
     render(<Models />);
@@ -114,11 +130,11 @@ describe('Models page', () => {
   });
 
   it('deletes a model after confirmation', async () => {
-    modelService.getModels.mockResolvedValueOnce([
+    modelService.getModels.mockResolvedValueOnce(apiPage([
       { id: 'm1', name: 'Benchy', material_weight: 15.5, print_time: 90, waste_material: 1.2, is_multicolor: false, print_jobs: [] },
-    ]);
+    ]));
     modelService.deleteModel.mockResolvedValueOnce({});
-    modelService.getModels.mockResolvedValueOnce([]);
+    modelService.getModels.mockResolvedValueOnce(apiPage([]));
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const user = userEvent.setup();
@@ -133,11 +149,11 @@ describe('Models page', () => {
 
   it('selects visible rows and bulk deletes them after count-aware confirmation', async () => {
     modelService.getModels
-      .mockResolvedValueOnce([
+      .mockResolvedValueOnce(apiPage([
         { id: 'm1', name: 'Benchy', material_weight: 15, print_time: 90, waste_material: 1, is_multicolor: false },
         { id: 'm2', name: 'Bracket', material_weight: 20, print_time: 60, waste_material: 2, is_multicolor: false },
-      ])
-      .mockResolvedValueOnce([]);
+      ]))
+      .mockResolvedValueOnce(apiPage([]));
     modelService.deleteModel.mockResolvedValue({});
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const user = userEvent.setup();
@@ -154,9 +170,9 @@ describe('Models page', () => {
   });
 
   it('cancels bulk deletion without losing the selection', async () => {
-    modelService.getModels.mockResolvedValueOnce([
+    modelService.getModels.mockResolvedValueOnce(apiPage([
       { id: 'm1', name: 'Benchy', material_weight: 15, print_time: 90, waste_material: 1, is_multicolor: false },
-    ]);
+    ]));
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     const user = userEvent.setup();
     render(<Models />);
@@ -169,9 +185,9 @@ describe('Models page', () => {
   });
 
   it('keeps protected rows selected and identifies bulk deletion failures', async () => {
-    modelService.getModels.mockResolvedValueOnce([
+    modelService.getModels.mockResolvedValueOnce(apiPage([
       { id: 'm1', name: 'Referenced model', material_weight: 15, print_time: 90, waste_material: 1, is_multicolor: false },
-    ]);
+    ]));
     modelService.deleteModel.mockRejectedValueOnce({ response: { data: { error: 'Model is used by print jobs' } } });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const user = userEvent.setup();
