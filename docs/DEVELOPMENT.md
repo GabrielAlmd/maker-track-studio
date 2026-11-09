@@ -55,6 +55,32 @@ and [Self-Hosted guide](SELF_HOSTED.md) before running a standalone deployment.
 
 ## Common change paths
 
+### Start with tests
+
+Always implement or update the relevant tests before changing application
+behavior. For a bug, first reproduce it with a failing regression test and
+verify that the failure demonstrates the reported behavior. Then make the
+smallest correction and rerun the focused tests before the broader checks.
+Do not skip a failing test or weaken its assertions to hide a defect.
+
+The regression suites now cover first-purchase initialization, paginated API
+responses, overlapping requests, backup restore, and Print Job labor hours,
+quantities, cost snapshots, and input validation. Use the existing suites when
+adding cases, and keep HTTP fixtures consistent with actual API contracts.
+
+From `apps/web`, check native browser validation of Print Job labor inputs with:
+
+```sh
+npm run screenshots:install
+npm run test:browser:cost-inputs
+```
+
+This Chromium check submits the real form against synthetic HTTP fixtures;
+Go tests separately verify cost calculations and SQLite persistence. It does
+not replace a complete workflow against the real API or packaged Desktop app.
+Keep local investigation plans, test-run reports, and draft issues out of
+commits; record durable workflow guidance in this development guide instead.
+
 ### Add or change an API behavior
 
 Read adjacent handlers, DTOs, routes, services, and tests first. Keep request
