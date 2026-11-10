@@ -1,15 +1,16 @@
 # Roadmap
 
-## First public release: v1.0.0
+## Next patch: v1.0.1
 
-The initial open source release is intended to include both Desktop and
-Self-Hosted. Publish the `v1.0.0` tag and artifacts only after the qualification
-evidence is complete:
+v1.0.0 has been published. v1.0.1 addresses early-user feedback with bug fixes,
+regression tests and clearer guidance. Track the remaining checks in the
+[v1.0.1 readiness record](RELEASE_READINESS_1.0.1.md) and changes in the
+[draft patch notes](RELEASE_NOTES_1.0.1.md). Before publication:
 
 - Validate Windows and Linux Desktop installers/archives on clean systems.
 - Complete native Raspberry Pi ARM64 and Linux AMD64 Compose/browser checks.
 - Verify backup restore, persistence, and upgrade/rollback with disposable
-  data from supported prior versions.
+  data from published v1.0.0.
 - Review GitHub Actions permissions and complete secret/dependency scans on the
   exact source tree used for the release.
 - Record checksums and installation/recovery evidence for both distributions.
