@@ -1,7 +1,7 @@
 import i18n from '../i18n';
 
 export const COST_SETTINGS = {
-  machine_cost_mode: ['Machine cost calculation', 'Choose Simple to preserve existing hourly costs, or Advanced to calculate the hourly machine rate from the advanced inputs below. Changes recalculate all recorded jobs.', 'Calculation'],
+  machine_cost_mode: ['Machine cost calculation', 'Choose Simple to preserve existing hourly costs, or Advanced to calculate the hourly machine rate from the advanced inputs below. Jobs with saved printer inputs retain them; legacy unassigned jobs use current defaults.', 'Calculation'],
   printer_purchase_cost: ['Printer Purchase Cost (€)', 'Adv. Inputs C11. Total purchase price, including delivery and taxes.', 'Machine investment'],
   printer_upfront_cost: ['Additional Upfront Cost (€)', 'Adv. Inputs C12. Upgrades and other initial expenses. Added to the purchase price to calculate total investment.', 'Machine investment'],
   printer_annual_maintenance: ['Annual Maintenance & Repair (€)', 'Adv. Inputs C15. Estimated yearly maintenance. Multiplied by the lifetime in years and added to the investment. Enter your own estimate; it is not automatically 10% of the purchase price.', 'Machine investment'],
