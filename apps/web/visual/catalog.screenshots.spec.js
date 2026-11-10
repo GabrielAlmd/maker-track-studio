@@ -296,6 +296,19 @@ const scenarios = [
     },
   },
   {
+    slug: 'settings-backups-restored', route: 'settings?section=backups',
+    setup: async (page) => {
+      await page.route('**/api/desktop-data/import', (route) => route.fulfill({ json: { ok: true } }));
+    },
+    prepare: async (page) => {
+      const input = page.getByLabel('Desktop backup file');
+      await input.setInputFiles({ name: 'fixture.zip', mimeType: 'application/zip', buffer: Buffer.from('synthetic fixture') });
+      await page.getByRole('button', { name: 'Import Backup' }).click();
+      await expect(input).toHaveValue('');
+      await expect(page.getByRole('button', { name: 'Import Backup' })).toBeDisabled();
+    },
+  },
+  {
     slug: 'settings-backups', route: 'settings?section=backups', prepare: async (page) => {
       await expect(page.getByText('Restore desktop backup')).toBeVisible();
       await page.getByLabel('Desktop backup file').setInputFiles({ name: 'makertrack-backup.zip', mimeType: 'application/zip', buffer: Buffer.from('fixture') });
