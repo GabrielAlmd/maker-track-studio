@@ -126,6 +126,7 @@ const scenarios = [
       await modal.getByRole('combobox', { name: 'Model' }).fill('modular');
       await modal.getByRole('option', { name: 'Modular Enclosure' }).click();
       await modal.locator('input[name="print_date"]').fill('2026-09-18');
+      await modal.locator('input[name="labor_hours"]').fill('0.25');
       await modal.getByLabel('Filament 1').fill('matte');
       await modal.getByRole('option', { name: 'Bambu Lab PLA — Matte Black' }).click();
       await expect(modal).toBeVisible();
