@@ -48,4 +48,39 @@ describe('usePaginatedList contracts and request ownership (A05/B02/B03)', () =>
     expect(result.current.data.items).toEqual([{ id: 'page-2' }]);
     expect(result.current.error).toBeNull();
   });
+  it.each(['filter', 'search', 'refetch'])('keeps current loading and data when %s changes during a request', async (change) => {
+    const old = deferred();
+    const next = deferred();
+    const fetch = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const { result } = renderHook(() => usePaginatedList(fetch));
+    if (change === 'filter') act(() => result.current.changeFilters({ brand: 'New' }));
+    if (change === 'search') {
+      act(() => result.current.setSearchInput('new query'));
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      expect(fetch).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'new query' }));
+    }
+    if (change === 'refetch') act(() => { result.current.refetch(); });
+    await act(async () => old.reject(new Error('obsolete')));
+    expect(result.current.loading).toBe(true);
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBeNull();
+    await act(async () => next.resolve(apiPage([{ id: 'latest' }])));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.data.items).toEqual([{ id: 'latest' }]);
+  });
+
+  it('does not reset page navigation when the search has not changed', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn().mockResolvedValue(apiPage());
+      const { result, unmount } = renderHook(() => usePaginatedList(fetch));
+      await act(async () => {});
+      await act(async () => result.current.setPage(2));
+      await act(async () => vi.advanceTimersByTimeAsync(350));
+      expect(result.current.page).toBe(2);
+      expect(fetch).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }));
+      unmount();
+    } finally { vi.useRealTimers(); }
+  });
+
 });
