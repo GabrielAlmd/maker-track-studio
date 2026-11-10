@@ -61,4 +61,16 @@ describe('Purchases first-run regression (A01/A02)', () => {
     expect(screen.getByRole('button', { name: /create new filament/i })).toBeEnabled();
     expect(screen.queryByText(/Restart the application/i)).not.toBeInTheDocument();
   });
+  it('retries lookup without losing the purchase draft', async () => {
+    getFilaments.mockRejectedValueOnce(new Error('Lookup unavailable')).mockResolvedValueOnce([]);
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /record first purchase/i }));
+    const date = screen.getByLabelText('Purchase Date');
+    await userEvent.type(date, '2026-09-18');
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(date).toHaveValue('2026-09-18');
+    expect(screen.getByRole('dialog')).toBeVisible();
+    expect(getFilaments).toHaveBeenCalledTimes(2);
+  });
+
 });

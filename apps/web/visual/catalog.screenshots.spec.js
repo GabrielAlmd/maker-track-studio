@@ -38,6 +38,22 @@ const ready = {
 };
 
 const scenarios = [
+  ...['empty', 'pending', 'error'].map((state) => ({
+    slug: `purchases-first-run-${state}`, route: 'purchases',
+    setup: async (page) => {
+      await page.route('**/api/filament-purchases*', (route) => route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 25 } }));
+      await page.route('**/api/filaments', (route) => {
+        if (state === 'pending') return;
+        return route.fulfill({ status: state === 'error' ? 500 : 200, json: state === 'error' ? { error: 'Fixture lookup unavailable' } : [] });
+      });
+    },
+    prepare: async (page) => {
+      await page.getByRole('button', { name: 'Record first purchase' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      if (state === 'pending') await expect(page.getByRole('dialog').getByRole('status')).toBeVisible();
+      if (state === 'error') await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
+    },
+  })),
   { slug: 'dashboard', route: 'dashboard', fullPage: true, prepare: ready.dashboard },
   { slug: 'dashboard-narrow', route: 'dashboard', viewport: { width: 390, height: 844 }, fullPage: true, prepare: ready.dashboard },
   {
