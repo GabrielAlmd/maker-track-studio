@@ -59,9 +59,12 @@ read for setting up and changing the code.
 - [Dependency security](DEPENDENCY_SECURITY.md) — dependency and image scan
   policy and evidence.
 - [Release qualification](PUBLIC_RELEASE.md) and [roadmap](ROADMAP.md) —
-  `v1.0.0` publication gates and remaining project work.
+  `v1.0.1` publication gates and remaining project work.
 
 ## Product and contributor references
+
+- [First print](FIRST_PRINT.md) — a bilingual worked example with cost units and history rules.
+- [Backups and support](SUPPORT.md) — restore, update and problem-reporting steps.
 
 - [Screenshots](screenshots/README.md) — deterministic visual fixtures and how
   to regenerate them after UI changes.

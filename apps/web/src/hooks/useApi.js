@@ -1,40 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-// Custom hook for data fetching with loading and error states
 export const useApi = (apiFunction) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const generation = useRef(0);
+  const mounted = useRef(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await apiFunction();
-        setData(result);
-      } catch (err) {
-        setError(err?.message || 'Could not load data.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+  const refetch = useCallback(async () => {
+    if (!mounted.current) return;
+    const request = ++generation.current;
+    const ownsRequest = () => mounted.current && request === generation.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apiFunction();
+      if (ownsRequest()) setData(result);
+    } catch (err) {
+      if (ownsRequest()) setError(err?.message || 'Could not load data.');
+    } finally {
+      if (ownsRequest()) setLoading(false);
+    }
   }, [apiFunction]);
 
-  const refetch = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await apiFunction();
-      setData(result);
-    } catch (err) {
-      setError(err?.message || 'Could not load data.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    mounted.current = true;
+    refetch();
+    return () => { mounted.current = false; generation.current += 1; };
+  }, [refetch]);
 
   return { data, loading, error, refetch, hasData: data !== null };
 };

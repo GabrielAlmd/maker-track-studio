@@ -175,7 +175,7 @@ function Purchases() {
   const list = usePaginatedList(fetchPurchases, 'date');
   const { data: purchasePage, loading, error, refetch } = list;
   const purchases = purchasePage?.items;
-  const { data: filaments, refetch: refetchFilaments } = useApi(fetchFilaments);
+  const { data: filaments, loading: filamentsLoading, error: filamentsError, refetch: refetchFilaments } = useApi(fetchFilaments);
 
   const filamentMap = {};
   if (filaments) {
@@ -232,7 +232,7 @@ function Purchases() {
   return (
     <div>
       {modalOpen && !editingPurchase && (
-        <PurchaseBatchModal filaments={filaments} onClose={handleModalClose} onSaved={handleSaved} />
+        <PurchaseBatchModal filamentsLoading={filamentsLoading} filamentsError={filamentsError} onRetryFilaments={refetchFilaments} filaments={filaments} onClose={handleModalClose} onSaved={handleSaved} />
       )}
       {modalOpen && editingPurchase && (
         <PurchaseModal
