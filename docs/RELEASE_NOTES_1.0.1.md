@@ -19,6 +19,14 @@ Regression coverage was added for these workflows in
 Passing source tests does not establish native installer or upgrade readiness;
 see the [release checklist](RELEASE_READINESS_1.0.1.md).
 
+## Guidance
+
+- Bilingual [first-print walkthrough](FIRST_PRINT.md) with a worked cost example.
+- [Backup and support instructions](SUPPORT.md), including restore replacement
+  behavior and local diagnostic logs.
+- Updated release documentation and explanations of printer snapshots versus
+  live material prices and legacy unassigned jobs.
+
 ## Upgrade from v1.0.0
 
 1. Export a ZIP from **Settings > Data & Backups** and keep an independent copy.

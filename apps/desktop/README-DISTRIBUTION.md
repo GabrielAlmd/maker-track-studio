@@ -8,7 +8,7 @@ O Maker Track Studio ajuda a registar impressões 3D, materiais e custos. Esta a
 
 ### Antes de começar
 
-- Descarregue apenas ficheiros enviados por uma pessoa de confiança. Se recebeu um checksum, confirme-o antes de instalar.
+- Descarregue apenas das [Releases oficiais](https://github.com/GabrielAlmd/maker-track-studio/releases) e confirme o checksum publicado antes de instalar.
 - Feche a aplicação antes de instalar uma atualização.
 - Os seus dados ficam guardados localmente neste computador. Faça uma cópia de segurança antes de trocar de computador ou de testar versões mais recentes.
 
@@ -45,6 +45,9 @@ Se o gestor de ficheiros não o abrir, pode iniciá-lo num terminal dentro dessa
 
 ### Primeira utilização
 
+Siga o [exemplo da primeira impressão](../../docs/FIRST_PRINT.md#português) e o
+[guia de cópias, recuperação e suporte](../../docs/SUPPORT.md#português).
+
 Ao abrir a aplicação, configure os valores de custos e comece por criar materiais, impressoras ou trabalhos conforme necessário. Pode alterar o idioma em **Definições > Aspeto > Idioma** sem reinstalar. Todas as funcionalidades ficam disponíveis localmente.
 
 ### Cópias de segurança e atualizações
@@ -76,7 +79,7 @@ Maker Track Studio helps you record 3D prints, materials, and costs. This applic
 
 ### Before you start
 
-- Download files only from someone you trust. If you received a checksum, verify it before installing.
+- Download only from the [official Releases](https://github.com/GabrielAlmd/maker-track-studio/releases) and verify the published checksum before installing.
 - Close the application before installing an update.
 - Your data is stored locally on this computer. Export a backup before changing computers or trying a newer version.
 
@@ -112,6 +115,9 @@ If your file manager does not open it, start it from a terminal in that folder:
 A graphical Linux session with GTK and WebKitGTK installed is required. This version is not intended for WSL or servers without a graphical desktop.
 
 ### First use
+
+Follow the [first-print walkthrough](../../docs/FIRST_PRINT.md#english) and
+[backup, recovery and support guide](../../docs/SUPPORT.md#english).
 
 When you open the app, configure cost values and then create materials, printers, or jobs as needed. You can change the language later under **Settings > Appearance > Language** without reinstalling. All features are available locally.
 

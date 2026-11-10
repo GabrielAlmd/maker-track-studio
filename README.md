@@ -13,6 +13,11 @@ React interface and SQLite data model.
 - Enable the optional Sales & Orders workflow in Settings.
 - Use the interface in English or Portuguese (Portugal).
 
+## Getting started
+
+Follow [your first print](docs/FIRST_PRINT.md) for a synthetic worked example,
+then keep the [backup and support guide](docs/SUPPORT.md) handy.
+
 ## Screenshots
 
 The screenshots use synthetic, deterministic fixtures.
