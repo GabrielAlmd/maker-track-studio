@@ -84,7 +84,7 @@ func GetFilamentPurchases(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(500, gin.H{"error": "Failed to retrieve filament purchases"})
 			return
 		}
-		var dtoList []dto.FilamentPurchaseDTO
+		dtoList := make([]dto.FilamentPurchaseDTO, 0)
 		for _, p := range purchases {
 			dtoList = append(dtoList, dto.FilamentPurchaseDTO{
 				ID:           p.ID,
