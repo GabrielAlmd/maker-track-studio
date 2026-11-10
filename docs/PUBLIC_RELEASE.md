@@ -1,22 +1,25 @@
-# v1.0.0 release qualification
+# Release qualification
 
-Maker Track Studio is open source under the MIT License. The first public
-release target is `v1.0.0`, covering the Windows/Linux Desktop application and
+Maker Track Studio is open source under the MIT License. The published
+first release is `v1.0.0`. The next patch, `v1.0.1`, covers the Windows/Linux Desktop application and
 the optional LAN-only Self-Hosted distribution.
 
 ## Release status
 
-The source tree documents the intended release, but a version tag, installers,
+The v1.0.1 patch is not published yet. Its version tag, installers,
 archives and container images must not be treated as available until they are
 published by the project's official GitHub Releases and GHCR locations. A
 successful source build or CI run alone does not qualify a release.
 
-Before publishing `v1.0.0`, maintainers must record evidence for these gates:
+Track evidence in the [v1.0.1 readiness record](RELEASE_READINESS_1.0.1.md).
+See the [draft release notes](RELEASE_NOTES_1.0.1.md) for the patch scope.
+
+Before publishing `v1.0.1`, maintainers must record evidence for these gates:
 
 - Windows and Linux Desktop packaging and smoke tests on clean systems.
 - Native Linux AMD64 and ARM64 Self-Hosted image, browser and runtime checks.
 - SQLite persistence, backup/restore, upgrade and rollback checks using
-  disposable data from a supported prior version, if one exists.
+  disposable data from the published v1.0.0.
 - LAN access controls, TLS trust, anonymous denial and denial of direct API or
   WAN access on supported target devices.
 - Dependency and image security scans, license review, release checksums and

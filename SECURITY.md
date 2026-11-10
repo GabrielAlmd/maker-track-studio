@@ -2,9 +2,9 @@
 
 ## Supported versions
 
-Security fixes target the latest supported release. `v1.0.0` is the first public
-release target; consult [release qualification](docs/PUBLIC_RELEASE.md) for its
-publication status and security gates.
+Security fixes target the latest supported release. `v1.0.0` is published;
+`v1.0.1` is in preparation. Consult [release qualification](docs/PUBLIC_RELEASE.md)
+for patch-release security gates.
 
 ## Reporting a vulnerability
 
