@@ -78,7 +78,7 @@ func GetFilaments(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		var dtoList []dto.FilamentDTO
+		dtoList := make([]dto.FilamentDTO, 0)
 		for _, f := range filaments {
 			// Map purchases
 			var purchases []dto.FilamentPurchaseDTO
