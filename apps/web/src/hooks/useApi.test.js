@@ -41,4 +41,32 @@ describe('useApi request ownership (B01/B03)', () => {
     expect(loadingDuringNextRequest).toBe(true);
     expect(result.current.data).toEqual(['current']);
   });
+  it.each(['resolve', 'reject'])('ignores an overlapping refetch completing with %s', async (completion) => {
+    const old = deferred();
+    const next = deferred();
+    const fetch = vi.fn().mockResolvedValueOnce(['initial']).mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const { result } = renderHook(() => useApi(fetch));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let first, second;
+    act(() => { first = result.current.refetch(); second = result.current.refetch(); });
+    await act(async () => { old[completion](completion === 'resolve' ? ['old'] : new Error('old')); await first; });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.data).toEqual(['initial']);
+    expect(result.current.error).toBeNull();
+    await act(async () => { next.resolve(['latest']); await second; });
+    expect(result.current.data).toEqual(['latest']);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('invalidates requests and refetch on unmount', async () => {
+    const pending = deferred();
+    const fetch = vi.fn().mockReturnValue(pending.promise);
+    const { result, unmount } = renderHook(() => useApi(fetch));
+    const refetch = result.current.refetch;
+    unmount();
+    await act(async () => pending.resolve(['obsolete']));
+    await refetch();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
 });
