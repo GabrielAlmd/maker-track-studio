@@ -19,7 +19,7 @@ type PrintJobInput struct {
 	PrinterID        *uuid.UUID `json:"printer_id"`
 	ModelID          *uuid.UUID `json:"model_id"`
 	PrintDate        time.Time  `json:"print_date" binding:"required"`
-	UnitsPrinted     int        `json:"units_printed" binding:"required"`
+	UnitsPrinted     int        `json:"units_printed" binding:"required,gt=0"`
 	LaborHours       *float32   `json:"labor_hours" binding:"required,gte=0"`
 	PrintTimeMinutes *int       `json:"print_time_minutes"`
 }
