@@ -59,7 +59,7 @@ read for setting up and changing the code.
 - [Dependency security](DEPENDENCY_SECURITY.md) — dependency and image scan
   policy and evidence.
 - [Release qualification](PUBLIC_RELEASE.md) and [roadmap](ROADMAP.md) —
-  `v1.0.0` publication gates and remaining project work.
+  `v1.0.1` publication gates and remaining project work.
 
 ## Product and contributor references
 
