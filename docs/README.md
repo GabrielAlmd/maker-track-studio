@@ -63,6 +63,9 @@ read for setting up and changing the code.
 
 ## Product and contributor references
 
+- [First print](FIRST_PRINT.md) — a bilingual worked example with cost units and history rules.
+- [Backups and support](SUPPORT.md) — restore, update and problem-reporting steps.
+
 - [Screenshots](screenshots/README.md) — deterministic visual fixtures and how
   to regenerate them after UI changes.
 - [Desktop installation guide](../apps/desktop/README-DISTRIBUTION.md) —

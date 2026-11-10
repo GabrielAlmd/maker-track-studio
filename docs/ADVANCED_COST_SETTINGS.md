@@ -1,12 +1,13 @@
 # Advanced cost settings
 
-Settings exposes configurable machine, labor and material-cost inputs. Each
-setting has a help tooltip available on hover, keyboard focus or tap.
+Settings exposes machine, labor and material-cost defaults for new printers.
+Edit existing machines under **Printers > Edit costs**. For a worked example,
+see [your first print](FIRST_PRINT.md). Each setting has a help tooltip available on hover, keyboard focus or tap.
 Inputs are grouped by purpose and can be edited directly. The preview updates as
 you type, including intermediate values in Advanced mode. Decimal commas are
 accepted. Use **Save changes** to apply the form or **Discard changes** to return
 to the saved values. The mode selector immediately updates field locks in the
-draft; job calculations change only when saved.
+draft; saved defaults are copied into newly created printers.
 
 The existing API saves changed keys sequentially, with the mode saved last. If a
 request fails, the form keeps the draft and identifies that some changes may
@@ -39,8 +40,13 @@ Selling prices retain the existing margin formula: total / (1 − margin / 100).
 Costs and prices describe the whole job; divide by units printed for a piece.
 Intermediate values retain precision; only displayed totals are rounded.
 All job views and dashboard aggregates use the same configuration loader.
-Changing settings recalculates existing jobs, as before; this is not a snapshot
-of historical prices.
+Assigned jobs use their saved printer configuration; changing defaults or
+editing a printer does not replace those saved inputs. Legacy jobs without a
+printer snapshot still use current global settings. Reassigning a job captures
+the new printer configuration. Material purchase averages, job duration and
+labor remain live inputs, so a printer snapshot is not a frozen total. Completed
+Sales orders retain their frozen profitability. See [printer profiles](PRINTER_PROFILES.md)
+and [Sales history](SALES_AND_ORDERS.md).
 
 ## Compatibility and rollback
 
@@ -53,8 +59,8 @@ This retains the historical calculation: printing hours × electricity value,
 plus printing hours × manual wear rate. The old electricity calculation implicitly
 assumes 1 kW; only Advanced mode uses the configured wattage and buffer.
 
-Export a backup before changing costing assumptions. New values travel through
-the existing SQLite backup/export/import flow without changes to its format.
+Export a backup before changing costing assumptions, especially for legacy
+unassigned jobs. New values travel through the existing SQLite backup/export/import flow without changes to its format.
 Switching back to Simple restores the old calculation and its saved wear rate;
 restore a backup to undo edits to shared electricity, labor, waste or margin values.
 Older application versions ignore the new keys and use the manual calculation.
