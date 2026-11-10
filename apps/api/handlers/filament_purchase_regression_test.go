@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"testing"
 	"time"
@@ -12,7 +13,11 @@ import (
 func TestIndividualPurchaseRejectsNonPositiveCostsWithoutChangingData(t *testing.T) {
 	for _, method := range []string{http.MethodPost, http.MethodPut} {
 		for _, field := range []string{"price", "amount"} {
-			for _, value := range []float64{0, -0.5} {
+			values := []float64{0, -0.5}
+			if field == "amount" {
+				values = append(values, math.SmallestNonzeroFloat64)
+			}
+			for _, value := range values {
 				t.Run(fmt.Sprintf("%s/%s=%g", method, field, value), func(t *testing.T) {
 					r, db := setupTestRouter(t)
 					filament := models.Filament{Brand: "Validation", Type: "PLA", Color: "Blue", AvgPrice: 20}

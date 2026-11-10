@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -15,8 +16,8 @@ import (
 
 type FilamentPurchaseInput struct {
 	FilamentID   uuid.UUID `json:"filament_id" binding:"required"`
-	Price        float64   `json:"price" binding:"required"`
-	Amount       float64   `json:"amount" binding:"required"`
+	Price        float64   `json:"price" binding:"required,gt=0"`
+	Amount       float64   `json:"amount" binding:"required,gt=0"`
 	PurchaseDate time.Time `json:"purchase_date" binding:"required"`
 }
 
@@ -149,7 +150,7 @@ func GetFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 func CreateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input FilamentPurchaseInput
-		if err := c.ShouldBindJSON(&input); err != nil {
+		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
@@ -200,7 +201,7 @@ func UpdateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		var input FilamentPurchaseInput
-		if err := c.ShouldBindJSON(&input); err != nil {
+		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
