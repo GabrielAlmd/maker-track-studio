@@ -46,6 +46,7 @@ const printJobSchema = (t) => yup.object({
   labor_hours: yup
     .number()
     .typeError(t('validation.laborNumber'))
+    .test('finite', t('validation.laborNumber'), (value) => value == null || Number.isFinite(value))
     .min(0, t('validation.nonNegative'))
     .required(t('validation.laborRequired')),
   print_time_minutes: yup
@@ -279,7 +280,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
             <input
               id="print-job-labor"
               type="number"
-              step="0.5"
+              step="any"
               min="0"
               aria-required="true"
               {...register('labor_hours')}

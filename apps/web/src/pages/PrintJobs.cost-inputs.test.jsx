@@ -40,7 +40,7 @@ describe('Print Jobs labor and quantity inputs (C11–C17)', () => {
     materials.deletePrintJobFilament.mockResolvedValue(undefined);
   });
 
-  it.each([0, 0.5, 1.5])('submits %s total labor hours unchanged when automatic quantities change', async (hours) => {
+  it.each([0, 0.25, 0.5, 1.5])('submits %s total labor hours unchanged when automatic quantities change', async (hours) => {
     const user = userEvent.setup();
     render(<PrintJobs />);
     await user.click(await screen.findByRole('button', { name: /add first print job/i }));
@@ -61,7 +61,7 @@ describe('Print Jobs labor and quantity inputs (C11–C17)', () => {
     expect(materials.createPrintJobFilament).toHaveBeenCalledExactlyOnceWith({ print_job_id: 'created', filament_id: 'f1', weight_used: 300 });
   });
 
-  it.each([0, 0.5, 1.5])('edits to %s labor hours and keeps manual totals when units change repeatedly', async (hours) => {
+  it.each([0, 0.25, 0.5, 1.5])('edits to %s labor hours and keeps manual totals when units change repeatedly', async (hours) => {
     jobs.getPrintJobs.mockResolvedValue(apiPage([savedJob]));
     const user = userEvent.setup();
     render(<PrintJobs />);
