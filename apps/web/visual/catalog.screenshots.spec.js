@@ -300,7 +300,15 @@ const scenarios = [
     slug: 'settings-appearance-pt', route: 'settings', locale: 'pt-PT', fullPage: true, prepare: (page) => expect(page.getByRole('heading', { name: 'Definições' })).toBeVisible(),
   },
   {
-    slug: 'settings-calculations', route: 'settings?section=calculations', fullPage: true, prepare: (page) => expect(page.getByRole('radio', { name: /Simple/ })).toBeVisible(),
+    slug: 'settings-calculations', route: 'settings?section=calculations', fullPage: true, prepare: async (page) => {
+      await expect(page.getByRole('radio', { name: /Simple/ })).toBeVisible();
+      await expect(page.getByText(/legacy jobs without saved printer inputs/)).toBeVisible();
+    },
+  },
+  {
+    slug: 'settings-calculations-pt', route: 'settings?section=calculations', locale: 'pt-PT', fullPage: true, prepare: async (page) => {
+      await expect(page.getByText(/as antigas sem esses valores usam estas predefinições/)).toBeVisible();
+    },
   },
   {
     slug: 'settings-features', route: 'settings?section=features', fullPage: true, prepare: (page) => expect(page.getByText('Track orders, selling prices, production allocation, revenue and profit.')).toBeVisible(),
@@ -309,6 +317,7 @@ const scenarios = [
     slug: 'settings-calculations-advanced', route: 'settings?section=calculations', fullPage: true, prepare: async (page) => {
       await page.getByRole('radio', { name: /Advanced/ }).click();
       await expect(page.getByText('Total investment')).toBeVisible();
+      await expect(page.getByText(/legacy jobs without saved printer inputs/)).toBeVisible();
     },
   },
   {

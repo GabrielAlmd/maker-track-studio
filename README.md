@@ -13,6 +13,11 @@ React interface and SQLite data model.
 - Enable the optional Sales & Orders workflow in Settings.
 - Use the interface in English or Portuguese (Portugal).
 
+## Getting started
+
+Follow [your first print](docs/FIRST_PRINT.md) for a synthetic worked example,
+then keep the [backup and support guide](docs/SUPPORT.md) handy.
+
 ## Screenshots
 
 The screenshots use synthetic, deterministic fixtures.
@@ -29,8 +34,9 @@ The screenshots use synthetic, deterministic fixtures.
 The Wails desktop app runs the API on loopback and stores one SQLite database
 per installation. See the [Desktop installation guide](apps/desktop/README-DISTRIBUTION.md)
 for Windows x64 and Linux x64 installation, backup, update and recovery steps.
-The first public release target is `v1.0.0`. Download installers and archives
-only from the project's GitHub Releases page after that release is published.
+`v1.0.0` is published. Download installers and archives from the official
+[GitHub Releases](https://github.com/GabrielAlmd/maker-track-studio/releases).
+The next patch, `v1.0.1`, is in preparation.
 See [release qualification](docs/PUBLIC_RELEASE.md) for the publication gates.
 
 ### Self-Hosted — Raspberry Pi and Linux
@@ -42,8 +48,8 @@ HTTPS reverse proxy and a shared login. The API is not published directly.
 
 Follow the [Self-Hosted installation and recovery guide](docs/SELF_HOSTED.md).
 Do not expose it to the public Internet or configure router port forwarding.
-Use only an image tag or digest published by the project. The v1.0.0 image is
-available only after the release is published.
+Use only an image tag or digest published by the project. Check the release
+notes for its matching image; do not assume a pending v1.0.1 image exists.
 
 ## Build from source
 
@@ -89,8 +95,9 @@ CSV and XLSX imports are available under **Settings > Data Migration**. See
 
 ## Release readiness
 
-- `v1.0.0` is the first public release target. Do not treat this source checkout
-  as a published or qualified release.
+- `v1.0.0` is published; this branch prepares the `v1.0.1` patch.
+- See the [draft patch notes](docs/RELEASE_NOTES_1.0.1.md) and
+  [readiness record](docs/RELEASE_READINESS_1.0.1.md).
 - The self-hosted service is for trusted home LANs only, with no Internet access
   or automatic Desktop/server synchronization.
 - Release qualification evidence must be completed for the exact source and
