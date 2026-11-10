@@ -68,6 +68,15 @@ responses, overlapping requests, backup restore, and Print Job labor hours,
 quantities, cost snapshots, and input validation. Use the existing suites when
 adding cases, and keep HTTP fixtures consistent with actual API contracts.
 
+Empty filament and purchase collections use JSON arrays in both legacy and
+paginated responses. Print Job quantities and individual purchase price/amount
+must be positive; reject a non-finite derived purchase unit price before writing.
+Labor hours accept finite non-negative fractions, including 0.25 in creation and
+editing. Request hooks apply results only for the active request, and successful
+backup restore clears the file input so the same file can be selected again.
+Filtered Print Job lists distinguish no matching results from a new installation.
+Keep these guarantees covered by regression tests and deterministic UI fixtures.
+
 From `apps/web`, check native browser validation of Print Job labor inputs with:
 
 ```sh

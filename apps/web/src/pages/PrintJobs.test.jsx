@@ -320,7 +320,9 @@ describe('PrintJobs page', () => {
     await user.selectOptions(screen.getByRole('listbox', { name: 'Printer' }), 'p2');
     await waitFor(() => expect(printJobService.getPrintJobs).toHaveBeenCalledWith(expect.objectContaining({ printer_id: 'p2' })));
     await user.click(screen.getByText('Filters (1)'));
-    await user.click(await screen.findByRole('button', { name: /add first print job/i }));
+    expect(await screen.findByText('No results match your search')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /add first print job/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add Print Job', exact: true }));
 
     const printer = screen.getByRole('combobox', { name: 'Printer' });
     expect(printer).toHaveValue('p1');

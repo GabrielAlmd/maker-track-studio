@@ -54,6 +54,22 @@ const scenarios = [
       if (state === 'error') await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
     },
   })),
+  {
+    slug: 'print-jobs-search-empty', route: 'print-jobs',
+    setup: async (page) => {
+      await page.route('**/api/print-jobs?*', async (route) => {
+        if (new URL(route.request().url()).searchParams.get('search')) {
+          await route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 25 } });
+        } else await route.fallback();
+      });
+    },
+    prepare: async (page) => {
+      await ready.printJobs(page);
+      await page.getByRole('searchbox').fill('No matching fixture');
+      await expect(page.getByText('No results match your search')).toBeVisible();
+      await expect(page.getByRole('button', { name: /clear search/i })).toBeVisible();
+    },
+  },
   { slug: 'dashboard', route: 'dashboard', fullPage: true, prepare: ready.dashboard },
   { slug: 'dashboard-narrow', route: 'dashboard', viewport: { width: 390, height: 844 }, fullPage: true, prepare: ready.dashboard },
   {
