@@ -1,0 +1,26 @@
+
+name: Validate release source
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  validate-release-source:
+    name: Only develop can merge to main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source branch
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [[ "$HEAD_BRANCH" != "develop" || "$HEAD_REPO" != "$BASE_REPO" ]]; then
+            echo "::error::Only develop from this repository can merge into main."
+            exit 1
+          fi

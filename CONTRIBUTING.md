@@ -40,3 +40,16 @@ commands, architecture links, and common implementation paths. The
 
 Use the pull request template and link the issue being addressed. A maintainer
 will review scope, compatibility, security and validation evidence.
+
+## Branches and local checks
+
+Fork the repository, fetch upstream, and create `feature/name` or `fix/name`
+from `upstream/develop`. Open your PR against `develop`, not `main`. Use clear,
+focused commit messages (for example, `fix: validate input`) and explain behavior
+and verification in the PR. CI must pass and review conversations must be
+resolved; maintainers squash merge. See the [branch and release guide](docs/development/branching-and-releases.md).
+
+Run relevant checks locally: `cd apps/api && go vet ./... && go test ./...`,
+then `cd apps/web && npm ci && npm run lint && npm test && npm run build`.
+Node 24, the Go version in `apps/api/go.mod`, a C compiler, and platform desktop
+dependencies described in the development guide are required.

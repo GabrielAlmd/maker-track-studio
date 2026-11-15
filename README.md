@@ -111,3 +111,5 @@ scope and first-issue guidance. Report vulnerabilities privately as described in
 Maker Track Studio is available under the [MIT License](LICENSE). The included
 Inter, Sora and JetBrains Mono fonts use SIL OFL 1.1; their notices are in
 [`THIRD_PARTY_FONTS_OFL-1.1.txt`](THIRD_PARTY_FONTS_OFL-1.1.txt).
+
+See the [branching and release guide](docs/development/branching-and-releases.md) for PR targets and release procedures.

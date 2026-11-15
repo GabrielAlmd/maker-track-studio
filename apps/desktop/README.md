@@ -6,7 +6,7 @@ Desktop target for Linux and Windows. The app starts an embedded local API runti
 
 ## Prerequisites
 
-- Go 1.26.10+
+- Go 1.26.11+
 - Node.js 20.19+ (Node.js 24 in CI)
 - Linux builds: GTK/WebKit development packages
 
