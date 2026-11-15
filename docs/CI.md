@@ -22,8 +22,7 @@ flowchart TD
 
 Preflight runs Go/npm security checks once, alongside API vet/tests and frontend
 lint/unit/build checks. Native packaging remains limited to PRs into `main`,
-version tags and manual packaging runs. Docker runs for relevant PRs into
-`develop`/`main` and upstream version tags. Docs-only PRs avoid the Docker matrix.
+version tags and manual packaging runs. Docker runs for relevant PRs into `develop`, every PR into `main`, and upstream version tags. Docs-only PRs to develop avoid the Docker matrix.
 The same path rules and depth-2 whole-PR comparison remain in effect.
 
 Heavy jobs start after successful preflight and run in parallel. Both publishers
