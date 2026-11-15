@@ -7,7 +7,7 @@ COPY apps/web/ ./
 RUN npm run build
 
 # Execute the CGO compiler on the target architecture (native runner or QEMU).
-FROM golang:1.26.10-alpine AS api
+FROM golang:1.26.11-alpine AS api
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /src
 COPY apps/api/go.mod apps/api/go.sum ./

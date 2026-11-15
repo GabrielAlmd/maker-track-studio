@@ -1,6 +1,6 @@
 module github.com/GabrielAlmd/maker-track-studio/apps/desktop
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/GabrielAlmd/maker-track-studio/apps/api v0.0.0
