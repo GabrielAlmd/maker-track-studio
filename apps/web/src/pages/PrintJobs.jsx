@@ -46,6 +46,7 @@ const printJobSchema = (t) => yup.object({
   labor_hours: yup
     .number()
     .typeError(t('validation.laborNumber'))
+    .test('finite', t('validation.laborNumber'), (value) => value == null || Number.isFinite(value))
     .min(0, t('validation.nonNegative'))
     .required(t('validation.laborRequired')),
   print_time_minutes: yup
@@ -279,7 +280,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
             <input
               id="print-job-labor"
               type="number"
-              step="0.5"
+              step="any"
               min="0"
               aria-required="true"
               {...register('labor_hours')}
@@ -490,7 +491,7 @@ function PrintJobs() {
       <div className="space-y-4">
         {error && <InlineError title={t('printJobs.loadError')} message={printJobs ? t('common.existingDataSafe') : error} onRetry={refetch} />}
         {loading && !printJobs ? <div className="page-panel"><TableSkeleton columns={4} label={t('printJobs.loading')} /></div> : !printJobs || printJobs.length === 0 ? (
-          !error && <div className="page-panel"><EmptyState icon={Printer} title={t('dashboard.noJobs')} description={t('dashboard.noJobsHelp')} action={activePrinters.length ? <button onClick={handleAdd} className="page-action">{t('printJobs.addFirst')}</button> : <a href="#/printers" className="page-action">{t('printJobs.addPrinterFirst')}</a>} /></div>
+          !error && (list.hasFilters ? <div className="page-panel"><EmptyState filtered title={t('common.noResults')} description={t('printJobs.differentFilter')} action={<button onClick={list.clear} className="page-action page-action-secondary">{t('printJobs.clearSearch')}</button>} /></div> : <div className="page-panel"><EmptyState icon={Printer} title={t('dashboard.noJobs')} description={t('dashboard.noJobsHelp')} action={activePrinters.length ? <button onClick={handleAdd} className="page-action">{t('printJobs.addFirst')}</button> : <a href="#/printers" className="page-action">{t('printJobs.addPrinterFirst')}</a>} /></div>)
         ) : (
           <div className="space-y-4">
             {visibleJobs.length ? visibleJobs.map((job) => (

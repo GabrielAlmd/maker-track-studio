@@ -20,6 +20,8 @@ it('uses multipart requests for inspection, preview, and import', async () => {
   expect(api.post).toHaveBeenCalledTimes(3);
   expect(api.post.mock.calls.map(([path]) => path)).toEqual(['/data-migration/inspect', '/data-migration/preview', '/data-migration/import']);
   expect(api.post.mock.calls[0][1].get('file')).toBe(file);
+  expect(api.post.mock.calls[1][1].get('file')).toBe(file);
+  expect(api.post.mock.calls[2][1].get('file')).toBe(file);
   expect(JSON.parse(api.post.mock.calls[1][1].get('plan'))).toEqual(plan);
   expect(JSON.parse(api.post.mock.calls[2][1].get('plan'))).toEqual(plan);
 });
