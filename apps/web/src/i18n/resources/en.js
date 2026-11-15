@@ -167,7 +167,7 @@ export default {
     breakdown: 'Cost Breakdown', filament: 'Filament Cost:', electricity: 'Electricity Cost:', wear: 'Wear Cost:', labor: 'Labor Cost:', total: 'Total Cost:',
   },
   costSettings: {
-    preview: 'Machine cost preview', estimated: 'Estimated machine cost', perHour: '/ hour', previewChanges: 'Preview of your changes.', savedSettings: 'Based on your saved settings.', applyExisting: 'Save to apply to existing print jobs.', keepExisting: 'Existing Print Jobs keep their saved inputs.',
+    preview: 'Machine cost preview', estimated: 'Estimated machine cost', perHour: '/ hour', previewChanges: 'Preview of your changes.', savedSettings: 'Based on your saved settings.', applyExisting: 'Save to apply to existing print jobs.', keepExisting: 'Print Jobs with saved printer inputs keep them.',
     totalInvestment: 'Total investment', lifetimeCost: 'Lifetime cost', annualHours: 'Annual printing hours', capitalBefore: 'Capital cost before buffer', electricityBefore: 'Electricity before buffer',
     advancedFormula: 'Machine rate = (capital + electricity) × buffer.', simpleFormula: 'Machine rate = manual wear + hourly electricity charge.', jobExtras: 'Filament and labor are added for each job.',
     mode: 'Calculation mode', machineCalculation: 'Machine cost calculation', simple: 'Simple', simpleHelp: 'Enter hourly rates directly. Ideal for a quick estimate.', advanced: 'Advanced', advancedHelp: 'Calculate the rate from investment, usage and power.',
@@ -197,7 +197,7 @@ export default {
   calculation: {
     previousCosts: 'Previous additional costs', maxExpenses: 'Maximum 500 expenses', descriptionRequired: 'Description is required', maxCharacters: 'Maximum 200 characters', validDate: 'Enter a valid date', totalMaximum: 'Total must not exceed 1000000000',
     saved: 'New-printer cost defaults saved', saveError: 'Could not save all changes. Your entries are still here. Retry to save the remaining changes; Discard keeps any values already saved.', empty: 'No configuration entries found.',
-    title: 'New-printer cost defaults', help: 'These values are copied only when you add a printer. Edit a printer’s costs from Printers; existing printers and Print Jobs are not changed.',
+    title: 'New-printer cost defaults', help: 'These defaults are copied when you add a printer. Edit existing printers from Printers. Jobs with saved printer inputs keep them; legacy jobs without saved printer inputs use these defaults and may recalculate when you save.',
     equipment: 'Equipment and improvements', equipmentHelp: 'Add upgrades, build plates and other equipment to the default template. Their total is copied into a new printer’s investment. Repairs already included in annual maintenance should not be counted again. Dates are optional for older expenses.',
     noExpenses: 'No equipment expenses yet.', expenseDescription: 'Description', expenseCategory: 'Category', categories: { spareParts: 'Spare parts', additional: 'Additional', other: 'Other' }, dateOptional: 'Date (optional)', amount: 'Amount (€)', removeExpense: 'Remove expense {{number}}', addExpense: 'Add expense', equipmentTotal: 'Equipment total',
     saving: 'Saving changes…', unsaved: 'You have unsaved changes', allSaved: 'All changes saved', discard: 'Discard changes',

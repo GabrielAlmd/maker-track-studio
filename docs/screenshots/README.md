@@ -11,7 +11,7 @@ The catalogue covers:
 
 - every primary page in light and dark mode;
 - every Settings section, including Features, the language selector and Simple and Advanced calculation modes;
-- the Portuguese (Portugal) Settings screen in both themes;
+- the Portuguese (Portugal) Settings screen and calculation-defaults guidance in both themes;
 - create forms, filters (including Print Jobs model search), filament type management and inline cost details;
 - physical printer profiles, default/archive states and printer-specific costs;
 - the Dashboard's recorded-expense breakdown, first-run migration entry point and the feature-gated Business Dashboard with completed-order financial metrics and recent Orders;
@@ -23,7 +23,7 @@ The catalogue covers:
 - the spreadsheet migration wizard with automatic mapping and validated preview;
 - keyboard focus and pointer hover in the primary navigation.
 
-The two calculation-settings images intentionally capture the complete scrollable
+The calculation-settings images intentionally capture the complete scrollable
 form. Most remaining images use the standard desktop viewport; the Sales compact
 scenarios use a 900px-wide viewport to verify laptop reflow. Selected narrow
 scenarios use a 390px-wide viewport to verify smaller-window navigation, forms,

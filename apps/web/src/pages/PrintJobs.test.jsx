@@ -1,3 +1,4 @@
+import { apiPage } from '../test/apiFixtures';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PrintJobs from './PrintJobs';
@@ -67,7 +68,7 @@ describe('PrintJobs page', () => {
   });
 
   it('calculates model estimates by quantity and saves the selected filament', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', print_time: 60, material_weight: 12.34, waste_material: 0 }]);
     filamentService.getFilaments.mockResolvedValue([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
     printJobService.createPrintJob.mockResolvedValue({ id: 'new-job' });
@@ -95,7 +96,7 @@ describe('PrintJobs page', () => {
   });
 
   it('includes decimal model waste exactly once in the automatic filament weight', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([{
       id: 'm1', name: 'Gear', print_time: 60, material_weight: 12.34, waste_material: 1.11,
     }]);
@@ -127,7 +128,7 @@ describe('PrintJobs page', () => {
   });
 
   it('submits manually entered two-decimal filament weight unchanged', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([]);
     filamentService.getFilaments.mockResolvedValue([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
     printJobService.createPrintJob.mockResolvedValue({ id: 'new-job' });
@@ -151,7 +152,7 @@ describe('PrintJobs page', () => {
   });
 
   it('keeps manual overrides when changing quantity and clears automatic values when deselecting', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', print_time: 60, material_weight: 12.5, waste_material: 2.5 }]);
     filamentService.getFilaments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -174,11 +175,11 @@ describe('PrintJobs page', () => {
   });
 
   it('keeps saved estimates on edit and replaces persisted filament rows', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([{
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([{
       id: 'j1', printer_id: 'p1', model_id: 'm1', print_date: '2026-04-01T00:00:00.000Z',
       units_printed: 2, labor_hours: 0, print_time_minutes: 95,
       filaments: [{ id: 'pjf1', filament_id: 'f1', weight_used: 30 }],
-    }]);
+    }]));
     modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', print_time: 60, material_weight: 12.5, waste_material: 2.5 }]);
     filamentService.getFilaments.mockResolvedValue([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
     const user = userEvent.setup();
@@ -195,7 +196,7 @@ describe('PrintJobs page', () => {
   });
 
   it('renders estimated cost from API response', async () => {
-    printJobService.getPrintJobs.mockResolvedValueOnce([
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([
       {
         id: 'j1',
         model_id: 'm1',
@@ -207,7 +208,7 @@ describe('PrintJobs page', () => {
         estimated_cost: 28.01,
         filaments: [{ id: 'pjf1', filament_id: 'f1', weight_used: 150 }],
       },
-    ]);
+    ]));
     modelService.getModels.mockResolvedValueOnce([{ id: 'm1', name: 'Gear', print_time: 120 }]);
     filamentService.getFilaments.mockResolvedValueOnce([
       { id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black', avg_price: 30 },
@@ -220,11 +221,11 @@ describe('PrintJobs page', () => {
   });
 
   it('shows allocation capacity and supports retry when metadata fails to load', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([{
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([{
       id: 'j1', model_id: 'm1', model: { state: 'assigned', id: 'm1', name: 'Gear' },
       print_date: '2026-04-01T00:00:00.000Z', units_printed: 6, labor_hours: 0,
       print_time_minutes: 120, filaments: [],
-    }]);
+    }]));
     modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear' }]);
     filamentService.getFilaments.mockResolvedValue([]);
     salesService.getPrintJobAllocations.mockRejectedValueOnce(new Error('Network failure')).mockResolvedValue({
@@ -248,7 +249,7 @@ describe('PrintJobs page', () => {
   });
 
   it('shows validation errors when submitting empty print job form', async () => {
-    printJobService.getPrintJobs.mockResolvedValueOnce([]);
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([]));
     modelService.getModels.mockResolvedValueOnce([]);
     filamentService.getFilaments.mockResolvedValueOnce([]);
     const user = userEvent.setup();
@@ -265,11 +266,11 @@ describe('PrintJobs page', () => {
   });
 
   it('submits valid print job payload with nullable model', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([]);
     filamentService.getFilaments.mockResolvedValue([]);
     printJobService.createPrintJob.mockResolvedValueOnce({ id: 'job-1' });
-    printJobService.getPrintJobs.mockResolvedValueOnce([]);
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([]));
 
     const user = userEvent.setup();
     render(<PrintJobs />);
@@ -307,7 +308,7 @@ describe('PrintJobs page', () => {
       { id: 'p2', name: 'Selected', is_default: false, is_archived: false },
       { id: 'p3', name: 'Archived', is_default: false, is_archived: true },
     ]);
-    printJobService.getPrintJobs.mockResolvedValue([]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([]);
     filamentService.getFilaments.mockResolvedValue([]);
     printJobService.createPrintJob.mockResolvedValue({ id: 'job-2' });
@@ -319,7 +320,9 @@ describe('PrintJobs page', () => {
     await user.selectOptions(screen.getByRole('listbox', { name: 'Printer' }), 'p2');
     await waitFor(() => expect(printJobService.getPrintJobs).toHaveBeenCalledWith(expect.objectContaining({ printer_id: 'p2' })));
     await user.click(screen.getByText('Filters (1)'));
-    await user.click(await screen.findByRole('button', { name: /add first print job/i }));
+    expect(await screen.findByText('No results match your search')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /add first print job/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add Print Job', exact: true }));
 
     const printer = screen.getByRole('combobox', { name: 'Printer' });
     expect(printer).toHaveValue('p1');
@@ -339,7 +342,7 @@ describe('PrintJobs page', () => {
       { id: 'p1', name: 'Current default', is_default: true, is_archived: false },
       { id: 'p-old', name: 'Old machine', is_default: false, is_archived: true },
     ]);
-    printJobService.getPrintJobs.mockResolvedValueOnce([{
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([{
       id: 'j-archived',
       printer_id: 'p-old',
       printer_cost: { printer_name: 'Retired MK3' },
@@ -349,11 +352,11 @@ describe('PrintJobs page', () => {
       labor_hours: 0,
       print_time_minutes: 60,
       filaments: [],
-    }]);
+    }]));
     modelService.getModels.mockResolvedValue([]);
     filamentService.getFilaments.mockResolvedValue([]);
     printJobService.updatePrintJob.mockResolvedValue({});
-    printJobService.getPrintJobs.mockResolvedValueOnce([]);
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([]));
 
     const user = userEvent.setup();
     render(<PrintJobs />);
@@ -372,13 +375,13 @@ describe('PrintJobs page', () => {
   });
 
   it('edits an existing print job', async () => {
-    printJobService.getPrintJobs.mockResolvedValueOnce([
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([
       { id: 'j1', printer_id: 'p1', model_id: null, print_date: '2026-04-01T00:00:00.000Z', units_printed: 2, labor_hours: 1, print_time_minutes: 60, filaments: [] },
-    ]);
+    ]));
     modelService.getModels.mockResolvedValue([]);
     filamentService.getFilaments.mockResolvedValue([]);
     printJobService.updatePrintJob.mockResolvedValueOnce({});
-    printJobService.getPrintJobs.mockResolvedValueOnce([]);
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([]));
 
     const user = userEvent.setup();
     render(<PrintJobs />);
@@ -399,13 +402,13 @@ describe('PrintJobs page', () => {
   });
 
   it('deletes a print job after confirmation', async () => {
-    printJobService.getPrintJobs.mockResolvedValueOnce([
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([
       { id: 'j1', model_id: null, print_date: '2026-04-01T00:00:00.000Z', units_printed: 1, labor_hours: 0, print_time_minutes: null, filaments: [] },
-    ]);
+    ]));
     modelService.getModels.mockResolvedValue([]);
     filamentService.getFilaments.mockResolvedValue([]);
     printJobService.deletePrintJob.mockResolvedValueOnce({});
-    printJobService.getPrintJobs.mockResolvedValueOnce([]);
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([]));
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const user = userEvent.setup();
@@ -419,7 +422,7 @@ describe('PrintJobs page', () => {
   });
 
   it('shows zero cost when API returns zero estimated_cost', async () => {
-    printJobService.getPrintJobs.mockResolvedValueOnce([
+    printJobService.getPrintJobs.mockResolvedValueOnce(apiPage([
       {
         id: 'j1',
         model_id: null,
@@ -430,7 +433,7 @@ describe('PrintJobs page', () => {
         estimated_cost: 0,
         filaments: [],
       },
-    ]);
+    ]));
     modelService.getModels.mockResolvedValueOnce([]);
     filamentService.getFilaments.mockResolvedValueOnce([]);
 
@@ -440,10 +443,13 @@ describe('PrintJobs page', () => {
   });
 
   it('shows materials without opening details and searches by filament', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([
+    const rows = [
       { id: 'j1', model_id: 'm1', model: { state: 'assigned', id: 'm1', name: 'Gear' }, print_date: '2026-04-01', units_printed: 2, labor_hours: 1, print_time_minutes: 95, estimated_cost: 12, filaments: [{ filament_id: 'f1', weight_used: 30, filament: { state: 'available', id: 'f1', name: 'Generic PLA Black' } }] },
       { id: 'j2', model_id: null, model: { state: 'not_assigned', name: 'Model not assigned' }, print_date: '2026-04-02', units_printed: 1, labor_hours: 0, filaments: [] },
-    ]);
+    ];
+    printJobService.getPrintJobs.mockImplementation(async ({ search }) => apiPage(
+      search ? rows.filter((job) => job.filaments.some((row) => row.filament.name.toLowerCase().includes(search))) : rows,
+    ));
     modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear' }]);
     filamentService.getFilaments.mockResolvedValue([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
     const user = userEvent.setup();
@@ -452,17 +458,17 @@ describe('PrintJobs page', () => {
     expect(screen.getByText('1h 35m')).toBeVisible();
     expect(printJobService.getPrintJobCost).not.toHaveBeenCalled();
     await user.type(screen.getByRole('searchbox'), 'black');
-    expect(screen.getAllByRole('article')).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
     await user.type(screen.getByRole('searchbox'), ' nonexistent');
-    expect(screen.getByText('No results match your search')).toBeVisible();
+    expect(await screen.findByText('No results match your search')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Clear search' }));
-    expect(screen.getAllByRole('article')).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sort print jobs' }), 'oldest');
     expect(screen.getAllByRole('article')[0]).toHaveAccessibleName('Gear print job');
   });
 
   it('finds a model by name in the list filter', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([
       { id: 'm1', name: 'Alpha bracket' },
       { id: 'm2', name: 'Workshop enclosure' },
@@ -482,7 +488,7 @@ describe('PrintJobs page', () => {
   });
 
   it('loads cost details inline, supports retry and retains details when collapsed', async () => {
-    printJobService.getPrintJobs.mockResolvedValue([{ id: 'j1', print_date: '2026-04-01', units_printed: 1, labor_hours: 0, filaments: [] }]);
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([{ id: 'j1', print_date: '2026-04-01', units_printed: 1, labor_hours: 0, filaments: [] }]));
     modelService.getModels.mockResolvedValue([]);
     filamentService.getFilaments.mockResolvedValue([]);
     printJobService.getPrintJobCost.mockRejectedValueOnce(new Error('Network failure')).mockResolvedValue({ state: 'calculated',

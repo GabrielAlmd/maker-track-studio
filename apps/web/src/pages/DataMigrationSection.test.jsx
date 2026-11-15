@@ -70,6 +70,8 @@ describe('Data migration wizard', () => {
     await user.click(screen.getByRole('checkbox', { name: /I reviewed the preview/i }));
     await user.click(importButton);
     await waitFor(() => expect(migrationService.importMigration).toHaveBeenCalledOnce());
+    expect(migrationService.previewMigration.mock.calls[0][0]).toBe(file);
+    expect(migrationService.importMigration).toHaveBeenCalledWith(file, migrationService.previewMigration.mock.calls[0][1]);
     expect(toast.success).toHaveBeenCalledWith('Spreadsheet data imported successfully');
     expect(migrationService.previewMigration.mock.calls[0][1].sections[0]).toMatchObject({
       section: 'printers', source: 'printers', duplicate_strategy: 'update', defaults: { notes: 'Imported' },

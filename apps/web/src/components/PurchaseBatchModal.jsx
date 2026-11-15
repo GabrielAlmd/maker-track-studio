@@ -10,6 +10,7 @@ import * as yup from 'yup';
 import toast from 'react-hot-toast';
 import { Loader2, Plus } from 'lucide-react';
 import Modal from './ui/Modal';
+import { InlineError } from './ui/PageState';
 import { createFilamentPurchaseBatch } from '../services/filamentPurchaseService';
 import { VALUE_FALLBACKS, formatCurrency, toFiniteNumber } from '../utils/formatters';
 import { useTranslation } from 'react-i18next';
@@ -41,7 +42,7 @@ const batchSchema = (t) => yup.object({
 const emptyLine = () => ({ filament_id: '', is_new: false, price: '', amount: '', brand: '', type: '', color: '' });
 const inputClass = 'w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring';
 
-export default function PurchaseBatchModal({ filaments, onClose, onSaved }) {
+export default function PurchaseBatchModal({ filaments, filamentsLoading, filamentsError, onRetryFilaments, onClose, onSaved }) {
   const { t } = useTranslation();
   const [managingTypes, setManagingTypes] = useState(false);
   const { data: types, loading: typesLoading, error: typesError, refetch: refetchTypes } = useApi(getFilamentTypes);
@@ -76,6 +77,8 @@ export default function PurchaseBatchModal({ filaments, onClose, onSaved }) {
   return (
     <Modal title={t('purchases.new')} onClose={close}>
       <form onSubmit={handleSubmit(submit)} className="space-y-4">
+        {filamentsLoading && <p role="status">{t('filaments.loading')}</p>}
+        {filamentsError && <InlineError title={t('filaments.loadError')} message={filamentsError} onRetry={onRetryFilaments} />}
         <fieldset disabled={isSubmitting} className="space-y-4">
           <p className="text-sm ui-text-secondary">{t('purchaseBatch.help')}</p>
           <label className="block text-sm font-medium ui-text-secondary">

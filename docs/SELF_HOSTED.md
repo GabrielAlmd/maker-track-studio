@@ -3,9 +3,8 @@
 The image workflow builds AMD64 and ARM64 using Buildx
 (native AMD64 and ARM64 build/test runners). The publisher copies the scanned
 OCI archives without rebuilding. Publication occurs through the Desktop release workflow on version tags.
-Local AMD64 smoke tests have passed; hosted ARM64 execution and publication
-have not been run as part of this implementation;
-do not treat this document as a release qualification report.
+v1.0.0 is published; v1.0.1 is in preparation. Current patch evidence and
+pending platform checks belong in the [readiness record](RELEASE_READINESS_1.0.1.md).
 
 ## Installation
 
@@ -57,7 +56,7 @@ engine at login/reboot; Linux hosts must enable the Docker service.
 
 ## Storage and lifecycle
 
-Desktop v0.4.0 and the server use the shared SQLite models and ZIP backup/import
+Desktop and the server use the shared SQLite models and ZIP backup/import
 implementation. Transfer data with an exported backup and the receiving app's
 import workflow; retain the original installation and backup until verification.
 There is no automatic Desktop/server synchronization. Never open a live Desktop
@@ -121,7 +120,7 @@ and rollback from cold volume copies. Broader browser and independent LAN checks
 remain release gates. Deployment to physical devices is performed manually.
 Desktop Windows/Linux packaging remains in its existing workflow.
 
-## v1.0.0 release qualification status
+## v1.0.1 release qualification
 
 Pull requests and manual builds validate both target architectures without package
 write permissions or registry login. Only version-tag pushes in the upstream
@@ -130,7 +129,7 @@ and SBOM attestations; CI checks the combined manifest for AMD64 and ARM64 and
 retains the manifest and immutable image reference as release evidence. Buildx
 uses GitHub Actions caches for both paths.
 
-The v1.0.0 release is not qualified until the required CI runtime results for
+The v1.0.1 patch is not qualified until the required CI runtime results for
 both architectures, compatibility evidence, browser coverage and target-device
 checks have been recorded for the exact release source. Confirmed unaddressed
 critical/high-risk security findings block publication. A successful image
@@ -156,10 +155,11 @@ They do not deploy to your devices. Each job uploads a `self-hosted-runtime-*`
 artifact with phase logs, image identity, architecture and explicit test status,
 including on failure.
 
-There is currently no published earlier self-hosted image. Without a baseline,
-`result.txt` reports `upgrade_rollback=NOT_EXECUTED`; first-release startup,
-backup/restore and restart still run. This is not evidence of compatibility
-between releases. Once an earlier image exists, supply `baseline-image` when
+For v1.0.1, use the published v1.0.0 image tag/digest as the baseline, verifying
+its availability in GHCR first. Without a baseline, `result.txt` reports
+`upgrade_rollback=NOT_EXECUTED`; this does not satisfy the patch release gate.
+If the matching image cannot be obtained, record the check as blocked.
+Supply `baseline-image` when
 starting the workflow manually, or set repository variable
 `SELF_HOSTED_BASELINE_IMAGE` to its versioned GHCR tag/digest for automatic runs.
 The baseline must be a distinct image and support the same Compose contract.

@@ -7,7 +7,7 @@ const filamentOptionLabel = (filament) =>
   (filament?.color ? ` — ${filament.color}` : '');
 
 const sortFilaments = (filaments = []) =>
-  [...filaments].sort((left, right) => {
+  [...(filaments || [])].sort((left, right) => {
     const labelComparison = filamentOptionLabel(left).localeCompare(
       filamentOptionLabel(right),
       undefined,

@@ -38,6 +38,38 @@ const ready = {
 };
 
 const scenarios = [
+  ...['empty', 'pending', 'error'].map((state) => ({
+    slug: `purchases-first-run-${state}`, route: 'purchases',
+    setup: async (page) => {
+      await page.route('**/api/filament-purchases*', (route) => route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 25 } }));
+      await page.route('**/api/filaments', (route) => {
+        if (state === 'pending') return;
+        return route.fulfill({ status: state === 'error' ? 500 : 200, json: state === 'error' ? { error: 'Fixture lookup unavailable' } : [] });
+      });
+    },
+    prepare: async (page) => {
+      await page.getByRole('button', { name: 'Record first purchase' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      if (state === 'pending') await expect(page.getByRole('dialog').getByRole('status')).toBeVisible();
+      if (state === 'error') await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
+    },
+  })),
+  {
+    slug: 'print-jobs-search-empty', route: 'print-jobs',
+    setup: async (page) => {
+      await page.route('**/api/print-jobs?*', async (route) => {
+        if (new URL(route.request().url()).searchParams.get('search')) {
+          await route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 25 } });
+        } else await route.fallback();
+      });
+    },
+    prepare: async (page) => {
+      await ready.printJobs(page);
+      await page.getByRole('searchbox').fill('No matching fixture');
+      await expect(page.getByText('No results match your search')).toBeVisible();
+      await expect(page.getByRole('button', { name: /clear search/i })).toBeVisible();
+    },
+  },
   { slug: 'dashboard', route: 'dashboard', fullPage: true, prepare: ready.dashboard },
   { slug: 'dashboard-narrow', route: 'dashboard', viewport: { width: 390, height: 844 }, fullPage: true, prepare: ready.dashboard },
   {
@@ -110,6 +142,7 @@ const scenarios = [
       await modal.getByRole('combobox', { name: 'Model' }).fill('modular');
       await modal.getByRole('option', { name: 'Modular Enclosure' }).click();
       await modal.locator('input[name="print_date"]').fill('2026-09-18');
+      await modal.locator('input[name="labor_hours"]').fill('0.25');
       await modal.getByLabel('Filament 1').fill('matte');
       await modal.getByRole('option', { name: 'Bambu Lab PLA — Matte Black' }).click();
       await expect(modal).toBeVisible();
@@ -267,7 +300,15 @@ const scenarios = [
     slug: 'settings-appearance-pt', route: 'settings', locale: 'pt-PT', fullPage: true, prepare: (page) => expect(page.getByRole('heading', { name: 'Definições' })).toBeVisible(),
   },
   {
-    slug: 'settings-calculations', route: 'settings?section=calculations', fullPage: true, prepare: (page) => expect(page.getByRole('radio', { name: /Simple/ })).toBeVisible(),
+    slug: 'settings-calculations', route: 'settings?section=calculations', fullPage: true, prepare: async (page) => {
+      await expect(page.getByRole('radio', { name: /Simple/ })).toBeVisible();
+      await expect(page.getByText(/legacy jobs without saved printer inputs/)).toBeVisible();
+    },
+  },
+  {
+    slug: 'settings-calculations-pt', route: 'settings?section=calculations', locale: 'pt-PT', fullPage: true, prepare: async (page) => {
+      await expect(page.getByText(/as antigas sem esses valores usam estas predefinições/)).toBeVisible();
+    },
   },
   {
     slug: 'settings-features', route: 'settings?section=features', fullPage: true, prepare: (page) => expect(page.getByText('Track orders, selling prices, production allocation, revenue and profit.')).toBeVisible(),
@@ -276,6 +317,20 @@ const scenarios = [
     slug: 'settings-calculations-advanced', route: 'settings?section=calculations', fullPage: true, prepare: async (page) => {
       await page.getByRole('radio', { name: /Advanced/ }).click();
       await expect(page.getByText('Total investment')).toBeVisible();
+      await expect(page.getByText(/legacy jobs without saved printer inputs/)).toBeVisible();
+    },
+  },
+  {
+    slug: 'settings-backups-restored', route: 'settings?section=backups',
+    setup: async (page) => {
+      await page.route('**/api/desktop-data/import', (route) => route.fulfill({ json: { ok: true } }));
+    },
+    prepare: async (page) => {
+      const input = page.getByLabel('Desktop backup file');
+      await input.setInputFiles({ name: 'fixture.zip', mimeType: 'application/zip', buffer: Buffer.from('synthetic fixture') });
+      await page.getByRole('button', { name: 'Import Backup' }).click();
+      await expect(input).toHaveValue('');
+      await expect(page.getByRole('button', { name: 'Import Backup' })).toBeDisabled();
     },
   },
   {
