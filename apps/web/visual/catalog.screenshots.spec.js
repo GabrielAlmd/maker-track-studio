@@ -145,6 +145,7 @@ const scenarios = [
       await modal.locator('input[name="labor_hours"]').fill('0.25');
       await modal.getByLabel('Filament 1').fill('matte');
       await modal.getByRole('option', { name: 'Bambu Lab PLA — Matte Black' }).click();
+      await expect(modal.getByText(/Total material: .* g/)).toBeVisible();
       await expect(modal).toBeVisible();
     },
   },

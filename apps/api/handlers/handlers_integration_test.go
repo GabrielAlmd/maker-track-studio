@@ -898,14 +898,14 @@ func TestFilamentWeightPrecisionRoundTripsAndDrivesCost(t *testing.T) {
 	assertFloat(t, cost["filament_cost"], 13.57)
 
 	for _, weight := range []float64{0.01, 0.12, 1.23, 12.34, 999.99, 1000.01} {
-		createRes := performRequest(t, r, http.MethodPost, "/print-job-filaments", map[string]any{
+		updateRes := performRequest(t, r, http.MethodPut, "/print-job-filaments/"+usage.ID.String(), map[string]any{
 			"print_job_id": fixture.JobID, "filament_id": fixture.FilamentID, "weight_used": weight,
 		})
-		if createRes.Code != http.StatusCreated {
-			t.Fatalf("create %.2f g usage: %d %s", weight, createRes.Code, createRes.Body.String())
+		if updateRes.Code != http.StatusOK {
+			t.Fatalf("update %.2f g usage: %d %s", weight, updateRes.Code, updateRes.Body.String())
 		}
 		var created apiResponse
-		decodeBody(t, createRes, &created)
+		decodeBody(t, updateRes, &created)
 		assertFloat(t, created["weight_used"], weight)
 		usageID, ok := created["id"].(string)
 		if !ok {
@@ -918,6 +918,36 @@ func TestFilamentWeightPrecisionRoundTripsAndDrivesCost(t *testing.T) {
 		var fetched apiResponse
 		decodeBody(t, getRes, &fetched)
 		assertFloat(t, fetched["weight_used"], weight)
+	}
+}
+
+func TestPrintJobFilamentRejectsDuplicateAndInvalidWeight(t *testing.T) {
+	r, db := setupTestRouter(t)
+	fixture := createModernCostFixture(t, r)
+	var original models.PrintJobFilament
+	if err := db.Where("print_job_id = ?", fixture.JobID).First(&original).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, weight := range []any{0, -1, "NaN"} {
+		res := performRequest(t, r, http.MethodPut, "/print-job-filaments/"+original.ID.String(), map[string]any{
+			"print_job_id": fixture.JobID, "filament_id": fixture.FilamentID, "weight_used": weight,
+		})
+		if res.Code != http.StatusBadRequest {
+			t.Fatalf("weight %v: status %d", weight, res.Code)
+		}
+	}
+	duplicate := performRequest(t, r, http.MethodPost, "/print-job-filaments", map[string]any{
+		"print_job_id": fixture.JobID, "filament_id": fixture.FilamentID, "weight_used": 2.5,
+	})
+	if duplicate.Code != http.StatusConflict {
+		t.Fatalf("duplicate status: %d", duplicate.Code)
+	}
+	var rows []models.PrintJobFilament
+	if err := db.Where("print_job_id = ?", fixture.JobID).Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].WeightUsed != original.WeightUsed {
+		t.Fatalf("invalid request changed material rows: %+v", rows)
 	}
 }
 func TestPrintJobsListIncludesEstimatedCost(t *testing.T) {

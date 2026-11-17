@@ -10,7 +10,7 @@ import { getFilaments } from '../services/filamentService';
 import { getPrinters } from '../services/printerService';
 
 vi.mock('../services/printJobService', () => ({ getPrintJobs: vi.fn(), getPrintJobCost: vi.fn(), createPrintJob: vi.fn(), updatePrintJob: vi.fn(), deletePrintJob: vi.fn() }));
-vi.mock('../services/printJobFilamentService', () => ({ createPrintJobFilament: vi.fn(), deletePrintJobFilament: vi.fn() }));
+vi.mock('../services/printJobFilamentService', () => ({ createPrintJobFilament: vi.fn(), updatePrintJobFilament: vi.fn(), deletePrintJobFilament: vi.fn() }));
 vi.mock('../services/modelService', () => ({ getModels: vi.fn(), createModel: vi.fn() }));
 vi.mock('../services/filamentService', () => ({ getFilaments: vi.fn() }));
 vi.mock('../services/printerService', () => ({ getPrinters: vi.fn() }));
@@ -77,8 +77,8 @@ describe('Print Jobs labor and quantity inputs (C11–C17)', () => {
     }
     await user.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(jobs.updatePrintJob).toHaveBeenCalledExactlyOnceWith('j1', expect.objectContaining({ units_printed: 3, labor_hours: hours, print_time_minutes: 90 })));
-    expect(materials.deletePrintJobFilament).toHaveBeenCalledExactlyOnceWith('usage-1');
-    expect(materials.createPrintJobFilament).toHaveBeenCalledExactlyOnceWith({ print_job_id: 'j1', filament_id: 'f1', weight_used: 150 });
+    expect(materials.updatePrintJobFilament).toHaveBeenCalledExactlyOnceWith('usage-1', { print_job_id: 'j1', filament_id: 'f1', weight_used: 150 });
+    expect(materials.deletePrintJobFilament).not.toHaveBeenCalled();
   });
 
   it('accepts fifteen minutes as 0.25 labor hours in the native input', async () => {

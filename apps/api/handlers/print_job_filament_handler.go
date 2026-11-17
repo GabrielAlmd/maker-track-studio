@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+	"math"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +18,8 @@ type PrintJobFilamentInput struct {
 	FilamentID uuid.UUID `json:"filament_id" binding:"required"`
 	WeightUsed float64   `json:"weight_used" binding:"required"`
 }
+
+var errDuplicatePrintJobFilament = errors.New("duplicate print job filament")
 
 // GetPrintJobsFilament godoc
 // @Summary      List all print job filaments
@@ -78,6 +82,10 @@ func CreatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
+		if !validPrintJobFilamentWeight(input.WeightUsed) {
+			c.JSON(400, gin.H{"error": "Weight used must be a finite positive number"})
+			return
+		}
 		if !printJobFilamentTargetsExist(db, input.PrintJobID, input.FilamentID) {
 			c.JSON(400, gin.H{"error": "Print job or filament not found"})
 			return
@@ -89,7 +97,24 @@ func CreatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			CreatedAt:  time.Now(),
 			UpdatedAt:  time.Now(),
 		}
-		if err := db.Create(&printJobFilament).Error; err != nil {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("UPDATE print_jobs SET updated_at = updated_at WHERE id = ?", input.PrintJobID).Error; err != nil {
+				return err
+			}
+			duplicate, err := duplicatePrintJobFilament(tx, input.PrintJobID, input.FilamentID, uuid.Nil)
+			if err != nil {
+				return err
+			}
+			if duplicate {
+				return errDuplicatePrintJobFilament
+			}
+			return tx.Create(&printJobFilament).Error
+		})
+		if errors.Is(err, errDuplicatePrintJobFilament) {
+			c.JSON(409, gin.H{"error": "Filament is already recorded for this print job"})
+			return
+		}
+		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to create print job filament"})
 			return
 		}
@@ -127,16 +152,36 @@ func UpdatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
+		if !validPrintJobFilamentWeight(input.WeightUsed) {
+			c.JSON(400, gin.H{"error": "Weight used must be a finite positive number"})
+			return
+		}
 		if !printJobFilamentTargetsExist(db, input.PrintJobID, input.FilamentID) {
 			c.JSON(400, gin.H{"error": "Print job or filament not found"})
 			return
 		}
-		printJobFilament.PrintJobID = input.PrintJobID
-		printJobFilament.FilamentID = input.FilamentID
-		printJobFilament.WeightUsed = input.WeightUsed
-		printJobFilament.UpdatedAt = time.Now()
-
-		if err := db.Save(&printJobFilament).Error; err != nil {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("UPDATE print_jobs SET updated_at = updated_at WHERE id = ?", input.PrintJobID).Error; err != nil {
+				return err
+			}
+			duplicate, err := duplicatePrintJobFilament(tx, input.PrintJobID, input.FilamentID, printJobFilament.ID)
+			if err != nil {
+				return err
+			}
+			if duplicate {
+				return errDuplicatePrintJobFilament
+			}
+			printJobFilament.PrintJobID = input.PrintJobID
+			printJobFilament.FilamentID = input.FilamentID
+			printJobFilament.WeightUsed = input.WeightUsed
+			printJobFilament.UpdatedAt = time.Now()
+			return tx.Save(&printJobFilament).Error
+		})
+		if errors.Is(err, errDuplicatePrintJobFilament) {
+			c.JSON(409, gin.H{"error": "Filament is already recorded for this print job"})
+			return
+		}
+		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to update print job filament"})
 			return
 		}
@@ -146,6 +191,20 @@ func UpdatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 		}
 		c.JSON(200, printJobFilamentDTO(printJobFilament))
 	}
+}
+
+func validPrintJobFilamentWeight(weight float64) bool {
+	return weight > 0 && !math.IsNaN(weight) && !math.IsInf(weight, 0)
+}
+
+func duplicatePrintJobFilament(db *gorm.DB, jobID, filamentID, excludeID uuid.UUID) (bool, error) {
+	query := db.Model(&models.PrintJobFilament{}).Where("print_job_id = ? AND filament_id = ?", jobID, filamentID)
+	if excludeID != uuid.Nil {
+		query = query.Where("id <> ?", excludeID)
+	}
+	var count int64
+	err := query.Count(&count).Error
+	return count > 0, err
 }
 
 func printJobFilamentTargetsExist(db *gorm.DB, printJobID, filamentID uuid.UUID) bool {

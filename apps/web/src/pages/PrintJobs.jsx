@@ -25,6 +25,7 @@ import {
 import {
   createPrintJobFilament,
   deletePrintJobFilament,
+  updatePrintJobFilament,
 } from '../services/printJobFilamentService';
 import { getModels } from '../services/modelService';
 import { getFilaments } from '../services/filamentService';
@@ -79,6 +80,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
   const [filamentRows, setFilamentRows] = useState(
     printJob?.filaments?.length
       ? printJob.filaments.map((pjf) => ({
+        id: pjf.id,
         filament_id: pjf.filament_id,
         weight_used: pjf.weight_used,
       }))
@@ -136,12 +138,12 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
     const weight = (materialWeight + wasteMaterial) * units;
     const weightUsed = Number.isFinite(weight) && weight > 0 ? Number(weight.toFixed(2)) : '';
     setFilamentRows((rows) => {
-      if (modelChanged) {
-        return model && weightUsed > 0
-          ? [{ filament_id: rows.length === 1 ? rows[0].filament_id : '', weight_used: weightUsed, _automaticWeight: true }]
-          : rows.filter((row) => !row._automaticWeight);
-      }
-      return rows.map((row) => row._automaticWeight ? { ...row, weight_used: weightUsed } : row);
+      const automatic = rows.find((row) => row._automaticWeight);
+      const manual = rows.filter((row) => !row._automaticWeight);
+      if (!model || !weightUsed) return manual;
+      if (automatic) return [...manual, { ...automatic, weight_used: weightUsed }];
+      // A model default is useful only when no material split has been entered.
+      return manual.length ? manual : [{ filament_id: '', weight_used: weightUsed, _automaticWeight: true }];
     });
   };
 
@@ -154,24 +156,20 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
   };
 
   const syncFilaments = async (jobId, existingFilaments = []) => {
-    // Delete all existing filament rows then re-insert (simple diff strategy)
-    await Promise.all(
-      existingFilaments
-        .filter((pjf) => pjf.id)
-        .map((pjf) => deletePrintJobFilament(pjf.id))
-    );
-    const validRows = filamentRows.filter(
-      (r) => r.filament_id && Number(r.weight_used) > 0
-    );
-    await Promise.all(
-      validRows.map((r) =>
-        createPrintJobFilament({
-          print_job_id: jobId,
-          filament_id: r.filament_id,
-          weight_used: Number(r.weight_used),
-        })
-      )
-    );
+    for (const row of filamentRows) {
+      const payload = { print_job_id: jobId, filament_id: row.filament_id, weight_used: Number(row.weight_used) };
+      const previous = existingFilaments.find((item) => item.id === row.id);
+      if (previous) {
+        if (previous.filament_id !== payload.filament_id || previous.weight_used !== payload.weight_used) {
+          await updatePrintJobFilament(row.id, payload);
+        }
+      } else {
+        await createPrintJobFilament(payload);
+      }
+    }
+    for (const previous of existingFilaments) {
+      if (!filamentRows.some((row) => row.id === previous.id)) await deletePrintJobFilament(previous.id);
+    }
   };
 
   const onSubmit = async (data) => {
@@ -183,6 +181,8 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
           .positive(t('validation.filamentWeightPositive')).required(t('validation.filamentWeightRequired'))
           .test('finite', t('validation.filamentWeightFinite'), Number.isFinite),
       })).validate(filamentRows);
+      const ids = filamentRows.map((row) => row.filament_id);
+      if (new Set(ids).size !== ids.length) throw new Error(t('validation.duplicateFilament'));
       const payload = {
         printer_id: data.printer_id,
         model_id: data.model_id || null,
@@ -355,6 +355,9 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
               </div>
             ))}
           </div>
+          {filamentRows.length > 0 && <p className="mt-2 text-xs ui-text-secondary">
+            {t('printJobs.totalMaterial')}: {filamentRows.reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g
+          </p>}
         </div>
 
         <div className="flex justify-end gap-3 pt-2">

@@ -38,6 +38,7 @@ vi.mock('../services/filamentService', () => ({
 
 vi.mock('../services/printJobFilamentService', () => ({
   createPrintJobFilament: vi.fn(),
+  updatePrintJobFilament: vi.fn(),
   deletePrintJobFilament: vi.fn(),
 }));
 
@@ -151,6 +152,26 @@ describe('PrintJobs page', () => {
     }));
   });
 
+  it('rejects the same filament in two material rows before saving a job', async () => {
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
+    modelService.getModels.mockResolvedValue([]);
+    filamentService.getFilaments.mockResolvedValue([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
+    const user = userEvent.setup();
+    render(<PrintJobs />);
+    await user.click(await screen.findByRole('button', { name: /add first print job/i }));
+    for (let i = 0; i < 2; i++) {
+      await user.click(screen.getByRole('button', { name: /add filament/i }));
+      const selector = screen.getByRole('combobox', { name: `Filament ${i + 1}` });
+      await user.click(selector);
+      await user.click(screen.getByRole('option', { name: /Black$/ }));
+    }
+    screen.getAllByPlaceholderText('g').forEach((input) => fireEvent.change(input, { target: { value: '10' } }));
+    fireEvent.change(document.querySelector('input[name="print_date"]'), { target: { value: '2026-04-03' } });
+    await user.click(screen.getByRole('button', { name: /create print job/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Each filament can only be listed once');
+    expect(printJobService.createPrintJob).not.toHaveBeenCalled();
+  });
+
   it('keeps manual overrides when changing quantity and clears automatic values when deselecting', async () => {
     printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', print_time: 60, material_weight: 12.5, waste_material: 2.5 }]);
@@ -168,13 +189,13 @@ describe('PrintJobs page', () => {
     await chooseModel(user, '');
     await chooseModel(user);
     expect(time).toHaveValue(120);
-    expect(screen.getByPlaceholderText('g')).toHaveValue(30);
+    expect(screen.getByPlaceholderText('g')).toHaveValue(20);
     await chooseModel(user, '');
     expect(time).toHaveValue(null);
-    expect(screen.queryByPlaceholderText('g')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('g')).toHaveValue(20);
   });
 
-  it('keeps saved estimates on edit and replaces persisted filament rows', async () => {
+  it('keeps measured material rows and IDs on edit', async () => {
     printJobService.getPrintJobs.mockResolvedValue(apiPage([{
       id: 'j1', printer_id: 'p1', model_id: 'm1', print_date: '2026-04-01T00:00:00.000Z',
       units_printed: 2, labor_hours: 0, print_time_minutes: 95,
@@ -189,10 +210,9 @@ describe('PrintJobs page', () => {
     expect(screen.getByPlaceholderText(/e.g. 90/i)).toHaveValue(95);
     expect(screen.getByPlaceholderText('g')).toHaveValue(30);
     await user.click(screen.getByRole('button', { name: /save changes/i }));
-    await waitFor(() => expect(printJobFilamentService.deletePrintJobFilament).toHaveBeenCalledWith('pjf1'));
-    await waitFor(() => expect(printJobFilamentService.createPrintJobFilament).toHaveBeenCalledWith({
-      print_job_id: 'j1', filament_id: 'f1', weight_used: 30,
-    }));
+    await waitFor(() => expect(printJobService.updatePrintJob).toHaveBeenCalled());
+    expect(printJobFilamentService.deletePrintJobFilament).not.toHaveBeenCalled();
+    expect(printJobFilamentService.createPrintJobFilament).not.toHaveBeenCalled();
   });
 
   it('renders estimated cost from API response', async () => {
