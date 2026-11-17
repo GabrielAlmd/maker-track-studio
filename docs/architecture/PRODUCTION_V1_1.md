@@ -1,6 +1,9 @@
 # INV-01: production plans, runs and output
 
 Status: proposed contract for review in #9 and alignment in #19 (BUS-01).
+Implementation note: #10 adds material provenance to existing Print Job filament
+rows and reserves backup schema 5; later production and Inventory migrations
+must build on this schema without replaying legacy consumption as physical stock.
 Target: v1.1.0, jointly with Inventory #7 and Business Operations #8.
 This document specifies future behavior; it does not add tables, routes or UI.
 No production schema implementation is authorized by this specification alone.

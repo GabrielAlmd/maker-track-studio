@@ -34,12 +34,15 @@ type FilamentDTO struct {
 }
 
 type PrintJobFilamentDTO struct {
-	ID         uuid.UUID            `json:"id"`
-	PrintJobID uuid.UUID            `json:"print_job_id"`
-	FilamentID uuid.UUID            `json:"filament_id"`
-	WeightUsed float64              `json:"weight_used"`
-	Filament   FilamentReferenceDTO `json:"filament"`
-	PrintJob   *PrintJobDTO         `json:"print_job,omitempty"` // optional, for expanded view
+	ID               uuid.UUID            `json:"id"`
+	PrintJobID       uuid.UUID            `json:"print_job_id"`
+	FilamentID       uuid.UUID            `json:"filament_id"`
+	WeightUsed       float64              `json:"weight_used"`
+	EstimatedWeightG *float64             `json:"estimated_weight_g,omitempty"`
+	WasteWeightG     *float64             `json:"waste_weight_g,omitempty"`
+	MeasurementState string               `json:"measurement_state"`
+	Filament         FilamentReferenceDTO `json:"filament"`
+	PrintJob         *PrintJobDTO         `json:"print_job,omitempty"` // optional, for expanded view
 }
 
 // ModelReferenceDTO is the sole representation of a print job's model link.

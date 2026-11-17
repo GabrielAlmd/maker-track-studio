@@ -22,11 +22,6 @@ import {
   updatePrintJob,
   deletePrintJob,
 } from '../services/printJobService';
-import {
-  createPrintJobFilament,
-  deletePrintJobFilament,
-  updatePrintJobFilament,
-} from '../services/printJobFilamentService';
 import { getModels } from '../services/modelService';
 import { getFilaments } from '../services/filamentService';
 import { getPrinters } from '../services/printerService';
@@ -83,19 +78,22 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
         id: pjf.id,
         filament_id: pjf.filament_id,
         weight_used: pjf.weight_used,
+        estimated_weight_g: pjf.estimated_weight_g ?? '',
+        waste_weight_g: pjf.waste_weight_g ?? '',
+        measurement_state: pjf.measurement_state ?? 'legacy_unverified',
       }))
       : []
   );
 
   const addFilamentRow = () =>
-    setFilamentRows((prev) => [...prev, { filament_id: '', weight_used: '' }]);
+    setFilamentRows((prev) => [...prev, { filament_id: '', weight_used: '', waste_weight_g: '', measurement_state: 'verified' }]);
 
   const removeFilamentRow = (index) =>
     setFilamentRows((prev) => prev.filter((_, i) => i !== index));
 
   const updateFilamentRow = (index, field, value) =>
     setFilamentRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value, ...(field === 'weight_used' ? { _automaticWeight: false } : {}) } : row))
+      prev.map((row, i) => (i === index ? { ...row, [field]: value, ...(field === 'weight_used' ? { _automaticWeight: false, measurement_state: 'verified', ...(row._automaticWeight ? { waste_weight_g: '' } : {}) } : {}) } : row))
     );
 
   const {
@@ -141,9 +139,10 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
       const automatic = rows.find((row) => row._automaticWeight);
       const manual = rows.filter((row) => !row._automaticWeight);
       if (!model || !weightUsed) return manual;
-      if (automatic) return [...manual, { ...automatic, weight_used: weightUsed }];
+      const estimatedWaste = Number.isFinite(wasteMaterial * units) ? Number((wasteMaterial * units).toFixed(2)) : 0;
+      if (automatic) return [...manual, { ...automatic, weight_used: weightUsed, estimated_weight_g: weightUsed, waste_weight_g: estimatedWaste }];
       // A model default is useful only when no material split has been entered.
-      return manual.length ? manual : [{ filament_id: '', weight_used: weightUsed, _automaticWeight: true }];
+      return manual.length ? manual : [{ filament_id: '', weight_used: weightUsed, estimated_weight_g: weightUsed, waste_weight_g: estimatedWaste, measurement_state: 'estimated', _automaticWeight: true }];
     });
   };
 
@@ -155,23 +154,6 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
     onModelCreated();
   };
 
-  const syncFilaments = async (jobId, existingFilaments = []) => {
-    for (const row of filamentRows) {
-      const payload = { print_job_id: jobId, filament_id: row.filament_id, weight_used: Number(row.weight_used) };
-      const previous = existingFilaments.find((item) => item.id === row.id);
-      if (previous) {
-        if (previous.filament_id !== payload.filament_id || previous.weight_used !== payload.weight_used) {
-          await updatePrintJobFilament(row.id, payload);
-        }
-      } else {
-        await createPrintJobFilament(payload);
-      }
-    }
-    for (const previous of existingFilaments) {
-      if (!filamentRows.some((row) => row.id === previous.id)) await deletePrintJobFilament(previous.id);
-    }
-  };
-
   const onSubmit = async (data) => {
     setSubmitError(null);
     try {
@@ -180,6 +162,9 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
         weight_used: yup.number().typeError(t('validation.filamentWeightNumber'))
           .positive(t('validation.filamentWeightPositive')).required(t('validation.filamentWeightRequired'))
           .test('finite', t('validation.filamentWeightFinite'), Number.isFinite),
+        waste_weight_g: yup.number().transform((value, original) => original === '' ? null : value)
+          .nullable().min(0, t('validation.nonNegative'))
+          .test('within-total', t('validation.wasteWithinTotal'), function (value) { return value == null || value <= Number(this.parent.weight_used); }),
       })).validate(filamentRows);
       const ids = filamentRows.map((row) => row.filament_id);
       if (new Set(ids).size !== ids.length) throw new Error(t('validation.duplicateFilament'));
@@ -190,14 +175,20 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
         units_printed: Number(data.units_printed),
         labor_hours: Number(data.labor_hours),
         print_time_minutes: data.print_time_minutes ? Number(data.print_time_minutes) : null,
+        filaments: filamentRows.map((row) => ({
+          ...(row.id ? { id: row.id } : {}),
+          filament_id: row.filament_id,
+          weight_used: Number(row.weight_used),
+          measurement_state: row.measurement_state,
+          ...(row.estimated_weight_g !== '' ? { estimated_weight_g: Number(row.estimated_weight_g) } : {}),
+          ...(row.waste_weight_g !== '' ? { waste_weight_g: Number(row.waste_weight_g) } : {}),
+        })),
       };
       if (isEdit) {
         await updatePrintJob(printJob.id, payload);
-        await syncFilaments(printJob.id, printJob.filaments ?? []);
         toast.success(t('printJobs.updated'));
       } else {
-        const created = await createPrintJob(payload);
-        await syncFilaments(created.id);
+        await createPrintJob(payload);
         toast.success(t('printJobs.created'));
       }
       onSaved();
@@ -327,7 +318,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
           )}
           <div className="space-y-2">
             {filamentRows.map((row, index) => (
-              <div key={index} className="flex gap-2 items-center">
+              <div key={row.id ?? index} className="flex flex-wrap gap-2 items-center">
                 <FilamentSelect
                   aria-label={`${t('filaments.title').slice(0, -1)} ${index + 1}`}
                   value={row.filament_id}
@@ -344,6 +335,20 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
                   onChange={(e) => updateFilamentRow(index, 'weight_used', e.target.value)}
                   className="w-20 border ui-border-default rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
                 />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder={t('printJobs.wasteGrams')}
+                  aria-label={`${t('printJobs.wasteGrams')} ${index + 1}`}
+                  value={row.waste_weight_g ?? ''}
+                  onChange={(e) => updateFilamentRow(index, 'waste_weight_g', e.target.value)}
+                  className="w-24 border ui-border-default rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
+                />
+                <span className="text-xs ui-text-muted">{t(`printJobs.materialState.${row.measurement_state ?? 'legacy_unverified'}`)}</span>
+                {row.measurement_state === 'verified' && row.estimated_weight_g !== '' && row.estimated_weight_g != null && (
+                  <span className="text-xs ui-text-muted">{t('printJobs.estimateLabel')}: {Number(row.estimated_weight_g).toFixed(2)} g</span>
+                )}
                 <button
                   type="button"
                   onClick={() => removeFilamentRow(index)}
@@ -356,8 +361,9 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
             ))}
           </div>
           {filamentRows.length > 0 && <p className="mt-2 text-xs ui-text-secondary">
-            {t('printJobs.totalMaterial')}: {filamentRows.reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g
+            {t('printJobs.totalMaterial')}: {filamentRows.reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g · {t('printJobs.verifiedMaterial')}: {filamentRows.filter((row) => row.measurement_state === 'verified').reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g
           </p>}
+          <p className="mt-1 text-xs ui-text-muted">{t('printJobs.materialHelp')}</p>
         </div>
 
         <div className="flex justify-end gap-3 pt-2">

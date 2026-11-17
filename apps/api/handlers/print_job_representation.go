@@ -54,7 +54,7 @@ func publicPrinterCostSnapshot(snapshot *models.PrinterCostSnapshot) *models.Pri
 func printJobDTO(pj models.PrintJob, cfg map[string]float64) dto.PrintJobDTO {
 	filaments := make([]dto.PrintJobFilamentDTO, 0, len(pj.Filaments))
 	for _, f := range pj.Filaments {
-		filaments = append(filaments, dto.PrintJobFilamentDTO{ID: f.ID, PrintJobID: f.PrintJobID, FilamentID: f.FilamentID, WeightUsed: f.WeightUsed, Filament: filamentReference(f)})
+		filaments = append(filaments, dto.PrintJobFilamentDTO{ID: f.ID, PrintJobID: f.PrintJobID, FilamentID: f.FilamentID, WeightUsed: f.WeightUsed, EstimatedWeightG: f.EstimatedWeightG, WasteWeightG: f.WasteWeightG, MeasurementState: materialMeasurementState(f), Filament: filamentReference(f)})
 	}
 	cost := calculatePrintJobCostState(pj, cfg)
 	return dto.PrintJobDTO{ID: pj.ID, PrinterID: pj.PrinterID, PrinterCost: publicPrinterCostSnapshot(pj.PrinterCost), ModelID: modelReferenceID(pj), PrintDate: pj.PrintDate, UnitsPrinted: pj.UnitsPrinted, LaborHours: pj.LaborHours, PrintTimeMinutes: pj.PrintTimeMinutes, EstimatedCost: cost.Total, Model: modelReference(pj), Cost: cost, CreatedAt: pj.CreatedAt, UpdatedAt: pj.UpdatedAt, Filaments: filaments}

@@ -43,6 +43,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	if err := db.AutoMigrate(
 		&models.Printer{},
 		&models.PrintJob{},
+		&models.PrintJobFilament{},
 		&salesmodels.SalesChannel{},
 		&salesmodels.SalesOrder{},
 		&salesmodels.SalesOrderItem{},
@@ -948,6 +949,131 @@ func TestPrintJobFilamentRejectsDuplicateAndInvalidWeight(t *testing.T) {
 	}
 	if len(rows) != 1 || rows[0].WeightUsed != original.WeightUsed {
 		t.Fatalf("invalid request changed material rows: %+v", rows)
+	}
+}
+
+func TestPrintJobAggregateMaterialsPreserveIDsAndRollBackOnConflict(t *testing.T) {
+	r, db := setupTestRouter(t)
+	fixture := createModernCostFixture(t, r)
+	var original models.PrintJobFilament
+	if err := db.Where("print_job_id = ?", fixture.JobID).First(&original).Error; err != nil {
+		t.Fatal(err)
+	}
+	input := map[string]any{
+		"printer_id": fixture.Printer.ID.String(), "model_id": fixture.ModelID,
+		"print_date": "2026-09-19T12:00:00Z", "units_printed": 2,
+		"labor_hours": 1.0, "print_time_minutes": 60,
+		"filaments": []map[string]any{{"id": original.ID.String(), "filament_id": fixture.FilamentID, "weight_used": 125.5, "estimated_weight_g": 100.0, "waste_weight_g": 25.5, "measurement_state": "verified"}},
+	}
+	ok := performRequest(t, r, http.MethodPut, "/print-jobs/"+fixture.JobID, input)
+	if ok.Code != http.StatusOK {
+		t.Fatalf("aggregate update: %d %s", ok.Code, ok.Body.String())
+	}
+	var after models.PrintJobFilament
+	if err := db.First(&after, "id = ?", original.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if after.ID != original.ID || after.WeightUsed != 125.5 || after.MeasurementState != "verified" || after.EstimatedWeightG == nil || *after.EstimatedWeightG != 100 || after.WasteWeightG == nil || *after.WasteWeightG != 25.5 {
+		t.Fatalf("material identity or grams changed: %+v", after)
+	}
+	costRes := performRequest(t, r, http.MethodGet, "/print-jobs/"+fixture.JobID+"/cost", nil)
+	if costRes.Code != http.StatusOK {
+		t.Fatalf("cost: %d %s", costRes.Code, costRes.Body.String())
+	}
+	var cost apiResponse
+	decodeBody(t, costRes, &cost)
+	assertFloat(t, cost["filament_cost"], 3.39)
+
+	input["units_printed"] = 3
+	input["filaments"] = []map[string]any{{"id": uuid.New().String(), "filament_id": fixture.FilamentID, "weight_used": 200.0}}
+	conflict := performRequest(t, r, http.MethodPut, "/print-jobs/"+fixture.JobID, input)
+	if conflict.Code != http.StatusConflict {
+		t.Fatalf("unknown material ID: %d %s", conflict.Code, conflict.Body.String())
+	}
+	var job models.PrintJob
+	if err := db.First(&job, "id = ?", fixture.JobID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if job.UnitsPrinted != 2 {
+		t.Fatalf("failed update changed job units to %d", job.UnitsPrinted)
+	}
+	if err := db.First(&after, "id = ?", original.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if after.WeightUsed != 125.5 {
+		t.Fatalf("failed update changed grams to %v", after.WeightUsed)
+	}
+	backup := performRequest(t, r, http.MethodGet, "/desktop-data/export", nil)
+	if backup.Code != http.StatusOK {
+		t.Fatalf("export: %d %s", backup.Code, backup.Body.String())
+	}
+	restoredRouter, restoredDB := setupDesktopTestRouter(t)
+	restore := performMultipartFileRequest(t, restoredRouter, http.MethodPost, "/desktop-data/import", "file", "materials.zip", backup.Body.Bytes())
+	if restore.Code != http.StatusOK {
+		t.Fatalf("restore: %d %s", restore.Code, restore.Body.String())
+	}
+	var restored models.PrintJobFilament
+	if err := restoredDB.First(&restored, "id = ?", original.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if restored.ID != original.ID || restored.MeasurementState != "verified" || restored.EstimatedWeightG == nil || *restored.EstimatedWeightG != 100 || restored.WasteWeightG == nil || *restored.WasteWeightG != 25.5 {
+		t.Fatalf("material metadata lost in backup: %+v", restored)
+	}
+}
+
+func TestPrintJobEstimatedMaterialDoesNotCountAsRecordedWeight(t *testing.T) {
+	r, db := setupTestRouter(t)
+	fixture := createModernCostFixture(t, r)
+	var material models.PrintJobFilament
+	if err := db.Where("print_job_id = ?", fixture.JobID).First(&material).Error; err != nil {
+		t.Fatal(err)
+	}
+	res := performRequest(t, r, http.MethodPut, "/print-jobs/"+fixture.JobID, map[string]any{
+		"printer_id": fixture.Printer.ID.String(), "model_id": fixture.ModelID,
+		"print_date": "2026-09-19T12:00:00Z", "units_printed": 1,
+		"labor_hours": 1.0, "print_time_minutes": 60,
+		"filaments": []map[string]any{{"id": material.ID.String(), "filament_id": fixture.FilamentID, "weight_used": 100.0, "estimated_weight_g": 100.0, "measurement_state": "estimated"}},
+	})
+	if res.Code != http.StatusOK {
+		t.Fatalf("estimate update: %d %s", res.Code, res.Body.String())
+	}
+	stats := performRequest(t, r, http.MethodGet, "/print-jobs/stats", nil)
+	if stats.Code != http.StatusOK {
+		t.Fatalf("stats: %d %s", stats.Code, stats.Body.String())
+	}
+	var body apiResponse
+	decodeBody(t, stats, &body)
+	assertFloat(t, body["total_filament_weight_g"], 0)
+}
+
+func TestPrintJobAggregateCreateRollsBackOnMaterialWriteFailure(t *testing.T) {
+	r, db := setupTestRouter(t)
+	filament := performRequest(t, r, http.MethodPost, "/filaments", map[string]any{
+		"brand": "Rollback", "type": "PLA", "color": "Blue", "avg_price": 25.0, "personal_score": 4,
+	})
+	if filament.Code != http.StatusCreated {
+		t.Fatalf("filament: %d %s", filament.Code, filament.Body.String())
+	}
+	var created apiResponse
+	decodeBody(t, filament, &created)
+	printer := addTestPrinter(t, r, "Rollback printer", "A1")
+	if err := db.Exec("CREATE TRIGGER fail_material_insert BEFORE INSERT ON print_job_filaments BEGIN SELECT RAISE(ABORT, 'injected failure'); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	result := performRequest(t, r, http.MethodPost, "/print-jobs", map[string]any{
+		"printer_id": printer.ID.String(), "print_date": "2026-09-19T12:00:00Z",
+		"units_printed": 1, "labor_hours": 0.0, "print_time_minutes": 60,
+		"filaments": []map[string]any{{"filament_id": created["id"], "weight_used": 10.0, "measurement_state": "verified"}},
+	})
+	if result.Code != http.StatusInternalServerError {
+		t.Fatalf("write failure: %d %s", result.Code, result.Body.String())
+	}
+	var jobs int64
+	if err := db.Model(&models.PrintJob{}).Count(&jobs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 0 {
+		t.Fatalf("material failure left %d print jobs", jobs)
 	}
 }
 func TestPrintJobsListIncludesEstimatedCost(t *testing.T) {

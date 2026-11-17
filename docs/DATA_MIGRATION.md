@@ -54,9 +54,9 @@ and retain the original source file for recovery and audit purposes.
 
 ## Planned production upgrade (v1.1.0)
 
-Issue #9 adds a [production migration design](architecture/PRODUCTION_V1_1.md),
-not a migration or new CSV/XLSX fields. Current imports and backup schema remain
-unchanged. Historical unit counts must retain their IDs and provenance; they
+Issue #9 adds a [production migration design](architecture/PRODUCTION_V1_1.md).
+Issue #10 adds nullable material provenance fields and backup schema 5, without
+new CSV/XLSX fields. Historical unit counts must retain their IDs and provenance; they
 will not automatically become verified physical stock. Future schema and backup
 implementation is gated on BUS-01 agreement and the INV-06 compatibility tests.
 

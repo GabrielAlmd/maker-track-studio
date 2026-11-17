@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -24,7 +25,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 4
+	desktopDataSchemaVersion   = 5
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -143,6 +144,12 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 			!sourceDB.Migrator().HasColumn(&models.PrintJob{}, "printer_id") ||
 			!sourceDB.Migrator().HasColumn(&models.PrintJob{}, "printer_cost")) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Backup is missing printer cost data"})
+			return
+		}
+		if manifest.SchemaVersion >= 5 && (!sourceDB.Migrator().HasColumn(&models.PrintJobFilament{}, "estimated_weight_g") ||
+			!sourceDB.Migrator().HasColumn(&models.PrintJobFilament{}, "waste_weight_g") ||
+			!sourceDB.Migrator().HasColumn(&models.PrintJobFilament{}, "measurement_state")) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Backup is missing material measurement data"})
 			return
 		}
 		backupData, err := installed.ValidateBackups(sourceDB, manifest.SchemaVersion)
@@ -462,6 +469,20 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 	}
 	if err := sourceDB.Order("created_at asc").Find(&printJobFilaments).Error; err != nil {
 		return err
+	}
+	for i := range printJobFilaments {
+		row := &printJobFilaments[i]
+		if row.MeasurementState == "" {
+			row.MeasurementState = "legacy_unverified"
+		}
+		if row.MeasurementState != "legacy_unverified" && row.MeasurementState != "estimated" && row.MeasurementState != "verified" {
+			return errors.New("Backup has an invalid material measurement state")
+		}
+		if row.MeasurementState != "legacy_unverified" && (row.WeightUsed <= 0 || math.IsNaN(row.WeightUsed) || math.IsInf(row.WeightUsed, 0)) ||
+			row.EstimatedWeightG != nil && (*row.EstimatedWeightG <= 0 || math.IsNaN(*row.EstimatedWeightG) || math.IsInf(*row.EstimatedWeightG, 0)) ||
+			row.WasteWeightG != nil && (*row.WasteWeightG < 0 || *row.WasteWeightG > row.WeightUsed || math.IsNaN(*row.WasteWeightG) || math.IsInf(*row.WasteWeightG, 0)) {
+			return errors.New("Backup has invalid material grams")
+		}
 	}
 
 	// All source rows have been read and validated; take the recovery snapshot

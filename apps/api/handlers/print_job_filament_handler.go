@@ -194,7 +194,7 @@ func UpdatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 }
 
 func validPrintJobFilamentWeight(weight float64) bool {
-	return weight > 0 && !math.IsNaN(weight) && !math.IsInf(weight, 0)
+	return weight > 0 && weight <= 1e9 && !math.IsNaN(weight) && !math.IsInf(weight, 0)
 }
 
 func duplicatePrintJobFilament(db *gorm.DB, jobID, filamentID, excludeID uuid.UUID) (bool, error) {
@@ -215,8 +215,15 @@ func printJobFilamentTargetsExist(db *gorm.DB, printJobID, filamentID uuid.UUID)
 	return db.Model(&models.Filament{}).Where("id = ?", filamentID).Count(&filaments).Error == nil && filaments == 1
 }
 
+func materialMeasurementState(row models.PrintJobFilament) string {
+	if row.MeasurementState == "" {
+		return "legacy_unverified"
+	}
+	return row.MeasurementState
+}
+
 func printJobFilamentDTO(pjf models.PrintJobFilament) dto.PrintJobFilamentDTO {
-	return dto.PrintJobFilamentDTO{ID: pjf.ID, PrintJobID: pjf.PrintJobID, FilamentID: pjf.FilamentID, WeightUsed: pjf.WeightUsed, Filament: filamentReference(pjf)}
+	return dto.PrintJobFilamentDTO{ID: pjf.ID, PrintJobID: pjf.PrintJobID, FilamentID: pjf.FilamentID, WeightUsed: pjf.WeightUsed, EstimatedWeightG: pjf.EstimatedWeightG, WasteWeightG: pjf.WasteWeightG, MeasurementState: materialMeasurementState(pjf), Filament: filamentReference(pjf)}
 }
 
 // DeletePrintJobFilament godoc

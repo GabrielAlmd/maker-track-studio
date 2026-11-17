@@ -16,12 +16,131 @@ import (
 )
 
 type PrintJobInput struct {
-	PrinterID        *uuid.UUID `json:"printer_id"`
-	ModelID          *uuid.UUID `json:"model_id"`
-	PrintDate        time.Time  `json:"print_date" binding:"required"`
-	UnitsPrinted     int        `json:"units_printed" binding:"required,gt=0"`
-	LaborHours       *float32   `json:"labor_hours" binding:"required,gte=0"`
-	PrintTimeMinutes *int       `json:"print_time_minutes"`
+	PrinterID        *uuid.UUID               `json:"printer_id"`
+	ModelID          *uuid.UUID               `json:"model_id"`
+	PrintDate        time.Time                `json:"print_date" binding:"required"`
+	UnitsPrinted     int                      `json:"units_printed" binding:"required,gt=0"`
+	LaborHours       *float32                 `json:"labor_hours" binding:"required,gte=0"`
+	PrintTimeMinutes *int                     `json:"print_time_minutes"`
+	Filaments        *[]PrintJobMaterialInput `json:"filaments"`
+}
+
+type PrintJobMaterialInput struct {
+	ID               *uuid.UUID `json:"id"`
+	FilamentID       uuid.UUID  `json:"filament_id"`
+	WeightUsed       float64    `json:"weight_used"`
+	EstimatedWeightG *float64   `json:"estimated_weight_g"`
+	WasteWeightG     *float64   `json:"waste_weight_g"`
+	MeasurementState string     `json:"measurement_state"`
+}
+
+var errPrintJobMaterialConflict = errors.New("print job material conflict")
+
+func validatePrintJobMaterials(db *gorm.DB, rows *[]PrintJobMaterialInput) error {
+	if rows == nil {
+		return nil
+	}
+	if len(*rows) > 100 {
+		return errors.New("Too many material rows")
+	}
+	seen := make(map[uuid.UUID]bool, len(*rows))
+	seenIDs := make(map[uuid.UUID]bool, len(*rows))
+	totalGrams := 0.0
+	for _, row := range *rows {
+		if row.FilamentID == uuid.Nil || !validPrintJobFilamentWeight(row.WeightUsed) {
+			return errors.New("Each material needs a filament and finite positive grams")
+		}
+		totalGrams += row.WeightUsed
+		if math.IsInf(totalGrams, 0) {
+			return errors.New("Total material grams are too large")
+		}
+		if row.MeasurementState != "" && row.MeasurementState != "verified" && row.MeasurementState != "estimated" && row.MeasurementState != "legacy_unverified" {
+			return errors.New("Invalid material measurement state")
+		}
+		if row.EstimatedWeightG != nil && (!validPrintJobFilamentWeight(*row.EstimatedWeightG)) {
+			return errors.New("Estimated grams must be finite and positive")
+		}
+		if row.WasteWeightG != nil && (*row.WasteWeightG < 0 || *row.WasteWeightG > row.WeightUsed || math.IsNaN(*row.WasteWeightG) || math.IsInf(*row.WasteWeightG, 0)) {
+			return errors.New("Physical waste must be between zero and total grams")
+		}
+		if row.MeasurementState == "estimated" && row.EstimatedWeightG == nil {
+			return errors.New("Estimated material needs estimated grams")
+		}
+		if row.MeasurementState == "estimated" && row.EstimatedWeightG != nil && *row.EstimatedWeightG != row.WeightUsed {
+			return errors.New("Estimated material total must match estimated grams")
+		}
+		if seen[row.FilamentID] {
+			return errors.New("Duplicate filament in material rows")
+		}
+		seen[row.FilamentID] = true
+		if row.ID != nil {
+			if *row.ID == uuid.Nil || seenIDs[*row.ID] {
+				return errors.New("Invalid material row ID")
+			}
+			seenIDs[*row.ID] = true
+		}
+		var count int64
+		if err := db.Model(&models.Filament{}).Where("id = ?", row.FilamentID).Count(&count).Error; err != nil {
+			return errors.New("Unable to validate filament")
+		}
+		if count != 1 {
+			return errors.New("Filament not found")
+		}
+	}
+	return nil
+}
+
+func savePrintJobMaterials(tx *gorm.DB, jobID uuid.UUID, rows *[]PrintJobMaterialInput) error {
+	if rows == nil {
+		return nil
+	}
+	var existing []models.PrintJobFilament
+	if err := tx.Where("print_job_id = ?", jobID).Find(&existing).Error; err != nil {
+		return err
+	}
+	byID := make(map[uuid.UUID]models.PrintJobFilament, len(existing))
+	for _, row := range existing {
+		byID[row.ID] = row
+	}
+	kept := make(map[uuid.UUID]bool, len(*rows))
+	for _, row := range *rows {
+		if row.ID != nil {
+			stored, ok := byID[*row.ID]
+			if !ok {
+				return errPrintJobMaterialConflict
+			}
+			kept[stored.ID] = true
+			state := row.MeasurementState
+			if state == "" {
+				state = materialMeasurementState(stored)
+				row.EstimatedWeightG = stored.EstimatedWeightG
+				row.WasteWeightG = stored.WasteWeightG
+			}
+			if row.WasteWeightG != nil && *row.WasteWeightG > row.WeightUsed {
+				return errPrintJobMaterialConflict
+			}
+			if err := tx.Model(&stored).Updates(map[string]any{"filament_id": row.FilamentID, "weight_used": row.WeightUsed, "estimated_weight_g": row.EstimatedWeightG, "waste_weight_g": row.WasteWeightG, "measurement_state": state}).Error; err != nil {
+				return err
+			}
+		} else {
+			state := row.MeasurementState
+			if state == "" {
+				state = "legacy_unverified"
+			}
+			material := models.PrintJobFilament{PrintJobID: jobID, FilamentID: row.FilamentID, WeightUsed: row.WeightUsed, EstimatedWeightG: row.EstimatedWeightG, WasteWeightG: row.WasteWeightG, MeasurementState: state}
+			if err := tx.Create(&material).Error; err != nil {
+				return err
+			}
+		}
+	}
+	for _, row := range existing {
+		if !kept[row.ID] {
+			if err := tx.Delete(&row).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // GetPrintJobs godoc
@@ -157,6 +276,18 @@ func CreatePrintJob(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Model not found"})
 			return
 		}
+		if err := validatePrintJobMaterials(db, input.Filaments); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		if input.Filaments != nil {
+			for _, material := range *input.Filaments {
+				if material.ID != nil {
+					c.JSON(400, gin.H{"error": "New material rows cannot have IDs"})
+					return
+				}
+			}
+		}
 		printJob := models.PrintJob{
 			ModelID:          input.ModelID,
 			PrintDate:        input.PrintDate,
@@ -170,7 +301,10 @@ func CreatePrintJob(db *gorm.DB) gin.HandlerFunc {
 			if err := assignPrintJobPrinter(tx, &printJob, input.PrinterID, true); err != nil {
 				return err
 			}
-			return tx.Create(&printJob).Error
+			if err := tx.Create(&printJob).Error; err != nil {
+				return err
+			}
+			return savePrintJobMaterials(tx, printJob.ID, input.Filaments)
 		})
 		if err != nil {
 			printJobPrinterError(c, err)
@@ -215,6 +349,10 @@ func UpdatePrintJob(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Model not found"})
 			return
 		}
+		if err := validatePrintJobMaterials(db, input.Filaments); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 		printJob.ModelID = input.ModelID
 		printJob.PrintDate = input.PrintDate
 		printJob.UnitsPrinted = input.UnitsPrinted
@@ -233,9 +371,16 @@ func UpdatePrintJob(db *gorm.DB) gin.HandlerFunc {
 			if err := assignPrintJobPrinter(tx, &printJob, input.PrinterID, false); err != nil {
 				return err
 			}
-			return tx.Save(&printJob).Error
+			if err := tx.Save(&printJob).Error; err != nil {
+				return err
+			}
+			return savePrintJobMaterials(tx, printJob.ID, input.Filaments)
 		})
 		if err != nil {
+			if errors.Is(err, errPrintJobMaterialConflict) {
+				c.JSON(409, gin.H{"error": "Material row does not belong to this print job"})
+				return
+			}
 			printJobPrinterError(c, err)
 			return
 		}
@@ -458,7 +603,11 @@ func calculatePrintJobCostParts(
 	}
 	var filamentCost float64
 	for _, pjf := range pj.Filaments {
-		filamentCost += (pjf.WeightUsed / 1000.0) * pjf.Filament.AvgPrice * filamentWasteFactor
+		costGrams := pjf.WeightUsed * filamentWasteFactor
+		if pjf.WasteWeightG != nil {
+			costGrams = (pjf.WeightUsed-*pjf.WasteWeightG)*filamentWasteFactor + *pjf.WasteWeightG
+		}
+		filamentCost += (costGrams / 1000.0) * pjf.Filament.AvgPrice
 	}
 
 	var printTimeMinutes int
@@ -696,7 +845,9 @@ func buildPrintJobStats(printJobs []models.PrintJob, cfg map[string]float64) dto
 		)
 
 		for _, pjf := range pj.Filaments {
-			stats.TotalFilamentWeightG += pjf.WeightUsed
+			if materialMeasurementState(pjf) != "estimated" {
+				stats.TotalFilamentWeightG += pjf.WeightUsed
+			}
 		}
 
 		stats.TotalFilamentCost += filamentCost

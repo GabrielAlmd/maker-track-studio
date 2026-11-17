@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PrintJobs from './PrintJobs';
 import { apiPage } from '../test/apiFixtures';
 import * as jobs from '../services/printJobService';
-import * as materials from '../services/printJobFilamentService';
 import { getModels } from '../services/modelService';
 import { getFilaments } from '../services/filamentService';
 import { getPrinters } from '../services/printerService';
@@ -36,8 +35,6 @@ describe('Print Jobs labor and quantity inputs (C11–C17)', () => {
     getModels.mockResolvedValue([model]);
     getFilaments.mockResolvedValue([filament]);
     getPrinters.mockResolvedValue([{ id: 'p1', name: 'Fixture printer', is_default: true }]);
-    materials.createPrintJobFilament.mockResolvedValue({ id: 'new-usage' });
-    materials.deletePrintJobFilament.mockResolvedValue(undefined);
   });
 
   it.each([0, 0.25, 0.5, 1.5])('submits %s total labor hours unchanged when automatic quantities change', async (hours) => {
@@ -58,7 +55,7 @@ describe('Print Jobs labor and quantity inputs (C11–C17)', () => {
     change('print_date', '2026-09-19');
     await user.click(screen.getByRole('button', { name: /create print job/i }));
     await waitFor(() => expect(jobs.createPrintJob).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ units_printed: 3, labor_hours: hours, print_time_minutes: 180 })));
-    expect(materials.createPrintJobFilament).toHaveBeenCalledExactlyOnceWith({ print_job_id: 'created', filament_id: 'f1', weight_used: 300 });
+    expect(jobs.createPrintJob).toHaveBeenCalledWith(expect.objectContaining({ filaments: [expect.objectContaining({ filament_id: 'f1', weight_used: 300, measurement_state: 'estimated' })] }));
   });
 
   it.each([0, 0.25, 0.5, 1.5])('edits to %s labor hours and keeps manual totals when units change repeatedly', async (hours) => {
@@ -77,8 +74,7 @@ describe('Print Jobs labor and quantity inputs (C11–C17)', () => {
     }
     await user.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(jobs.updatePrintJob).toHaveBeenCalledExactlyOnceWith('j1', expect.objectContaining({ units_printed: 3, labor_hours: hours, print_time_minutes: 90 })));
-    expect(materials.updatePrintJobFilament).toHaveBeenCalledExactlyOnceWith('usage-1', { print_job_id: 'j1', filament_id: 'f1', weight_used: 150 });
-    expect(materials.deletePrintJobFilament).not.toHaveBeenCalled();
+    expect(jobs.updatePrintJob).toHaveBeenCalledWith('j1', expect.objectContaining({ filaments: [expect.objectContaining({ id: 'usage-1', filament_id: 'f1', weight_used: 150, measurement_state: 'verified' })] }));
   });
 
   it('accepts fifteen minutes as 0.25 labor hours in the native input', async () => {

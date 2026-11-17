@@ -6,7 +6,6 @@ import { FeatureContext } from '../contexts/featureState';
 import * as printJobService from '../services/printJobService';
 import * as salesService from '../modules/sales/services/salesService';
 import * as modelService from '../services/modelService';
-import * as printJobFilamentService from '../services/printJobFilamentService';
 import * as filamentService from '../services/filamentService';
 import * as printerService from '../services/printerService';
 
@@ -88,9 +87,9 @@ describe('PrintJobs page', () => {
     await user.click(screen.getByRole('option', { name: /Black$/ }));
     fireEvent.change(document.querySelector('input[name="print_date"]'), { target: { value: '2026-04-03' } });
     await user.click(screen.getByRole('button', { name: /create print job/i }));
-    await waitFor(() => expect(printJobFilamentService.createPrintJobFilament).toHaveBeenCalledWith({
-      print_job_id: 'new-job', filament_id: 'f1', weight_used: 37.02,
-    }));
+    await waitFor(() => expect(printJobService.createPrintJob).toHaveBeenCalledWith(expect.objectContaining({
+      filaments: [expect.objectContaining({ filament_id: 'f1', weight_used: 37.02, measurement_state: 'estimated' })],
+    })));
     expect(printJobService.createPrintJob).toHaveBeenCalledWith(expect.objectContaining({
       model_id: 'm1', units_printed: 3, print_time_minutes: 180,
     }));
@@ -123,9 +122,9 @@ describe('PrintJobs page', () => {
     fireEvent.change(document.querySelector('input[name="print_date"]'), { target: { value: '2026-04-03' } });
     await user.click(screen.getByRole('button', { name: /create print job/i }));
 
-    await waitFor(() => expect(printJobFilamentService.createPrintJobFilament).toHaveBeenCalledWith({
-      print_job_id: 'new-job', filament_id: 'f1', weight_used: 40.35,
-    }));
+    await waitFor(() => expect(printJobService.createPrintJob).toHaveBeenCalledWith(expect.objectContaining({
+      filaments: [expect.objectContaining({ filament_id: 'f1', weight_used: 40.35, measurement_state: 'estimated' })],
+    })));
   });
 
   it('submits manually entered two-decimal filament weight unchanged', async () => {
@@ -147,9 +146,30 @@ describe('PrintJobs page', () => {
     fireEvent.change(document.querySelector('input[name="print_date"]'), { target: { value: '2026-04-03' } });
     await user.click(screen.getByRole('button', { name: /create print job/i }));
 
-    await waitFor(() => expect(printJobFilamentService.createPrintJobFilament).toHaveBeenCalledWith({
-      print_job_id: 'new-job', filament_id: 'f1', weight_used: 12.34,
-    }));
+    await waitFor(() => expect(printJobService.createPrintJob).toHaveBeenCalledWith(expect.objectContaining({
+      filaments: [expect.objectContaining({ filament_id: 'f1', weight_used: 12.34, measurement_state: 'verified' })],
+    })));
+  });
+
+  it('keeps the model estimate separate when recording measured grams and waste', async () => {
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
+    modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', print_time: 60, material_weight: 12, waste_material: 1 }]);
+    filamentService.getFilaments.mockResolvedValue([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
+    const user = userEvent.setup();
+    render(<PrintJobs />);
+    await user.click(await screen.findByRole('button', { name: /add first print job/i }));
+    await chooseModel(user);
+    const filament = screen.getByRole('combobox', { name: 'Filament 1' });
+    await user.type(filament, 'black');
+    await user.click(screen.getByRole('option', { name: /Black$/ }));
+    fireEvent.change(screen.getByPlaceholderText('g'), { target: { value: '15' } });
+    expect(screen.getByRole('spinbutton', { name: 'Waste g 1' })).toHaveValue(null);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Waste g 1' }), { target: { value: '2' } });
+    fireEvent.change(document.querySelector('input[name="print_date"]'), { target: { value: '2026-04-03' } });
+    await user.click(screen.getByRole('button', { name: /create print job/i }));
+    await waitFor(() => expect(printJobService.createPrintJob).toHaveBeenCalledWith(expect.objectContaining({
+      filaments: [expect.objectContaining({ filament_id: 'f1', weight_used: 15, estimated_weight_g: 13, waste_weight_g: 2, measurement_state: 'verified' })],
+    })));
   });
 
   it('rejects the same filament in two material rows before saving a job', async () => {
@@ -211,8 +231,9 @@ describe('PrintJobs page', () => {
     expect(screen.getByPlaceholderText('g')).toHaveValue(30);
     await user.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(printJobService.updatePrintJob).toHaveBeenCalled());
-    expect(printJobFilamentService.deletePrintJobFilament).not.toHaveBeenCalled();
-    expect(printJobFilamentService.createPrintJobFilament).not.toHaveBeenCalled();
+    expect(printJobService.updatePrintJob).toHaveBeenCalledWith('j1', expect.objectContaining({
+      filaments: [expect.objectContaining({ id: 'pjf1', filament_id: 'f1', weight_used: 30 })],
+    }));
   });
 
   it('renders estimated cost from API response', async () => {
@@ -318,6 +339,7 @@ describe('PrintJobs page', () => {
         units_printed: 3,
         labor_hours: 1.5,
         print_time_minutes: 110,
+        filaments: [],
       });
     });
   });

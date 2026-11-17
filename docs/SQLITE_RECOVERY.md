@@ -135,9 +135,9 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-This change introduces no schema version or ZIP format change. Current desktop
-and self-hosted builds share schema version 4 / ZIP format version 1. Supported
-older ZIP schemas (1–3, including earlier desktop exports) follow existing printer
+Current desktop and self-hosted builds share schema version 5 / ZIP format
+version 1. Schema 5 adds material estimate, waste, and measurement provenance
+to Print Job filament rows. Supported older ZIP schemas (1–4, including earlier desktop exports) follow existing printer
 and Sales migrations. Missing optional-module support fails closed for databases
 or archives containing that module's data. Tests use disposable fixtures for
 legacy migrations and current round trips; no live user data is migrated.
