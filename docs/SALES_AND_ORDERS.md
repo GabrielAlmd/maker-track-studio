@@ -1,5 +1,14 @@
 # Sales and Orders — allocations and profitability
 
+This page describes the current implementation. The proposed v1.1.0
+[Business Operations workflow](architecture/BUSINESS_V1_1.md) adds budgets,
+revisioned proposals, independent production/delivery/finance states and a Quick
+Sale shortcut in later issues. Issue #19 only specifies that design; it does not
+rename the current UI or change existing orders. Existing history will retain
+its IDs, prices and frozen profitability. Legacy open orders will require an
+explicit reconciliation step before joining the verified Inventory workflow.
+Keep a pre-upgrade ZIP backup; no migration action is needed for this design PR.
+
 ## Purpose
 
 Sales and Orders records what was sold, for how much, and how an order relates

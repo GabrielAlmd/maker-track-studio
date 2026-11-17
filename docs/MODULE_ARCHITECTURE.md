@@ -1,5 +1,12 @@
 # Desktop module architecture
 
+For the planned v1.1.0 evolution, see
+[BUS-01](architecture/BUSINESS_V1_1.md). Business Operations retains the
+`sales_orders` module ID and feature key. Core Inventory owns physical stock and
+reservations; Business owns commercial links and invokes Inventory using the
+same SQLite transaction. The version/schema changes described there are future
+implementation requirements; the current module contract below is unchanged.
+
 Issue #55 makes Sales & Orders the first built-in module of the Wails desktop app. Modules run in the same process, use the same loopback API, and share the existing SQLite database. Module registration is a build-time composition choice; the **Settings > Features** preference controls presentation only.
 
 ## Composition and lifecycle
