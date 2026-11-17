@@ -87,3 +87,10 @@ go vet ./...
 Tests cover CRUD and cost flows, SQLite initialization, backup validation/round
 trips, and spreadsheet mapping, duplicate, relationship and rollback behavior.
 They use temporary or in-memory SQLite databases.
+
+## Planned v1.1.0 production contract
+
+[INV-01 architecture](../../docs/architecture/PRODUCTION_V1_1.md) specifies
+plate plans, executed runs, accepted output and the BUS-01 boundary. This is a
+review proposal; existing routes and schema are unchanged. Test-only examples
+run with `go test ./architecture`.

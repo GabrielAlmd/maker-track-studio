@@ -147,3 +147,15 @@ real e uma base SQLite descartável: total de 5,70 €, persistência após reca
 e exportação/importação ZIP confirmados. Esta verificação não qualifica os
 instaladores, Wails, LAN nem a atualização da v1.0.0; esses pontos continuam
 pendentes no registo de preparação.
+
+## Planned multi-plate support / Suporte previsto para várias placas
+
+The [v1.1.0 production design](architecture/PRODUCTION_V1_1.md) separates plate
+plans from actual runs and accepted/rejected pieces. It is not yet available in
+the application. Continue recording jobs with the current workflow; this design
+changes no existing data. Older counts will not automatically confirm stock.
+
+O [desenho de produção para v1.1.0](architecture/PRODUCTION_V1_1.md) separa os
+planos por placa das execuções e das peças aceites/rejeitadas. Ainda não está
+disponível na aplicação. Continue a registar trabalhos pelo fluxo atual; este
+desenho não altera os dados existentes nem confirma automaticamente o stock.
