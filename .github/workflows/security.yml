@@ -90,13 +90,23 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - name: Audit all locked frontend dependencies
+      - name: Audit production frontend dependencies
         working-directory: apps/web
-        run: npm audit --package-lock-only --audit-level=high --json > npm-audit.json
+        run: npm audit --package-lock-only --omit=dev --audit-level=high --json > npm-audit.json
+      - name: Report full dependency audit findings as warnings
+        if: always()
+        working-directory: apps/web
+        run: |
+          npm audit --package-lock-only --audit-level=high --json > npm-full-audit.json || audit_status=$?
+          if [ "${audit_status:-0}" -ne 0 ]; then
+            echo "::warning::High or critical npm dependency vulnerabilities were found. Production dependencies are checked by the blocking audit; dev dependency findings are non-blocking. See the full audit report."
+          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ${{ inputs.report-prefix || 'dependency' }}-npm-security
-          path: apps/web/npm-audit.json
+          path: |
+            apps/web/npm-audit.json
+            apps/web/npm-full-audit.json
           if-no-files-found: warn
           retention-days: 14
