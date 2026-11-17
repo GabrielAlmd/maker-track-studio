@@ -5,6 +5,11 @@ Target: v1.1.0, jointly with Inventory #7 and Business Operations #8.
 This document specifies future behavior; it does not add tables, routes or UI.
 No production schema implementation is authorized by this specification alone.
 
+[BUS-01](BUSINESS_V1_1.md) supplies the paired proposal for independent workflow
+states, conserved mixed-model cost attribution, explicit legacy-order adoption,
+versioned API compatibility and Inventory operations. Review both contracts
+together before implementing persistence.
+
 ## Scope and dependency gate
 
 Issue #9 has no prerequisite for architecture work (the GitHub native blocked-by
@@ -244,7 +249,9 @@ No UI changes or screenshot refresh in #9. Desktop Windows/Linux packaged
 artifact and self-hosted end-to-end qualification remain mandatory for the
 joint release; unit tests do not substitute for those checks.
 
-Review checklist for #19: agree run-item identity/capacity; cost apportionment;
-legacy open-order treatment; versioned DTO projections; inventory reservation
-operation identity; migration/backup version gates. Next architecture issue is
-#19, followed by #10 once contracts are agreed; #12 follows #11, not #9 directly.
+The [BUS-01 handoff](BUSINESS_V1_1.md) addresses run-item identity/capacity,
+cost apportionment, legacy open-order treatment, versioned DTO projections,
+Inventory operation identity and migration/backup gates. These remain design
+contracts until their implementation issues land. After #19 contract agreement,
+#10 continues production and #20 starts the Business core; #12 follows #11,
+not #9 directly.

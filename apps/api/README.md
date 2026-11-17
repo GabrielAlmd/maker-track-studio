@@ -94,3 +94,11 @@ They use temporary or in-memory SQLite databases.
 plate plans, executed runs, accepted output and the BUS-01 boundary. This is a
 review proposal; existing routes and schema are unchanged. Test-only examples
 run with `go test ./architecture`.
+
+[BUS-01 architecture](../../docs/architecture/BUSINESS_V1_1.md) specifies
+independent commercial states, Inventory transaction boundaries, stable revisions,
+future `/v2/business/...` contracts and compatibility for the existing Sales API.
+It resolves the production handoff for cost attribution and legacy open orders.
+These are design contracts, not available endpoints; no runtime or schema change
+is included in #19. Existing SQLite rollback/backup tests remain the regression
+evidence alongside the test-only business examples in `architecture`.

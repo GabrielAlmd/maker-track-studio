@@ -59,3 +59,12 @@ not a migration or new CSV/XLSX fields. Current imports and backup schema remain
 unchanged. Historical unit counts must retain their IDs and provenance; they
 will not automatically become verified physical stock. Future schema and backup
 implementation is gated on BUS-01 agreement and the INV-06 compatibility tests.
+
+The [BUS-01 migration strategy](architecture/BUSINESS_V1_1.md#migration-backups-and-rollback)
+preserves Sales IDs, allocations, statuses and frozen financial snapshots.
+Historical orders will not automatically create customers, payments, shipments
+or verified stock. Moving an open legacy order into the new workflow will be an
+explicit reconciliation, with rollback on conflicting references. #19 adds no
+new import sections, database migration or backup version; current migration
+instructions above still apply. Future upgrades require a pre-upgrade backup,
+and rollback to it loses changes made after that backup.

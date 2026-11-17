@@ -31,6 +31,9 @@ read for setting up and changing the code.
 
 - [v1.1.0 production architecture](architecture/PRODUCTION_V1_1.md) — INV-01
   proposal, quantity examples and BUS-01 integration gate (not shipped behavior).
+- [v1.1.0 Business Operations architecture](architecture/BUSINESS_V1_1.md) —
+  BUS-01 states, ownership, Inventory contracts, legacy API policy and upgrade
+  strategy (not shipped behavior).
 
 - [Module architecture](MODULE_ARCHITECTURE.md) — composition, ownership,
   lifecycle, cross-module operations, and adding a built-in module.
