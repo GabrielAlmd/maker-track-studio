@@ -154,6 +154,7 @@ const scenarios = [
       await ready.printJobs(page);
       await page.getByRole('button', { name: 'Add Print Job' }).click();
       await expect(page.getByRole('heading', { name: 'Add New Print Job' })).toBeVisible();
+      await expect(page.getByText(/Model values are estimates/)).toBeVisible();
     },
   },
   { slug: 'printers', route: 'printers', prepare: ready.printers },
