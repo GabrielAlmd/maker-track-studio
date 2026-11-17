@@ -135,7 +135,7 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share schema version 5 / ZIP format
+Current desktop and self-hosted builds share schema version 6 / ZIP format
 version 1. Schema 5 adds material estimate, waste, and measurement provenance
 to Print Job filament rows. Supported older ZIP schemas (1–4, including earlier desktop exports) follow existing printer
 and Sales migrations. Missing optional-module support fails closed for databases

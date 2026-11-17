@@ -102,3 +102,8 @@ It resolves the production handoff for cost attribution and legacy open orders.
 These are design contracts, not available endpoints; no runtime or schema change
 is included in #19. Existing SQLite rollback/backup tests remain the regression
 evidence alongside the test-only business examples in `architecture`.
+
+## Production lifecycle API
+
+See [INV-03 production lifecycle](../../docs/PRODUCTION_LIFECYCLE.md) for the
+versioned aggregate endpoints, retry/revision contract and schema 6 migration.

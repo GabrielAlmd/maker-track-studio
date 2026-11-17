@@ -8,15 +8,16 @@ import (
 )
 
 type PrintJobFilament struct {
-	ID               uuid.UUID `gorm:"type:uuid;primaryKey"`
-	PrintJobID       uuid.UUID `gorm:"type:uuid;not null"`
-	PrintJob         PrintJob  `gorm:"foreignKey:PrintJobID"`
-	FilamentID       uuid.UUID `gorm:"type:uuid;not null"`
-	Filament         Filament  `gorm:"foreignKey:FilamentID"`
-	WeightUsed       float64   `gorm:"not null"` // in grams
-	EstimatedWeightG *float64  `gorm:"default:null"`
-	WasteWeightG     *float64  `gorm:"default:null"` // physical waste included in WeightUsed
-	MeasurementState string    `gorm:"not null;default:'legacy_unverified'"`
+	PrintRunID       *uuid.UUID `gorm:"type:uuid;index"`
+	ID               uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	PrintJobID       uuid.UUID  `gorm:"type:uuid;not null"`
+	PrintJob         PrintJob   `gorm:"foreignKey:PrintJobID"`
+	FilamentID       uuid.UUID  `gorm:"type:uuid;not null"`
+	Filament         Filament   `gorm:"foreignKey:FilamentID"`
+	WeightUsed       float64    `gorm:"not null"` // in grams
+	EstimatedWeightG *float64   `gorm:"default:null"`
+	WasteWeightG     *float64   `gorm:"default:null"` // physical waste included in WeightUsed
+	MeasurementState string     `gorm:"not null;default:'legacy_unverified'"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

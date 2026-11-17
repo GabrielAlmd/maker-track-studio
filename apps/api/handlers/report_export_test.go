@@ -95,7 +95,7 @@ func TestFullCSVExportPreservesRelationshipsAndExcludesUnmanagedConfig(t *testin
 		ApplicationName string   `json:"application_name"`
 		Datasets        []string `json:"datasets"`
 	}
-	if err := json.Unmarshal(entries["manifest.json"], &manifest); err != nil || manifest.FormatVersion != 1 || manifest.ApplicationName != "Maker Track Studio" || len(manifest.Datasets) != 12 {
+	if err := json.Unmarshal(entries["manifest.json"], &manifest); err != nil || manifest.FormatVersion != 1 || manifest.ApplicationName != "Maker Track Studio" || len(manifest.Datasets) != 14 {
 		t.Fatalf("manifest: %+v %v", manifest, err)
 	}
 }
