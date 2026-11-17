@@ -145,6 +145,7 @@ const scenarios = [
       await modal.locator('input[name="labor_hours"]').fill('0.25');
       await modal.getByLabel('Filament 1').fill('matte');
       await modal.getByRole('option', { name: 'Bambu Lab PLA — Matte Black' }).click();
+      await expect(modal.getByText(/Total material: .* g/)).toBeVisible();
       await expect(modal).toBeVisible();
     },
   },
@@ -153,6 +154,7 @@ const scenarios = [
       await ready.printJobs(page);
       await page.getByRole('button', { name: 'Add Print Job' }).click();
       await expect(page.getByRole('heading', { name: 'Add New Print Job' })).toBeVisible();
+      await expect(page.getByText(/Model values are estimates/)).toBeVisible();
     },
   },
   { slug: 'printers', route: 'printers', prepare: ready.printers },

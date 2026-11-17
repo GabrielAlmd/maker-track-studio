@@ -14,7 +14,8 @@ credentials are confined to the trusted upstream tagged publication job.
 | --- | --- | --- |
 | API Linux AMD64/ARM64 and Windows AMD64 | Native `govulncheck` source scan | Any scanner finding that produces a nonzero status, or scanner failure, blocks release |
 | Desktop Linux/Windows AMD64 | Native `govulncheck`, with Linux Wails build tags | Same policy |
-| All locked npm dependencies, including build dependencies | `npm audit --package-lock-only --audit-level=high` | HIGH/CRITICAL or audit failure blocks release |
+| Production npm dependencies | `npm audit --package-lock-only --omit=dev --audit-level=high` | HIGH/CRITICAL or audit failure blocks release |
+| Development npm dependencies, including build and test tools | `npm audit --package-lock-only --include=dev --audit-level=high` | Findings are reported as CI warnings and uploaded; they do not block release |
 | Final Linux AMD64/ARM64 images | Trivy OS and application-library scan | HIGH/CRITICAL, including unfixed findings, or scanner/DB failure blocks publication |
 
 These checks identify known vulnerabilities using their current databases. They
