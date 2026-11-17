@@ -74,7 +74,9 @@ On Windows, omit `-tags webkit2_41`.
 
 ## Reusable Agent Workflows
 
-- When asked to implement a GitHub issue end-to-end, follow `.agents/prompts/implement-issue.md` in addition to this file.
+- When asked to plan a future release, translate feedback into Epics/sub-issues, or prepare GitHub Projects, follow `.agents/prompts/plan-release.md` before publishing issues. Present the proposed architecture, release scope, dependency order, and issue hierarchy for approval first.
+- For release planning, preserve the v1.1.0 lessons: distinguish native sub-issues from checklist links, native `Blocked by` relationships from `Execution Order`, and technical prerequisites from priority. Use actual GitHub issue IDs only after creation; verify relationships and checklists after publishing.
+- When asked to implement a GitHub issue end-to-end, follow `.agents/prompts/implement-issue.md` in addition to this file. Keep acceptance and engineering checklists accurate: tick only verified results, leave untested items unchecked, and report synchronization failures. Do not close issues or merge PRs without authorization.
 - Treat `AGENTS.md` as the repository-specific source of truth when it conflicts with generic instructions in a reusable prompt.
 
 ## Implementation Expectations
