@@ -101,6 +101,9 @@ func CreatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			if err := tx.Exec("UPDATE print_jobs SET updated_at = updated_at WHERE id = ?", input.PrintJobID).Error; err != nil {
 				return err
 			}
+			if err := checkLegacyMaterialWrite(tx, input.PrintJobID); err != nil {
+				return err
+			}
 			duplicate, err := duplicatePrintJobFilament(tx, input.PrintJobID, input.FilamentID, uuid.Nil)
 			if err != nil {
 				return err
@@ -108,8 +111,15 @@ func CreatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			if duplicate {
 				return errDuplicatePrintJobFilament
 			}
-			return tx.Create(&printJobFilament).Error
+			if err := tx.Create(&printJobFilament).Error; err != nil {
+				return err
+			}
+			return syncLegacyProductionJob(tx, input.PrintJobID)
 		})
+		if errors.Is(err, errProductionConflict) {
+			productionError(c, err)
+			return
+		}
 		if errors.Is(err, errDuplicatePrintJobFilament) {
 			c.JSON(409, gin.H{"error": "Filament is already recorded for this print job"})
 			return
@@ -164,6 +174,9 @@ func UpdatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			if err := tx.Exec("UPDATE print_jobs SET updated_at = updated_at WHERE id = ?", input.PrintJobID).Error; err != nil {
 				return err
 			}
+			if err := checkLegacyMaterialWrite(tx, input.PrintJobID); err != nil {
+				return err
+			}
 			duplicate, err := duplicatePrintJobFilament(tx, input.PrintJobID, input.FilamentID, printJobFilament.ID)
 			if err != nil {
 				return err
@@ -171,12 +184,23 @@ func UpdatePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			if duplicate {
 				return errDuplicatePrintJobFilament
 			}
+			if err := checkLegacyMaterialWrite(tx, printJobFilament.PrintJobID); err != nil {
+				return err
+			}
 			printJobFilament.PrintJobID = input.PrintJobID
 			printJobFilament.FilamentID = input.FilamentID
 			printJobFilament.WeightUsed = input.WeightUsed
 			printJobFilament.UpdatedAt = time.Now()
-			return tx.Save(&printJobFilament).Error
+			printJobFilament.PrintRunID = nil
+			if err := tx.Save(&printJobFilament).Error; err != nil {
+				return err
+			}
+			return syncLegacyProductionJob(tx, input.PrintJobID)
 		})
+		if errors.Is(err, errProductionConflict) {
+			productionError(c, err)
+			return
+		}
 		if errors.Is(err, errDuplicatePrintJobFilament) {
 			c.JSON(409, gin.H{"error": "Filament is already recorded for this print job"})
 			return
@@ -241,10 +265,37 @@ func DeletePrintJobFilament(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Invalid UUID"})
 			return
 		}
-		if err := db.Where("id = ?", id).Delete(&models.PrintJobFilament{}).Error; err != nil {
+		if err := printerTransaction(db, func(tx *gorm.DB) error {
+			var row models.PrintJobFilament
+			if err := tx.Where("id = ?", id).First(&row).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+			if err := checkLegacyMaterialWrite(tx, row.PrintJobID); err != nil {
+				return err
+			}
+			return tx.Delete(&row).Error
+		}); err != nil {
+			if errors.Is(err, errProductionConflict) {
+				productionError(c, err)
+				return
+			}
 			c.JSON(404, gin.H{"error": "Print job filament not found"})
 			return
 		}
 		c.Status(204)
 	}
+}
+
+func checkLegacyMaterialWrite(tx *gorm.DB, id uuid.UUID) error {
+	var job models.PrintJob
+	if err := tx.First(&job, "id = ?", id).Error; err != nil {
+		return err
+	}
+	if job.WorkflowVersion > 1 {
+		return errProductionConflict
+	}
+	return nil
 }

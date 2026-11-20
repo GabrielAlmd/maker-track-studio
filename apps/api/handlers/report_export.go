@@ -35,8 +35,10 @@ var exportDatasets = []exportDataset{
 	{"filaments", "materials", "filaments", "id,brand,type,color,avg_price,personal_score,times_used,times_purchased,created_at,updated_at", "", ""},
 	{"filament_purchases", "purchases", "filament_purchases", "id,filament_id,price,amount,purchase_date,created_at,updated_at", "purchase_date", ""},
 	{"models", "print_jobs", "models", "id,name,image_url,material_weight,print_time,waste_material,is_multicolor,created_at,updated_at", "", ""},
-	{"print_jobs", "print_jobs", "print_jobs", "id,printer_id,printer_cost,model_id,print_date,units_printed,labor_hours,print_time_minutes,created_at,updated_at", "print_date", ""},
-	{"print_job_filaments", "materials", "print_job_filaments", "id,print_job_id,filament_id,weight_used,created_at,updated_at", "print_jobs.print_date", "JOIN print_jobs ON print_jobs.id = print_job_filaments.print_job_id"},
+	{"print_jobs", "print_jobs", "print_jobs", "id,printer_id,printer_cost,model_id,print_date,units_printed,labor_hours,print_time_minutes,created_at,updated_at,workflow_version,revision", "print_date", ""},
+	{"print_job_filaments", "materials", "print_job_filaments", "id,print_job_id,filament_id,weight_used,created_at,updated_at,print_run_id,estimated_weight_g,waste_weight_g,measurement_state", "print_jobs.print_date", "JOIN print_jobs ON print_jobs.id = print_job_filaments.print_job_id"},
+	{"print_runs", "print_jobs", "print_runs", "id,print_job_id,status,provenance,revision,print_time_minutes,labor_hours", "print_jobs.print_date", "JOIN print_jobs ON print_jobs.id = print_runs.print_job_id"},
+	{"print_run_items", "print_jobs", "print_run_items", "id,print_run_id,model_id,model_name,planned,attempted,accepted,rejected,legacy_reported_units", "print_jobs.print_date", "JOIN print_runs ON print_runs.id = print_run_items.print_run_id JOIN print_jobs ON print_jobs.id = print_runs.print_job_id"},
 	{"sales_channels", "sales", "sales_channels", "id,name,notes,is_archived,created_at,updated_at", "", ""},
 	{"sales_orders", "sales", "sales_orders", "id,reference,order_date,sales_channel_id,fulfilment_status,payment_status,packaging_cost_cents,shipping_cost_cents,platform_fee_cents,other_cost_cents,notes,production_cost_cents,total_cost_cents,net_profit_cents,margin_basis_points,created_at,updated_at", "order_date", ""},
 	{"sales_order_items", "sales", "sales_order_items", "id,sales_order_id,model_id,model_name_snapshot,quantity,unit_price_cents,created_at,updated_at", "sales_orders.order_date", "JOIN sales_orders ON sales_orders.id = sales_order_items.sales_order_id"},
@@ -258,7 +260,7 @@ func buildReportArchive(ctx context.Context, db *gorm.DB, request reportRequest,
 			}
 			manifest.Datasets = append(manifest.Datasets, "equipment_expenses.csv")
 		}
-		manifest.Notes = append(manifest.Notes, "Print jobs have no completion or outcome status. Sales use order_date and completed-order frozen costs. Application events cover only the bounded recent memory of this run; diagnostic files are excluded.")
+		manifest.Notes = append(manifest.Notes, "Legacy job counts are unverified; print_runs and print_run_items carry lifecycle and verified output for newer jobs. Sales use order_date and completed-order frozen costs. Application events cover only the bounded recent memory of this run; diagnostic files are excluded.")
 	}
 	content, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {

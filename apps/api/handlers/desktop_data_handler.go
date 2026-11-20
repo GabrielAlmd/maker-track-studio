@@ -25,7 +25,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 5
+	desktopDataSchemaVersion   = 6
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -150,6 +150,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 			!sourceDB.Migrator().HasColumn(&models.PrintJobFilament{}, "waste_weight_g") ||
 			!sourceDB.Migrator().HasColumn(&models.PrintJobFilament{}, "measurement_state")) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Backup is missing material measurement data"})
+			return
+		}
+		if manifest.SchemaVersion >= 6 && (!sourceDB.Migrator().HasTable(&models.PrintRun{}) || !sourceDB.Migrator().HasTable(&models.PrintRunItem{}) || !sourceDB.Migrator().HasTable(&models.ProductionOperation{}) || !sourceDB.Migrator().HasColumn(&models.PrintJob{}, "workflow_version") || !sourceDB.Migrator().HasColumn(&models.PrintJob{}, "revision") || !sourceDB.Migrator().HasColumn(&models.PrintJobFilament{}, "print_run_id")) {
+			c.JSON(400, gin.H{"error": "Backup is missing production data"})
 			return
 		}
 		backupData, err := installed.ValidateBackups(sourceDB, manifest.SchemaVersion)
@@ -400,6 +404,9 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		printJobs         []models.PrintJob
 		printJobFilaments []models.PrintJobFilament
 		printers          []models.Printer
+		runs              []models.PrintRun
+		items             []models.PrintRunItem
+		operations        []models.ProductionOperation
 	)
 
 	// Version 1 snapshots have no printers table. They are upgraded inside the
@@ -485,6 +492,20 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		}
 	}
 
+	if sourceDB.Migrator().HasTable(&models.PrintRun{}) {
+		if err := sourceDB.Find(&runs).Error; err != nil {
+			return err
+		}
+		if err := sourceDB.Find(&items).Error; err != nil {
+			return err
+		}
+		if err := sourceDB.Find(&operations).Error; err != nil {
+			return err
+		}
+		if err := validateProductionBackup(printJobs, runs, items, printJobFilaments, operations); err != nil {
+			return err
+		}
+	}
 	// All source rows have been read and validated; take the recovery snapshot
 	// immediately before the first destructive operation.
 	if err := beforeReplace(); err != nil {
@@ -511,6 +532,7 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 	}
 	for _, model := range []any{
 		&models.PrintJobFilament{},
+		&models.PrintRunItem{}, &models.PrintRun{}, &models.ProductionOperation{},
 		&models.FilamentPurchase{},
 		&models.PrintJob{},
 		&models.Printer{},
@@ -546,6 +568,18 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		tx.Rollback()
 		return err
 	}
+	if err := createBatch(tx, &runs); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := createBatch(tx, &items); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := createBatch(tx, &operations); err != nil {
+		tx.Rollback()
+		return err
+	}
 	if err := installed.RestoreBackups(tx, backupData); err != nil {
 		tx.Rollback()
 		return err
@@ -572,6 +606,10 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		}
 	}
 
+	if err := models.NormalizeLegacyProduction(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
 	return tx.Commit().Error
 }
 

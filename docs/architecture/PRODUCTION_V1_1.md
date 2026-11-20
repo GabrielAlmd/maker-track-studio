@@ -1,5 +1,7 @@
 # INV-01: production plans, runs and output
 
+For implemented INV-03 lifecycle behavior and schema 6, see [Production lifecycle](../PRODUCTION_LIFECYCLE.md).
+
 Status: proposed contract for review in #9 and alignment in #19 (BUS-01).
 Implementation note: #10 adds material provenance to existing Print Job filament
 rows and reserves backup schema 5; later production and Inventory migrations

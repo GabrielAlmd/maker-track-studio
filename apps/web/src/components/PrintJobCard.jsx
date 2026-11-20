@@ -38,7 +38,7 @@ export default function PrintJobCard({ job, onEdit, onDelete, deleting, selectio
   const [expanded, setExpanded] = useState(false);
   const [visited, setVisited] = useState(false);
   const materials = job.filaments ?? [];
-  const weights = materials.map((row) => toFiniteNumber(row.weight_used));
+  const weights = materials.filter(row => job.workflow_version !== 2 || row.measurement_state !== 'estimated').map((row) => toFiniteNumber(row.weight_used));
   const weight = weights.every((value) => value !== null) ? weights.reduce((total, value) => total + value, 0) : null;
   const name = modelName(job);
   return (
@@ -51,12 +51,13 @@ export default function PrintJobCard({ job, onEdit, onDelete, deleting, selectio
             <div className="min-w-0">
               <h2 className="font-semibold ui-text-primary break-words">{name}</h2>
               <p className="mt-1 text-sm ui-text-muted">{formatDate(job.print_date)}</p>
+ {job.workflow_version === 2 && <p className="mt-1 text-sm ui-text-secondary">Accepted units: {job.units_printed}</p>}
               <p className="mt-1 text-xs ui-text-secondary">{t('printJobCard.printer')}: {job.printer_cost?.printer_name ?? t('dashboard.notAssigned')}</p>
             </div>
           </div>
           <div className="flex gap-3 text-sm">
             <button onClick={() => onEdit(job)} className="flex items-center gap-1.5 rounded-md px-2 py-1 ui-text-primary-action hover:ui-surface-hover"><Pencil className="h-3.5 w-3.5" aria-hidden="true" />{t('common.edit')}</button>
-            <button onClick={() => onDelete(job.id)} disabled={deleting} className="flex items-center gap-1.5 rounded-md px-2 py-1 ui-text-muted hover:ui-surface-hover hover:ui-text-danger disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" />{t(deleting ? 'common.deleting' : 'common.delete')}</button>
+            <button onClick={() => onDelete(job.id)} disabled={deleting || job.workflow_version === 2} className="flex items-center gap-1.5 rounded-md px-2 py-1 ui-text-muted hover:ui-surface-hover hover:ui-text-danger disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" />{t(deleting ? 'common.deleting' : 'common.delete')}</button>
           </div>
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -72,11 +73,11 @@ export default function PrintJobCard({ job, onEdit, onDelete, deleting, selectio
             </div>
           ))}
         </dl>
-        {printJobCardContributions(features).map((contribution) => <contribution.Component key={contribution.id} jobId={job.id} unitsPrinted={job.units_printed} />)}
+        {job.workflow_version !== 2 && printJobCardContributions(features).map((contribution) => <contribution.Component key={contribution.id} jobId={job.id} unitsPrinted={job.units_printed} />)}
         <div className="mt-5 flex flex-wrap gap-2" aria-label={t('printJobs.filamentsUsed')}>
           {materials.length ? materials.map((row, index) => (
             <span key={row.id ?? index} className="rounded-md ui-surface-input px-2.5 py-1 text-xs ui-text-secondary">
-              {filamentName(row)} <span className="ui-text-muted mx-1">·</span> {formatWeight(row.weight_used)}
+              {filamentName(row)} <span className="ui-text-muted mx-1">·</span> {formatWeight(row.weight_used)} {job.workflow_version === 2 && row.measurement_state === 'estimated' ? '(estimate)' : ''}
             </span>
           )) : <p className="text-xs ui-text-muted">{t('printJobCard.noFilaments')}</p>}
         </div>

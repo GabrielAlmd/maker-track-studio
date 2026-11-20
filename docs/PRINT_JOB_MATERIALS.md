@@ -1,5 +1,7 @@
 # Print Job material weights
 
+For implemented INV-03 lifecycle behavior and schema 6, see [Production lifecycle](PRODUCTION_LIFECYCLE.md).
+
 The Print Job form records one row per filament identity. Enter the total grams
 consumed by that filament for the job, including physical waste such as purge
 and supports. The displayed total is the sum of the entered rows. A model's

@@ -8,15 +8,17 @@ import (
 )
 
 type PrintJob struct {
-	PrinterID        *uuid.UUID `gorm:"type:uuid;index"`
+	WorkflowVersion  int                  `gorm:"not null;default:1"`
+	Revision         int64                `gorm:"not null;default:0"`
+	PrinterID        *uuid.UUID           `gorm:"type:uuid;index"`
 	PrinterCost      *PrinterCostSnapshot `gorm:"serializer:json"`
-	ID               uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	ModelID          *uuid.UUID `gorm:"type:uuid"`
-	Model            *Model     `gorm:"foreignKey:ModelID"`
-	PrintDate        time.Time  `gorm:"not null"`
-	UnitsPrinted     int        `gorm:"not null"`
-	LaborHours       float32    `gorm:"not null"`
-	PrintTimeMinutes *int       `gorm:"default:null"`
+	ID               uuid.UUID            `gorm:"type:uuid;primaryKey"`
+	ModelID          *uuid.UUID           `gorm:"type:uuid"`
+	Model            *Model               `gorm:"foreignKey:ModelID"`
+	PrintDate        time.Time            `gorm:"not null"`
+	UnitsPrinted     int                  `gorm:"not null"`
+	LaborHours       float32              `gorm:"not null"`
+	PrintTimeMinutes *int                 `gorm:"default:null"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 

@@ -124,6 +124,15 @@ const scenarios = [
       await expect(page.getByRole('heading', { name: 'Manage filament types' })).toBeVisible();
     },
   },
+  { slug: 'print-jobs-plan', route: 'print-jobs', prepare: async (page) => {
+    await ready.printJobs(page);
+    await page.getByRole('button', { name: 'Plan production' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Date', { exact: true }).fill('2026-09-18');
+    await dialog.getByRole('combobox', { name: 'Model', exact: true }).selectOption({ label: 'Workshop Bracket' });
+    await dialog.getByRole('button', { name: 'Add material' }).click();
+    await expect(dialog.getByText('Estimates do not represent recorded consumption.', { exact: false })).toBeVisible();
+  } },
   { slug: 'print-jobs', route: 'print-jobs', prepare: ready.printJobs },
   { slug: 'print-jobs-narrow', route: 'print-jobs', viewport: { width: 390, height: 844 }, fullPage: true, prepare: ready.printJobs },
   {

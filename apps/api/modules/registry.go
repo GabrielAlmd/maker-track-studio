@@ -86,6 +86,11 @@ func (registry *Registry) Migrate(db *gorm.DB) error {
 		if err := tx.AutoMigrate(&moduleVersion{}); err != nil {
 			return fmt.Errorf("initialize module version registry: %w", err)
 		}
+		if tx.Migrator().HasTable("print_runs") {
+			if err := tx.Save(&moduleVersion{ID: "core_production", Version: 1}).Error; err != nil {
+				return err
+			}
+		}
 		for _, module := range registry.modules {
 			var recorded moduleVersion
 			err := tx.Where("id = ?", module.ID()).First(&recorded).Error
@@ -135,6 +140,12 @@ func (registry *Registry) CheckBackupTables(db *gorm.DB) error {
 			return err
 		}
 		for _, row := range recorded {
+			if row.ID == "core_production" {
+				if row.Version != 1 {
+					return errors.New("unsupported production schema")
+				}
+				continue
+			}
 			found := false
 			for _, module := range registry.modules {
 				if row.ID == module.ID() {

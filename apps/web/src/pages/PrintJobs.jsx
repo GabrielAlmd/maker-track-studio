@@ -1,3 +1,4 @@
+import ProductionModal from '../components/ProductionModal';
 import PageHeader from '../components/ui/PageHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -391,6 +392,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
 
 function PrintJobs() {
   const { t } = useTranslation();
+  const [productionOpen, setProductionOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -420,6 +422,7 @@ function PrintJobs() {
 
   const handleEdit = (job) => {
     setEditingJob(job);
+    if (job.workflow_version === 2) { setProductionOpen(true); return; }
     setModalOpen(true);
   };
 
@@ -434,6 +437,7 @@ function PrintJobs() {
 
   const handleModalClose = () => {
     setModalOpen(false);
+    setProductionOpen(false);
     setEditingJob(null);
   };
 
@@ -458,6 +462,7 @@ function PrintJobs() {
 
   return (
     <div>
+      {productionOpen && <ProductionModal job={editingJob} models={models ?? []} filaments={filaments ?? []} printers={editingJob ? (printers ?? []) : activePrinters} onClose={handleModalClose} onSaved={handleSaved} />}
       {modalOpen && (
         <PrintJobModal
           printJob={editingJob}
@@ -471,6 +476,7 @@ function PrintJobs() {
       )}
 
       <PageHeader title={t('printJobs.title')} description={t('printJobs.description')}>
+        <button className="page-action page-action-secondary" disabled={!activePrinters.length} onClick={() => { setEditingJob(null); setProductionOpen(true); }}>{t('production.plan')}</button>
         <button
           onClick={handleAdd}
           disabled={printersLoading || !activePrinters.length}

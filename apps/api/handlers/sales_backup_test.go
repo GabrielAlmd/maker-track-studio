@@ -89,8 +89,8 @@ func TestSalesBackupSchemaAndRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest["schema_version"] != float64(5) {
-		t.Fatalf("expected backup schema 5, got %#v", manifest["schema_version"])
+	if manifest["schema_version"] != float64(6) {
+		t.Fatalf("expected backup schema 6, got %#v", manifest["schema_version"])
 	}
 
 	target, targetDB := setupDesktopTestRouter(t)

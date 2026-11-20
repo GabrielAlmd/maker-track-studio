@@ -67,20 +67,23 @@ type PrintJobCostStateDTO struct {
 }
 
 type PrintJobDTO struct {
-	PrinterID        *uuid.UUID                  `json:"printer_id,omitempty"`
-	PrinterCost      *models.PrinterCostSnapshot `json:"printer_cost,omitempty"`
-	ID               uuid.UUID                   `json:"id"`
-	ModelID          *uuid.UUID                  `json:"model_id,omitempty"`
-	PrintDate        time.Time                   `json:"print_date"`
-	UnitsPrinted     int                         `json:"units_printed"`
-	LaborHours       float32                     `json:"labor_hours"`
-	PrintTimeMinutes *int                        `json:"print_time_minutes,omitempty"`
-	EstimatedCost    *float64                    `json:"estimated_cost,omitempty"`
-	Model            ModelReferenceDTO           `json:"model"`
-	Cost             PrintJobCostStateDTO        `json:"cost"`
-	CreatedAt        time.Time                   `json:"created_at"`
-	UpdatedAt        time.Time                   `json:"updated_at"`
-	Filaments        []PrintJobFilamentDTO       `json:"filaments,omitempty"`
+	WorkflowVersion      int                         `json:"workflow_version"`
+	Revision             int64                       `json:"revision"`
+	LegacyWriteSupported bool                        `json:"legacy_write_supported"`
+	PrinterID            *uuid.UUID                  `json:"printer_id,omitempty"`
+	PrinterCost          *models.PrinterCostSnapshot `json:"printer_cost,omitempty"`
+	ID                   uuid.UUID                   `json:"id"`
+	ModelID              *uuid.UUID                  `json:"model_id,omitempty"`
+	PrintDate            time.Time                   `json:"print_date"`
+	UnitsPrinted         int                         `json:"units_printed"`
+	LaborHours           float32                     `json:"labor_hours"`
+	PrintTimeMinutes     *int                        `json:"print_time_minutes,omitempty"`
+	EstimatedCost        *float64                    `json:"estimated_cost,omitempty"`
+	Model                ModelReferenceDTO           `json:"model"`
+	Cost                 PrintJobCostStateDTO        `json:"cost"`
+	CreatedAt            time.Time                   `json:"created_at"`
+	UpdatedAt            time.Time                   `json:"updated_at"`
+	Filaments            []PrintJobFilamentDTO       `json:"filaments,omitempty"`
 	// Model omitted to avoid circular reference
 }
 

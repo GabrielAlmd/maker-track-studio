@@ -8,6 +8,9 @@ import (
 )
 
 func modelReference(pj models.PrintJob) dto.ModelReferenceDTO {
+	if pj.WorkflowVersion == 2 {
+		return dto.ModelReferenceDTO{State: "production_runs", Name: "Production runs"}
+	}
 	if pj.ModelID == nil {
 		return dto.ModelReferenceDTO{State: "not_assigned", Name: "Model not assigned"}
 	}
@@ -57,7 +60,7 @@ func printJobDTO(pj models.PrintJob, cfg map[string]float64) dto.PrintJobDTO {
 		filaments = append(filaments, dto.PrintJobFilamentDTO{ID: f.ID, PrintJobID: f.PrintJobID, FilamentID: f.FilamentID, WeightUsed: f.WeightUsed, EstimatedWeightG: f.EstimatedWeightG, WasteWeightG: f.WasteWeightG, MeasurementState: materialMeasurementState(f), Filament: filamentReference(f)})
 	}
 	cost := calculatePrintJobCostState(pj, cfg)
-	return dto.PrintJobDTO{ID: pj.ID, PrinterID: pj.PrinterID, PrinterCost: publicPrinterCostSnapshot(pj.PrinterCost), ModelID: modelReferenceID(pj), PrintDate: pj.PrintDate, UnitsPrinted: pj.UnitsPrinted, LaborHours: pj.LaborHours, PrintTimeMinutes: pj.PrintTimeMinutes, EstimatedCost: cost.Total, Model: modelReference(pj), Cost: cost, CreatedAt: pj.CreatedAt, UpdatedAt: pj.UpdatedAt, Filaments: filaments}
+	return dto.PrintJobDTO{WorkflowVersion: pj.WorkflowVersion, Revision: pj.Revision, LegacyWriteSupported: pj.WorkflowVersion <= 1, ID: pj.ID, PrinterID: pj.PrinterID, PrinterCost: publicPrinterCostSnapshot(pj.PrinterCost), ModelID: modelReferenceID(pj), PrintDate: pj.PrintDate, UnitsPrinted: pj.UnitsPrinted, LaborHours: pj.LaborHours, PrintTimeMinutes: pj.PrintTimeMinutes, EstimatedCost: cost.Total, Model: modelReference(pj), Cost: cost, CreatedAt: pj.CreatedAt, UpdatedAt: pj.UpdatedAt, Filaments: filaments}
 }
 
 func loadPrintJobDTO(db *gorm.DB, id uuid.UUID) (dto.PrintJobDTO, error) {

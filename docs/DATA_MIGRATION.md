@@ -1,5 +1,7 @@
 # Guided data migration
 
+For implemented INV-03 lifecycle behavior and schema 6, see [Production lifecycle](PRODUCTION_LIFECYCLE.md).
+
 Open **Settings > Data Migration** to move existing tabular records into Maker
 Track Studio. An empty workspace also links to the wizard from the Dashboard.
 Migration is optional during first use and remains available later.

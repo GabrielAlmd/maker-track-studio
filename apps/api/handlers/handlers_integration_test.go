@@ -44,6 +44,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		&models.Printer{},
 		&models.PrintJob{},
 		&models.PrintJobFilament{},
+		&models.PrintRun{}, &models.PrintRunItem{}, &models.ProductionOperation{},
 		&salesmodels.SalesChannel{},
 		&salesmodels.SalesOrder{},
 		&salesmodels.SalesOrderItem{},

@@ -92,7 +92,7 @@ func validatePrintJobMaterials(db *gorm.DB, rows *[]PrintJobMaterialInput) error
 
 func savePrintJobMaterials(tx *gorm.DB, jobID uuid.UUID, rows *[]PrintJobMaterialInput) error {
 	if rows == nil {
-		return nil
+		return syncLegacyProductionJob(tx, jobID)
 	}
 	var existing []models.PrintJobFilament
 	if err := tx.Where("print_job_id = ?", jobID).Find(&existing).Error; err != nil {
@@ -140,7 +140,7 @@ func savePrintJobMaterials(tx *gorm.DB, jobID uuid.UUID, rows *[]PrintJobMateria
 			}
 		}
 	}
-	return nil
+	return syncLegacyProductionJob(tx, jobID)
 }
 
 // GetPrintJobs godoc
@@ -367,6 +367,9 @@ func UpdatePrintJob(db *gorm.DB) gin.HandlerFunc {
 			if err := tx.Where("id = ?", printJob.ID).First(&current).Error; err != nil {
 				return err
 			}
+			if current.WorkflowVersion > 1 {
+				return errPrintJobMaterialConflict
+			}
 			printJob.PrinterID, printJob.PrinterCost = current.PrinterID, current.PrinterCost
 			if err := assignPrintJobPrinter(tx, &printJob, input.PrinterID, false); err != nil {
 				return err
@@ -431,8 +434,26 @@ func deletePrintJob(db *gorm.DB, installed *modules.Registry, id string) error {
 			return err
 		}
 
+		var job models.PrintJob
+		if err := tx.Where("id = ?", id).Find(&job).Error; err != nil {
+			return err
+		}
+		if job.WorkflowVersion > 1 {
+			return modules.PrintJobDeleteConflict{Message: "Production runs must be retained; cancel an unstarted run instead"}
+		}
 		if err := installed.CheckPrintJobDeletion(tx, id); err != nil {
 			return err
+		}
+		if tx.Migrator().HasTable(&models.PrintRun{}) {
+			if err := tx.Where("print_job_id = ?", id).Delete(&models.PrintJobFilament{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("print_run_id IN (?)", tx.Model(&models.PrintRun{}).Select("id").Where("print_job_id = ?", id)).Delete(&models.PrintRunItem{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("print_job_id = ?", id).Delete(&models.PrintRun{}).Error; err != nil {
+				return err
+			}
 		}
 		return tx.Where("id = ?", id).Delete(&models.PrintJob{}).Error
 	})
@@ -830,6 +851,11 @@ func buildPrintJobStats(printJobs []models.PrintJob, cfg map[string]float64) dto
 	for _, pj := range printJobs {
 		stats.TotalUnitsPrinted += pj.UnitsPrinted
 		stats.TotalLaborHours += float64(pj.LaborHours)
+		for _, pjf := range pj.Filaments {
+			if materialMeasurementState(pjf) != "estimated" {
+				stats.TotalFilamentWeightG += pjf.WeightUsed
+			}
+		}
 
 		costState := calculatePrintJobCostState(pj, cfg)
 		if costState.State != "calculated" {
@@ -843,12 +869,6 @@ func buildPrintJobStats(printJobs []models.PrintJob, cfg map[string]float64) dto
 			laborCostHour,
 			filamentWasteFactor,
 		)
-
-		for _, pjf := range pj.Filaments {
-			if materialMeasurementState(pjf) != "estimated" {
-				stats.TotalFilamentWeightG += pjf.WeightUsed
-			}
-		}
 
 		stats.TotalFilamentCost += filamentCost
 		stats.TotalElectricityCost += electricityCost
@@ -867,4 +887,12 @@ func buildPrintJobStats(printJobs []models.PrintJob, cfg map[string]float64) dto
 	stats.TotalCost = round2(stats.TotalCost)
 
 	return stats
+}
+
+func syncLegacyProductionJob(tx *gorm.DB, id uuid.UUID) error {
+	var job models.PrintJob
+	if err := tx.First(&job, "id = ?", id).Error; err != nil {
+		return err
+	}
+	return models.SyncLegacyProduction(tx, job)
 }

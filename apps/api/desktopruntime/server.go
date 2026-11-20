@@ -285,9 +285,13 @@ func initSQLiteDBAtPath(events *diagnostics.Logger, installed *modules.Registry,
 		&models.Model{},
 		&models.PrintJob{},
 		&models.PrintJobFilament{},
+		&models.PrintRun{}, &models.PrintRunItem{}, &models.ProductionOperation{},
 		&models.Printer{},
 		&models.AppConfig{},
 	); err != nil {
+		return nil, err
+	}
+	if err := db.Transaction(models.NormalizeLegacyProduction); err != nil {
 		return nil, err
 	}
 	if err := installed.Migrate(db); err != nil {
