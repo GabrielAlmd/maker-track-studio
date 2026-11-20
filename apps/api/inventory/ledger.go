@@ -20,6 +20,7 @@ var (
 )
 
 type Posting struct {
+	SourceKey   string    `json:"source_key,omitempty" gorm:"not null;default:'';index"`
 	OperationID uuid.UUID `json:"operation_id" gorm:"type:uuid;not null;uniqueIndex"`
 	SourceID    uuid.UUID `json:"source_id" gorm:"type:uuid;not null;uniqueIndex"`
 	ItemType    string    `json:"item_type" gorm:"not null;index:idx_inventory_item"`
@@ -47,11 +48,23 @@ func (p Posting) Validate() error {
 	}
 	switch p.Kind {
 	case "opening":
-		if p.Quantity < 0 {
+		if p.SourceKey != "" || p.Quantity < 0 {
+			return ErrInvalid
+		}
+	case "purchase", "consumption", "compensation":
+		sourceType, sourceID, ok := strings.Cut(p.SourceKey, ":")
+		ref, err := uuid.Parse(sourceID)
+		if !ok || err != nil || ref == uuid.Nil || (sourceType != "purchase" && sourceType != "material") || (p.Kind == "purchase" && sourceType != "purchase") || (p.Kind == "consumption" && sourceType != "material") {
+			return ErrInvalid
+		}
+		if p.ItemType != "filament" || strings.TrimSpace(p.SourceKey) == "" || len(p.SourceKey) > 128 || p.Quantity == 0 {
+			return ErrInvalid
+		}
+		if p.Kind == "purchase" && p.Quantity < 0 || p.Kind == "consumption" && p.Quantity > 0 {
 			return ErrInvalid
 		}
 	case "adjustment":
-		if p.Quantity == 0 {
+		if p.SourceKey != "" || p.Quantity == 0 {
 			return ErrInvalid
 		}
 	default:

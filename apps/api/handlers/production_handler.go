@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -130,6 +131,10 @@ func WriteProduction(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 			for _, m := range run.Materials {
+				if _, err := inventory.Milligrams(m.WeightUsed, 1000); err != nil {
+					c.JSON(400, gin.H{"error": "Material grams exceed inventory range"})
+					return
+				}
 				if m.MeasurementState != "verified" && m.MeasurementState != "estimated" || run.Status == "planned" && m.MeasurementState != "estimated" {
 					c.JSON(400, gin.H{"error": "Planned runs require estimates; executed consumption must have explicit provenance"})
 					return
@@ -363,6 +368,15 @@ func saveRunMaterials(tx *gorm.DB, jobID uuid.UUID, run, prior models.PrintRun, 
 		seen[m.ID] = true
 		if prior.Status == "completed" || prior.Status == "failed" || prior.Status == "cancelled" {
 			continue
+		}
+		if (run.Status == "completed" || run.Status == "failed") && m.MeasurementState == "verified" {
+			quantity, err := inventory.Milligrams(m.WeightUsed, 1000)
+			if err != nil {
+				return err
+			}
+			if err := inventory.SetSource(tx, "material:"+m.ID.String(), map[uuid.UUID]int64{m.FilamentID: -quantity}, "consumption"); err != nil {
+				return err
+			}
 		}
 		if err := tx.Save(&m).Error; err != nil {
 			return err

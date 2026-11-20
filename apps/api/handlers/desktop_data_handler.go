@@ -26,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 7
+	desktopDataSchemaVersion   = 8
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -159,6 +159,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 		}
 		if manifest.SchemaVersion >= 7 && !sourceDB.Migrator().HasTable(&inventory.Movement{}) {
 			c.JSON(400, gin.H{"error": "Backup is missing inventory history"})
+			return
+		}
+		if manifest.SchemaVersion >= 8 && !sourceDB.Migrator().HasColumn(&inventory.Movement{}, "source_key") {
+			c.JSON(400, gin.H{"error": "Backup is missing inventory source references"})
 			return
 		}
 		backupData, err := installed.ValidateBackups(sourceDB, manifest.SchemaVersion)
@@ -517,7 +521,11 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		}
 	}
 	if sourceDB.Migrator().HasTable(&inventory.Movement{}) {
-		if err := sourceDB.Select("sequence, operation_id, source_id, item_type, item_id, kind, quantity, reason, actor, created_at").Order("sequence").Find(&movements).Error; err != nil {
+		columns := "sequence, operation_id, source_id, item_type, item_id, kind, quantity, reason, actor, created_at"
+		if sourceDB.Migrator().HasColumn(&inventory.Movement{}, "source_key") {
+			columns += ", source_key"
+		}
+		if err := sourceDB.Select(columns).Order("sequence").Find(&movements).Error; err != nil {
 			return err
 		}
 		if err := inventory.ValidateHistory(movements, filaments, modelsList); err != nil {
@@ -606,7 +614,8 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		tx.Rollback()
 		return err
 	}
-	if err := createBatch(tx, &printJobFilaments); err != nil {
+	// Material estimate/waste nulls require the same SQLite-safe row batches.
+	if err := createBatch(tx.Session(&gorm.Session{CreateBatchSize: 1}), &printJobFilaments); err != nil {
 		tx.Rollback()
 		return err
 	}
