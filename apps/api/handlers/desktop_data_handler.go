@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules"
 	"github.com/gin-gonic/gin"
@@ -25,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 6
+	desktopDataSchemaVersion   = 7
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -156,6 +157,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 			c.JSON(400, gin.H{"error": "Backup is missing production data"})
 			return
 		}
+		if manifest.SchemaVersion >= 7 && !sourceDB.Migrator().HasTable(&inventory.Movement{}) {
+			c.JSON(400, gin.H{"error": "Backup is missing inventory history"})
+			return
+		}
 		backupData, err := installed.ValidateBackups(sourceDB, manifest.SchemaVersion)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -170,6 +175,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 			return recoveryErr
 		}
 		if err := importDesktopDataSnapshot(db, sourceDB, installed, backupData, beforeReplace); err != nil {
+			if errors.Is(err, inventory.ErrInvalid) {
+				c.JSON(400, gin.H{"error": "Backup contains invalid inventory history"})
+				return
+			}
 			message := "Failed to import desktop data"
 			if recoveryErr != nil {
 				message = "Could not save recovery backup; restore cancelled"
@@ -407,6 +416,7 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		runs              []models.PrintRun
 		items             []models.PrintRunItem
 		operations        []models.ProductionOperation
+		movements         []inventory.Movement
 	)
 
 	// Version 1 snapshots have no printers table. They are upgraded inside the
@@ -506,6 +516,14 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 			return err
 		}
 	}
+	if sourceDB.Migrator().HasTable(&inventory.Movement{}) {
+		if err := sourceDB.Select("sequence, operation_id, source_id, item_type, item_id, kind, quantity, reason, actor, created_at").Order("sequence").Find(&movements).Error; err != nil {
+			return err
+		}
+		if err := inventory.ValidateHistory(movements, filaments, modelsList); err != nil {
+			return err
+		}
+	}
 	// All source rows have been read and validated; take the recovery snapshot
 	// immediately before the first destructive operation.
 	if err := beforeReplace(); err != nil {
@@ -532,7 +550,7 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 	}
 	for _, model := range []any{
 		&models.PrintJobFilament{},
-		&models.PrintRunItem{}, &models.PrintRun{}, &models.ProductionOperation{},
+		&inventory.Movement{}, &models.PrintRunItem{}, &models.PrintRun{}, &models.ProductionOperation{},
 		&models.FilamentPurchase{},
 		&models.PrintJob{},
 		&models.Printer{},
@@ -555,6 +573,10 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		return err
 	}
 	if err := createBatch(tx, &modelsList); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := createBatch(tx, &movements); err != nil {
 		tx.Rollback()
 		return err
 	}

@@ -46,6 +46,7 @@ func TestProductionOnlyStartupAndPrimaryRoutes(t *testing.T) {
 		method, path string
 		want         int
 	}{
+		{http.MethodGet, "/v2/inventory/balances/model/" + model.ID.String(), http.StatusOK},
 		{http.MethodGet, "/models", http.StatusOK},
 		{http.MethodGet, "/print-jobs", http.StatusOK},
 		{http.MethodGet, "/features", http.StatusOK},

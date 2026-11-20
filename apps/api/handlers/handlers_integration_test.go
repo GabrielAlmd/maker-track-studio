@@ -18,6 +18,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/routes"
 )
@@ -44,6 +45,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		&models.Printer{},
 		&models.PrintJob{},
 		&models.PrintJobFilament{},
+		&inventory.Movement{},
 		&models.PrintRun{}, &models.PrintRunItem{}, &models.ProductionOperation{},
 		&salesmodels.SalesChannel{},
 		&salesmodels.SalesOrder{},

@@ -1,5 +1,7 @@
 # Guided data migration
 
+Physical Inventory history transfers through a full workspace backup. CSV/XLSX imports do not establish an opening stock count. See the [Inventory ledger](INVENTORY_LEDGER.md).
+
 For implemented INV-03 lifecycle behavior and schema 6, see [Production lifecycle](PRODUCTION_LIFECYCLE.md).
 
 Open **Settings > Data Migration** to move existing tabular records into Maker

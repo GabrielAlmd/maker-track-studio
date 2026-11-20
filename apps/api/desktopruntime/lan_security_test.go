@@ -2,11 +2,15 @@ package desktopruntime
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func TestLANBoundary(t *testing.T) {
@@ -16,7 +20,12 @@ func TestLANBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer runtime.Shutdown(context.Background())
-	for _, path := range []string{"/health/live", "/health/ready", "/printers", "/desktop-data/export", "/reports/export", "/desktop-data/import", "/data-migration/import", "/sales-orders", "/models/id"} {
+	item := models.Model{Name: "LAN stock"}
+	if err := runtime.db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	adjustment := fmt.Sprintf(`{"item_type":"model","item_id":"%s","operation_id":"%s","source_id":"%s","kind":"opening","quantity":3,"actor":"operator","reason":"count"}`, item.ID, uuid.New(), uuid.New())
+	for _, path := range []string{"/health/live", "/health/ready", "/printers", "/desktop-data/export", "/reports/export", "/desktop-data/import", "/data-migration/import", "/sales-orders", "/models/id", "/v2/inventory/adjustments"} {
 		for _, tc := range []struct {
 			name, method, secret, host, origin, peer, proto string
 			status                                          int
@@ -55,6 +64,8 @@ func TestLANBoundary(t *testing.T) {
 	}{
 		{"GET", "/health/ready", "", 200},
 		{"GET", "/printers", "", 200},
+		{"POST", "/v2/inventory/adjustments", adjustment, 201},
+		{"GET", "/v2/inventory/balances/model/" + item.ID.String(), "", 200},
 		{"GET", "/desktop-data/export", "", 200},
 		{"POST", "/printers", `{"name":"LAN printer","manufacturer":"Test","model":"A1"}`, 201},
 	} {

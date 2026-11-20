@@ -86,6 +86,11 @@ func (registry *Registry) Migrate(db *gorm.DB) error {
 		if err := tx.AutoMigrate(&moduleVersion{}); err != nil {
 			return fmt.Errorf("initialize module version registry: %w", err)
 		}
+		if tx.Migrator().HasTable("inventory_movements") {
+			if err := tx.Save(&moduleVersion{ID: "core_inventory", Version: 1}).Error; err != nil {
+				return err
+			}
+		}
 		if tx.Migrator().HasTable("print_runs") {
 			if err := tx.Save(&moduleVersion{ID: "core_production", Version: 1}).Error; err != nil {
 				return err
@@ -140,6 +145,12 @@ func (registry *Registry) CheckBackupTables(db *gorm.DB) error {
 			return err
 		}
 		for _, row := range recorded {
+			if row.ID == "core_inventory" {
+				if row.Version != 1 || !db.Migrator().HasTable("inventory_movements") {
+					return errors.New("unsupported or missing inventory schema")
+				}
+				continue
+			}
 			if row.ID == "core_production" {
 				if row.Version != 1 {
 					return errors.New("unsupported production schema")

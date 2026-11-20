@@ -16,6 +16,7 @@ import (
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/appmodules"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/diagnostics"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/routes"
@@ -285,6 +286,7 @@ func initSQLiteDBAtPath(events *diagnostics.Logger, installed *modules.Registry,
 		&models.Model{},
 		&models.PrintJob{},
 		&models.PrintJobFilament{},
+		&inventory.Movement{},
 		&models.PrintRun{}, &models.PrintRunItem{}, &models.ProductionOperation{},
 		&models.Printer{},
 		&models.AppConfig{},
