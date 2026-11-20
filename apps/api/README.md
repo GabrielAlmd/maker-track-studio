@@ -107,3 +107,5 @@ evidence alongside the test-only business examples in `architecture`.
 
 See [INV-03 production lifecycle](../../docs/PRODUCTION_LIFECYCLE.md) for the
 versioned aggregate endpoints, retry/revision contract and schema 6 migration.
+
+Core Inventory exposes adjustment, audit history and availability endpoints in both runtimes. See the [Inventory API and quantity contract](../../docs/INVENTORY_LEDGER.md).

@@ -43,6 +43,10 @@ func RegisterRoutesWithModules(r *gin.Engine, db *gorm.DB, installed *modules.Re
 	r.PUT("/printers/:id/restore", withRequestDB(db, handlers.RestorePrinter))
 	r.PUT("/printers/:id/cost-config", withRequestDB(db, handlers.UpdatePrinterCostConfig))
 
+	r.POST("/v2/inventory/adjustments", withRequestDB(db, handlers.AdjustInventory))
+	r.GET("/v2/inventory/movements/:type/:id", withRequestDB(db, handlers.InventoryHistory))
+	r.GET("/v2/inventory/balances/:type/:id", withRequestDB(db, handlers.InventoryBalance))
+
 	// Filament type catalog
 	r.GET("/filament-types", withRequestDB(db, handlers.GetFilamentTypes))
 	r.PUT("/filament-types", withRequestDB(db, handlers.UpdateFilamentTypes))

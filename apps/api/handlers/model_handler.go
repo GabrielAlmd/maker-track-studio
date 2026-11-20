@@ -286,15 +286,6 @@ func UpdateModel(db *gorm.DB) gin.HandlerFunc {
 // @Router       /models/{id} [delete]
 func DeleteModel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
-		if _, err := uuid.Parse(id); err != nil {
-			c.JSON(400, gin.H{"error": "Invalid UUID"})
-			return
-		}
-		if err := db.Where("id = ?", id).Delete(&models.Model{}).Error; err != nil {
-			c.JSON(500, gin.H{"error": "Failed to delete model"})
-			return
-		}
-		c.Status(204)
+		deleteInventoryItem(c, db, "model", &models.Model{})
 	}
 }
