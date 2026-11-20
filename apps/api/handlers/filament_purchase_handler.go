@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -150,7 +151,7 @@ func GetFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 func CreateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input FilamentPurchaseInput
-		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) {
+		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) || !validPurchaseAmount(input.Amount) {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
@@ -162,7 +163,20 @@ func CreateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
 		}
-		if err := db.Create(&purchase).Error; err != nil {
+		if err := printerTransaction(db, func(tx *gorm.DB) error {
+			var filament models.Filament
+			if err := tx.First(&filament, "id = ?", input.FilamentID).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&purchase).Error; err != nil {
+				return err
+			}
+			return syncPurchaseStock(tx, purchase, true)
+		}); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(404, gin.H{"error": "Filament not found"})
+				return
+			}
 			c.JSON(500, gin.H{"error": "Failed to create filament purchase"})
 			return
 		}
@@ -201,19 +215,33 @@ func UpdateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		var input FilamentPurchaseInput
-		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) {
+		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) || !validPurchaseAmount(input.Amount) {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
-		purchase.FilamentID = input.FilamentID
-		purchase.Price = input.Price
-		purchase.Amount = input.Amount
-		purchase.PurchaseDate = input.PurchaseDate
-		purchase.UpdatedAt = time.Now()
-		if err := db.Save(&purchase).Error; err != nil {
-			c.JSON(500, gin.H{"error": "Failed to update filament purchase"})
+		err := printerTransaction(db, func(tx *gorm.DB) error {
+			if err := tx.First(&purchase, "id = ?", id).Error; err != nil {
+				return err
+			}
+			var filament models.Filament
+			if err := tx.First(&filament, "id = ?", input.FilamentID).Error; err != nil {
+				return err
+			}
+			purchase.FilamentID = input.FilamentID
+			purchase.Price = input.Price
+			purchase.Amount = input.Amount
+			purchase.PurchaseDate = input.PurchaseDate
+			purchase.UpdatedAt = time.Now()
+			if err := tx.Omit("Filament").Save(&purchase).Error; err != nil {
+				return err
+			}
+			return syncPurchaseStock(tx, purchase, false)
+		})
+		if err != nil {
+			inventoryError(c, err)
 			return
 		}
+
 		dtoObj := dto.FilamentPurchaseDTO{
 			ID:           purchase.ID,
 			FilamentID:   purchase.FilamentID,
@@ -242,10 +270,25 @@ func DeleteFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Invalid UUID"})
 			return
 		}
-		if err := db.Where("id = ?", id).Delete(&models.FilamentPurchase{}).Error; err != nil {
-			c.JSON(500, gin.H{"error": "Failed to delete filament purchase"})
+		err := printerTransaction(db, func(tx *gorm.DB) error {
+			var purchase models.FilamentPurchase
+			if err := tx.First(&purchase, "id = ?", id).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+			purchase.Amount = 0
+			if err := syncPurchaseStock(tx, purchase, false); err != nil {
+				return err
+			}
+			return tx.Delete(&purchase).Error
+		})
+		if err != nil {
+			inventoryError(c, err)
 			return
 		}
+
 		c.Status(204)
 	}
 }

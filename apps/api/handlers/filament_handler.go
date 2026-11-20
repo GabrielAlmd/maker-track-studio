@@ -60,7 +60,7 @@ func GetFilaments(db *gorm.DB) gin.HandlerFunc {
 					return
 				}
 				if low == "true" {
-					query = query.Where("times_purchased > 0 AND times_used >= times_purchased")
+					query = query.Where("id IN (SELECT item_id FROM inventory_movements WHERE item_type = ? GROUP BY item_id HAVING MAX(kind = 'opening') = 1 AND SUM(quantity) <= 0)", "filament")
 				}
 			}
 		}

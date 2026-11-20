@@ -41,7 +41,7 @@ func CreateFilamentPurchaseBatch(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		for _, item := range input.Items {
-			if (item.FilamentID == uuid.Nil) == (item.NewFilament == nil) || math.IsInf(item.Price/item.Amount, 0) {
+			if (item.FilamentID == uuid.Nil) == (item.NewFilament == nil) || math.IsInf(item.Price/item.Amount, 0) || !validPurchaseAmount(item.Amount) {
 				c.JSON(400, gin.H{"error": "Each line requires an existing or new filament and valid costs"})
 				return
 			}
@@ -54,7 +54,7 @@ func CreateFilamentPurchaseBatch(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 		result := make([]dto.FilamentPurchaseDTO, 0, len(input.Items))
-		err := db.Transaction(func(tx *gorm.DB) error {
+		err := printerTransaction(db, func(tx *gorm.DB) error {
 			for _, item := range input.Items {
 				id := item.FilamentID
 				if f := item.NewFilament; f != nil {
@@ -75,6 +75,9 @@ func CreateFilamentPurchaseBatch(db *gorm.DB) gin.HandlerFunc {
 				}
 				p := models.FilamentPurchase{FilamentID: id, Price: item.Price, Amount: item.Amount, PurchaseDate: input.PurchaseDate}
 				if err := tx.Create(&p).Error; err != nil {
+					return err
+				}
+				if err := syncPurchaseStock(tx, p, true); err != nil {
 					return err
 				}
 				result = append(result, dto.FilamentPurchaseDTO{ID: p.ID, FilamentID: p.FilamentID, Price: p.Price, Amount: p.Amount, PurchaseDate: p.PurchaseDate, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt})

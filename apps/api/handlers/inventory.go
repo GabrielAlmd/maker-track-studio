@@ -33,7 +33,7 @@ func AdjustInventory(db *gorm.DB) gin.HandlerFunc {
 			inventory.Posting
 			Quantity *int64 `json:"quantity"`
 		}
-		if c.ShouldBindJSON(&input) != nil || input.Quantity == nil {
+		if c.ShouldBindJSON(&input) != nil || input.Quantity == nil || (input.Kind != "opening" && input.Kind != "adjustment") || input.SourceKey != "" {
 			inventoryError(c, inventory.ErrInvalid)
 			return
 		}

@@ -111,6 +111,16 @@ const scenarios = [
   },
   { slug: 'filaments', route: 'filaments', prepare: ready.filaments },
   {
+    slug: 'filaments-low-stock', route: 'filaments', prepare: async (page) => {
+      await ready.filaments(page);
+      await page.locator('summary').filter({ hasText: 'Filters' }).click();
+      await page.getByRole('checkbox', { name: 'Low stock' }).check();
+      await expect(page.getByText('Ocean Blue')).toBeVisible();
+      await expect(page.getByText('Galaxy Silver')).toHaveCount(0);
+      await expect(page.getByText('Matte Black')).toHaveCount(0);
+    },
+  },
+  {
     slug: 'filaments-add', route: 'filaments', prepare: async (page) => {
       await ready.filaments(page);
       await page.getByRole('button', { name: 'Add New Filament' }).click();

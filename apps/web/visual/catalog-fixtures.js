@@ -245,7 +245,14 @@ export async function installApiFixtures(pageContext) {
 
     let body = responses.get(apiPath);
     if (apiPath === '/models') body = url.search ? page(models) : models;
-    if (apiPath === '/filaments') body = url.search ? page(filaments) : filaments;
+    if (apiPath === '/filaments') {
+      // Physical opening counts: unknown stock is excluded even with high use counters.
+      const stock = { f1: { verified: false, onHand: 0 }, f2: { verified: true, onHand: 0 }, f3: { verified: true, onHand: 250000 } };
+      const rows = url.searchParams.get('low_stock') === 'true'
+        ? filaments.filter((item) => stock[item.id].verified && stock[item.id].onHand <= 0)
+        : filaments;
+      body = url.search ? page(rows) : rows;
+    }
     if (apiPath === '/print-jobs') body = page(url.searchParams.get('model_id') ? printJobs.filter((job) => job.model_id === url.searchParams.get('model_id')) : printJobs);
     if (apiPath === '/filament-purchases') body = page(purchases);
     if (apiPath === '/sales-orders') {

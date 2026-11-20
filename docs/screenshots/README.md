@@ -13,6 +13,7 @@ The catalogue covers:
 - every Settings section, including Features, the language selector and Simple and Advanced calculation modes;
 - the Portuguese (Portugal) Settings screen and calculation-defaults guidance in both themes;
 - create forms, filters (including Print Jobs model search), filament type management and inline cost details;
+- the low-stock filter using verified physical balances, excluding unknown stock;
 - physical printer profiles, default/archive states and printer-specific costs;
 - the Dashboard's recorded-expense breakdown, first-run migration entry point and the feature-gated Business Dashboard with completed-order financial metrics and recent Orders;
 - the Sales list at wide and compact desktop widths, its active-filter menu, the new Order form at wide, compact and narrow widths, active production allocations, completed locked history and inline Sales Channel creation;

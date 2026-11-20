@@ -135,11 +135,11 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share schema version 7 / ZIP format
-version 1. Schema 7 includes Inventory movements and their audit and retry identifiers.
+Current desktop and self-hosted builds share schema version 8 / ZIP format
+version 1. Schema 8 adds automatic material source references; schema 7 includes Inventory movements and their audit and retry identifiers.
 Restoring a pre-ledger archive clears local ledger history and leaves balances unverified.
 Schema 6 adds production lifecycle records. Schema 5 adds material estimate, waste, and measurement provenance
-to Print Job filament rows. Supported older ZIP schemas (1–6, including earlier desktop exports) follow existing printer
+to Print Job filament rows. Supported older ZIP schemas (1–7, including earlier desktop exports) follow existing printer
 and Sales migrations. Missing optional-module support fails closed for databases
 or archives containing that module's data. Tests use disposable fixtures for
 legacy migrations and current round trips; no live user data is migrated.
