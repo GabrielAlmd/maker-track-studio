@@ -40,6 +40,26 @@ A completed or failed v2 run posts `-round(weight_used × 1,000)` for each **ver
 
 Movement `source_key` is `purchase:<purchase UUID>` or `material:<PrintJobFilament UUID>`. Automatic kinds are `purchase`, `consumption` and `compensation`; the adjustment endpoint cannot forge these. Source/event identities and source keys survive backup/restore, including after a purchase is deleted. Existing manual movements retain empty source keys.
 
-`GET /filaments?page=1&low_stock=true` selects only filaments with an opening count and an on-hand balance at or below zero. Unknown stock is excluded rather than inferred from purchase/use counters. Configurable thresholds and unknown-stock UI follow in #15.
+`GET /filaments?page=1&low_stock=true` selects only filaments with an opening balance or physical count and an on-hand balance at or below zero. Unknown stock is excluded rather than inferred from purchase/use counters. Configurable thresholds and unknown-stock UI follow in #15.
 
-Upgrade is additive and idempotent; it does not replay historical purchases or terminal runs. Editing/deleting a historical purchase without ledger history changes its financial record only. Establish opening stock by physical reconciliation; historical migration policy belongs to #14. ZIP schema 8 preserves source keys. Schemas 1–7 remain readable; older builds reject the new core marker/ZIP schema. Before downgrade restore the pre-upgrade backup with its matching build; removing source metadata would permit duplicate posting.
+## Physical stock reconciliation
+
+After an upgrade or historical import, count each material in milligrams or each finished model in whole pieces. Read the item's balance and keep its revision while counting. Submit the observed total to `POST /v2/inventory/adjustments` with fresh operation and source UUIDs. For example, an operator who weighs 250.5 g and reads revision 17 would submit this request.
+
+```json
+{
+  "operation_id": "73d7d2bc-032d-4a92-95cb-5dbb9a963ea8",
+  "source_id": "81cdf374-fa37-4e86-bc74-a7cb4a86622c",
+  "item_type": "filament",
+  "item_id": "0bb55686-46e5-4759-aebf-4fd9c138d3fb",
+  "kind": "count",
+  "counted_quantity": 250500,
+  "expected_revision": 17,
+  "reason": "Weighed remaining PLA",
+  "actor": "Workshop operator"
+}
+```
+
+Use revision 0 for an item with no movements. Supply both count fields explicitly, including for an empty shelf. Omit `quantity`; the server records the signed difference. If the prior on-hand value was 300000 mg, the movement is −49500 mg and verified on-hand becomes 250500 mg. A matching count still records verification. A later recount uses the latest revision. Both the observed total and the signed difference must fit the ledger's safe integer range.
+
+On a lost response, repeat the identical request to retrieve its original receipt, including after restoring a backup. A stale revision returns 409. Refresh the balance and confirm the count against any intervening movements before submitting a new event. Historical purchases, job material rows, and reported production units retain their provenance. Subsequent startup and archive restore preserve posted movements and their IDs without replaying these records.

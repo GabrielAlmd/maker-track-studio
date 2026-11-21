@@ -20,15 +20,17 @@ var (
 )
 
 type Posting struct {
-	SourceKey   string    `json:"source_key,omitempty" gorm:"not null;default:'';index"`
-	OperationID uuid.UUID `json:"operation_id" gorm:"type:uuid;not null;uniqueIndex"`
-	SourceID    uuid.UUID `json:"source_id" gorm:"type:uuid;not null;uniqueIndex"`
-	ItemType    string    `json:"item_type" gorm:"not null;index:idx_inventory_item"`
-	ItemID      uuid.UUID `json:"item_id" gorm:"type:uuid;not null;index:idx_inventory_item"`
-	Kind        string    `json:"kind" gorm:"not null"`
-	Quantity    int64     `json:"quantity" gorm:"not null"`
-	Reason      string    `json:"reason" gorm:"not null"`
-	Actor       string    `json:"actor" gorm:"not null"`
+	CountedQuantity  int64     `json:"counted_quantity,omitempty" gorm:"not null;default:0"`
+	ExpectedRevision int64     `json:"expected_revision,omitempty" gorm:"not null;default:0"`
+	SourceKey        string    `json:"source_key,omitempty" gorm:"not null;default:'';index"`
+	OperationID      uuid.UUID `json:"operation_id" gorm:"type:uuid;not null;uniqueIndex"`
+	SourceID         uuid.UUID `json:"source_id" gorm:"type:uuid;not null;uniqueIndex"`
+	ItemType         string    `json:"item_type" gorm:"not null;index:idx_inventory_item"`
+	ItemID           uuid.UUID `json:"item_id" gorm:"type:uuid;not null;index:idx_inventory_item"`
+	Kind             string    `json:"kind" gorm:"not null"`
+	Quantity         int64     `json:"quantity" gorm:"not null"`
+	Reason           string    `json:"reason" gorm:"not null"`
+	Actor            string    `json:"actor" gorm:"not null"`
 }
 
 type Movement struct {
@@ -46,7 +48,14 @@ func (p Posting) Validate() error {
 		p.Quantity < -MaxQuantity || p.Quantity > MaxQuantity {
 		return ErrInvalid
 	}
+	if p.Kind != "count" && (p.CountedQuantity != 0 || p.ExpectedRevision != 0) {
+		return ErrInvalid
+	}
 	switch p.Kind {
+	case "count":
+		if p.SourceKey != "" || p.CountedQuantity < 0 || p.CountedQuantity > MaxQuantity || p.ExpectedRevision < 0 || p.ExpectedRevision > MaxQuantity {
+			return ErrInvalid
+		}
 	case "opening":
 		if p.SourceKey != "" || p.Quantity < 0 {
 			return ErrInvalid
@@ -101,7 +110,7 @@ func projection(db *gorm.DB, typ string, id uuid.UUID, through int64) (Balance, 
 	if through > 0 {
 		q = q.Where("sequence <= ?", through)
 	}
-	err := q.Select("COALESCE(SUM(quantity),0) AS on_hand, COALESCE(MAX(kind = 'opening'),0) AS verified, COALESCE(MAX(sequence),0) AS revision").Scan(&b).Error
+	err := q.Select("COALESCE(SUM(quantity),0) AS on_hand, COALESCE(MAX(kind IN ('opening','count')),0) AS verified, COALESCE(MAX(sequence),0) AS revision").Scan(&b).Error
 	b.Available = b.OnHand
 	b.Negative = b.OnHand < 0
 	return b, err
@@ -141,6 +150,10 @@ func Post(tx *gorm.DB, p Posting) (Receipt, error) {
 	}
 	err := tx.Where("operation_id = ? OR source_id = ?", p.OperationID, p.SourceID).Take(&r.Movement).Error
 	if err == nil {
+		if p.Kind == "count" {
+			// The quantity on the receipt is the server-computed ledger delta.
+			p.Quantity = r.Quantity
+		}
 		if r.Posting != p {
 			return Receipt{}, ErrConflict
 		}
@@ -153,6 +166,12 @@ func Post(tx *gorm.DB, p Posting) (Receipt, error) {
 	b, err := Availability(tx, p.ItemType, p.ItemID)
 	if err != nil {
 		return r, err
+	}
+	if p.Kind == "count" {
+		p.Quantity = p.CountedQuantity - b.OnHand
+		if p.Quantity > MaxQuantity || p.Quantity < -MaxQuantity {
+			return r, ErrInvalid
+		}
 	}
 	if err = b.apply(p); err != nil {
 		return r, err
@@ -171,13 +190,16 @@ func Post(tx *gorm.DB, p Posting) (Receipt, error) {
 
 func (b *Balance) apply(p Posting) error {
 	next := b.OnHand + p.Quantity
+	if p.Kind == "count" && (p.ExpectedRevision != b.Revision || next != p.CountedQuantity) {
+		return ErrConflict
+	}
 	if next < -MaxQuantity || next > MaxQuantity || (p.Kind == "opening" && b.Verified) {
 		return ErrConflict
 	}
 	b.OnHand = next
 	b.Available = next
 	b.Negative = next < 0
-	b.Verified = b.Verified || p.Kind == "opening"
+	b.Verified = b.Verified || p.Kind == "opening" || p.Kind == "count"
 	return nil
 }
 
@@ -204,6 +226,7 @@ func ValidateHistory(rows []Movement, filaments []models.Filament, products []mo
 		}
 		ops[m.OperationID], sources[m.SourceID] = true, true
 		last = m.Sequence
+		b.Revision = m.Sequence
 		balances[k] = b
 	}
 	return nil

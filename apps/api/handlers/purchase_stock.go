@@ -25,8 +25,8 @@ func syncPurchaseStock(tx *gorm.DB, purchase models.FilamentPurchase, creating b
 		}
 	}
 	q, err := inventory.Milligrams(purchase.Amount, 1000000)
-	if err != nil {
-		return err
+	if err != nil || (purchase.Amount != 0 && q == 0) {
+		return inventory.ErrInvalid
 	}
 	return inventory.SetSource(tx, key, map[uuid.UUID]int64{purchase.FilamentID: q}, "purchase")
 }

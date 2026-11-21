@@ -31,13 +31,32 @@ func AdjustInventory(db *gorm.DB) gin.HandlerFunc {
 		}
 		var input struct {
 			inventory.Posting
-			Quantity *int64 `json:"quantity"`
+			Quantity         *int64 `json:"quantity"`
+			CountedQuantity  *int64 `json:"counted_quantity"`
+			ExpectedRevision *int64 `json:"expected_revision"`
 		}
-		if c.ShouldBindJSON(&input) != nil || input.Quantity == nil || (input.Kind != "opening" && input.Kind != "adjustment") || input.SourceKey != "" {
+		if c.ShouldBindJSON(&input) != nil || input.SourceKey != "" {
 			inventoryError(c, inventory.ErrInvalid)
 			return
 		}
-		input.Posting.Quantity = *input.Quantity
+		switch input.Kind {
+		case "count":
+			if input.Quantity != nil || input.CountedQuantity == nil || input.ExpectedRevision == nil {
+				inventoryError(c, inventory.ErrInvalid)
+				return
+			}
+			input.Posting.CountedQuantity = *input.CountedQuantity
+			input.Posting.ExpectedRevision = *input.ExpectedRevision
+		case "opening", "adjustment":
+			if input.Quantity == nil || input.CountedQuantity != nil || input.ExpectedRevision != nil {
+				inventoryError(c, inventory.ErrInvalid)
+				return
+			}
+			input.Posting.Quantity = *input.Quantity
+		default:
+			inventoryError(c, inventory.ErrInvalid)
+			return
+		}
 		var receipt inventory.Receipt
 		err := db.Transaction(func(tx *gorm.DB) error {
 			var err error

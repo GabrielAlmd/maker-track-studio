@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -89,8 +90,8 @@ func TestSalesBackupSchemaAndRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest["schema_version"] != float64(8) {
-		t.Fatalf("expected backup schema 8, got %#v", manifest["schema_version"])
+	if manifest["schema_version"] != float64(9) {
+		t.Fatalf("expected backup schema 9, got %#v", manifest["schema_version"])
 	}
 
 	target, targetDB := setupDesktopTestRouter(t)
@@ -415,4 +416,58 @@ func rewriteBackupSchemaVersion(t *testing.T, archive []byte, schemaVersion int)
 	}
 	files["manifest.json"] = manifestJSON
 	return buildZipArchive(t, files)
+}
+
+func TestPreLedgerRestorePreservesHistoricalSourcesAcrossRetries(t *testing.T) {
+	source, db := setupDesktopTestRouter(t)
+	fixture := createSalesBackupFixture(t, source, db)
+	filament := models.Filament{Brand: "Historical", TimesPurchased: 7}
+	if err := db.Create(&filament).Error; err != nil {
+		t.Fatal(err)
+	}
+	purchase := models.FilamentPurchase{FilamentID: filament.ID, Amount: 2, Price: 42}
+	if err := db.Create(&purchase).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []any{&inventory.Movement{}, &models.PrintRunItem{}, &models.PrintRun{}, &models.ProductionOperation{}} {
+		if err := db.Migrator().DropTable(table); err != nil {
+			t.Fatal(err)
+		}
+	}
+	backup := performRequest(t, source, "GET", "/desktop-data/export", nil)
+	if backup.Code != 200 {
+		t.Fatal(backup.Body.String())
+	}
+	legacy := rewriteBackupSchemaVersion(t, backup.Body.Bytes(), 4)
+	target, restored := setupDesktopTestRouter(t)
+	var firstRun, firstItem uuid.UUID
+	for i := 0; i < 2; i++ {
+		res := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "historical.zip", legacy)
+		if res.Code != 200 {
+			t.Fatal(res.Body.String())
+		}
+		assertStock(t, restored, filament.ID, 0)
+		var historical models.FilamentPurchase
+		if err := restored.First(&historical, "id = ?", purchase.ID).Error; err != nil || historical.Amount != 2 || historical.FilamentID != filament.ID {
+			t.Fatal(historical, err)
+		}
+		var allocation salesmodels.SalesOrderAllocation
+		if err := restored.First(&allocation, "id = ?", fixture.allocation.ID).Error; err != nil || allocation.PrintJobID == nil || *allocation.PrintJobID != *fixture.allocation.PrintJobID || allocation.ProductionCostCents == nil || *allocation.ProductionCostCents != *fixture.allocation.ProductionCostCents {
+			t.Fatal(allocation, err)
+		}
+		var order salesmodels.SalesOrder
+		if err := restored.First(&order, "id = ?", fixture.order.ID).Error; err != nil || order.NetProfitCents == nil || *order.NetProfitCents != *fixture.order.NetProfitCents {
+			t.Fatal(order, err)
+		}
+		var run models.PrintRun
+		if err := restored.Preload("Items").Where("print_job_id = ?", *allocation.PrintJobID).First(&run).Error; err != nil || run.Provenance != "legacy_unverified" || len(run.Items) != 1 {
+			t.Fatal(run, err)
+		}
+		if i == 0 {
+			firstRun, firstItem = run.ID, run.Items[0].ID
+		}
+		if run.ID != firstRun || run.Items[0].ID != firstItem || run.Items[0].Accepted != 0 || run.Items[0].LegacyReportedUnits != 2 {
+			t.Fatal(run)
+		}
+	}
 }

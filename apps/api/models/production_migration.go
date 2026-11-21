@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -24,11 +25,11 @@ func SyncLegacyProduction(tx *gorm.DB, job PrintJob) error {
 		return nil
 	}
 	var run PrintRun
-	if err := tx.Where("print_job_id = ? AND provenance = ?", job.ID, "legacy_unverified").Attrs(PrintRun{PrintJobID: job.ID, Status: "completed", Provenance: "legacy_unverified", Revision: 1}).FirstOrCreate(&run).Error; err != nil {
+	if err := tx.Where("print_job_id = ? AND provenance = ?", job.ID, "legacy_unverified").Attrs(PrintRun{ID: uuid.NewSHA1(job.ID, []byte("legacy-run")), PrintJobID: job.ID, Status: "completed", Provenance: "legacy_unverified", Revision: 1}).FirstOrCreate(&run).Error; err != nil {
 		return err
 	}
 	var item PrintRunItem
-	if err := tx.Where("print_run_id = ?", run.ID).Attrs(PrintRunItem{PrintRunID: run.ID, ModelID: job.ModelID, LegacyReportedUnits: int64(job.UnitsPrinted)}).FirstOrCreate(&item).Error; err != nil {
+	if err := tx.Where("print_run_id = ?", run.ID).Attrs(PrintRunItem{ID: uuid.NewSHA1(run.ID, []byte("legacy-item")), PrintRunID: run.ID, ModelID: job.ModelID, LegacyReportedUnits: int64(job.UnitsPrinted)}).FirstOrCreate(&item).Error; err != nil {
 		return err
 	}
 	if err := tx.Model(&item).Updates(map[string]any{"model_id": job.ModelID, "legacy_reported_units": job.UnitsPrinted}).Error; err != nil {

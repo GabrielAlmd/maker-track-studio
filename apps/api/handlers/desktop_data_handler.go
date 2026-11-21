@@ -26,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 8
+	desktopDataSchemaVersion   = 9
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -163,6 +163,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 		}
 		if manifest.SchemaVersion >= 8 && !sourceDB.Migrator().HasColumn(&inventory.Movement{}, "source_key") {
 			c.JSON(400, gin.H{"error": "Backup is missing inventory source references"})
+			return
+		}
+		if manifest.SchemaVersion >= 9 && (!sourceDB.Migrator().HasColumn(&inventory.Movement{}, "counted_quantity") || !sourceDB.Migrator().HasColumn(&inventory.Movement{}, "expected_revision")) {
+			c.JSON(400, gin.H{"error": "Backup is missing inventory count history"})
 			return
 		}
 		backupData, err := installed.ValidateBackups(sourceDB, manifest.SchemaVersion)
@@ -524,6 +528,9 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		columns := "sequence, operation_id, source_id, item_type, item_id, kind, quantity, reason, actor, created_at"
 		if sourceDB.Migrator().HasColumn(&inventory.Movement{}, "source_key") {
 			columns += ", source_key"
+		}
+		if sourceDB.Migrator().HasColumn(&inventory.Movement{}, "counted_quantity") {
+			columns += ", counted_quantity, expected_revision"
 		}
 		if err := sourceDB.Select(columns).Order("sequence").Find(&movements).Error; err != nil {
 			return err
