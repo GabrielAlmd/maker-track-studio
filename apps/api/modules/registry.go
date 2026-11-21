@@ -121,7 +121,7 @@ var legacyModuleTables = map[string]string{
 	"sales_channels": "sales_orders", "sales_orders": "sales_orders",
 	"sales_order_items": "sales_orders", "sales_order_allocations": "sales_orders",
 	"business_customers": "sales_orders", "business_budgets": "sales_orders",
-	"business_budget_operations": "sales_orders",
+	"business_budget_operations": "sales_orders", "business_proposals": "sales_orders",
 }
 
 // CheckBackupTables checks legacy module tables and recorded module versions

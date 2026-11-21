@@ -1,4 +1,4 @@
-// Package budget implements internal Business Operations estimates.
+// Package budget implements Business Operations customers, estimates and proposals.
 package budget
 
 import (
@@ -131,4 +131,6 @@ type operation struct {
 
 func (operation) TableName() string { return "business_budget_operations" }
 
-func Tables() []any { return []any{&Customer{}, &Record{}, &operation{}} }
+func budgetTables() []any { return []any{&Customer{}, &Record{}, &operation{}} }
+
+func Tables() []any { return append(budgetTables(), &Proposal{}) }

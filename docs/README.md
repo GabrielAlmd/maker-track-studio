@@ -41,6 +41,7 @@ read for setting up and changing the code.
 - [Settings architecture](SETTINGS_ARCHITECTURE.md) — settings sections,
   lazy loading, persistence, and compatibility.
 - [Customers and budgets](BUSINESS_BUDGETS.md) — internal estimates and the versioned Business API.
+- [Customer proposals](BUSINESS_PROPOSALS.md) — pricing, discounts, issued revisions and the customer document contract.
 - [Sales & Orders](SALES_AND_ORDERS.md) — entities, APIs, lifecycle,
   profitability, migrations, and backup rules.
 - [Printer profiles](PRINTER_PROFILES.md) — printer identity, costs, snapshots,

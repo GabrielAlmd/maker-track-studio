@@ -19,7 +19,7 @@ records follow their current workflow.
 3. Enter per-unit post-processing and other costs in EUR cents and set the
    quantity. Review the estimate privately. Budget endpoints and workspace
    backups can contain both customer information and confidential cost inputs.
-   Share customer proposals through the customer-facing workflow in #21.
+   Share customer proposals through the [proposal document contract](BUSINESS_PROPOSALS.md).
 4. Edit using the current revision and existing line IDs. Each successful edit
    creates a revision. Title, line name, customer and quantity changes retain
    unchanged lines' cost sources. Changing a line's assumptions captures
@@ -93,10 +93,11 @@ and totals reconcile exactly.
 The Sales module moves from version 1 to 2. Its migration adds
 `business_customers`, `business_budgets` and `business_budget_operations`
 without backfilling Sales orders or changing their IDs, allocations or
-snapshots. Full ZIP backups use schema 12, format 1, and include revisions and
-operation records. Supported older archives restore with empty customer and
-budget tables. Imports validate references, revisions, estimates and retries
-before replacing workspace data in one transaction.
+snapshots. Full ZIP backups include revisions and operation records starting
+in schema 12. See [SQLite recovery](SQLITE_RECOVERY.md) for the current schema.
+Supported older archives restore with empty customer and budget tables. Imports
+validate references, revisions, estimates and retries before replacing
+workspace data in one transaction.
 
 Before an upgrade, save an SQLite ZIP backup using the prior version. For
 rollback, stop the app, retain the upgraded workspace separately, and restore
