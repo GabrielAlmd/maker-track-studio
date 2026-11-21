@@ -10,6 +10,7 @@ import (
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type productionConflict string
@@ -20,6 +21,14 @@ const (
 	errProductionOrder    = productionConflict("Run-item production requires a proposal-backed order")
 	errProductionEdit     = productionConflict("Production links can only be changed on confirmed or preparing orders")
 	errProductionRevision = productionConflict("The production plan has changed. Reload it before saving")
+)
+
+const (
+	productionNotStarted = "not_started"
+	productionPlanned    = "planned"
+	productionInProgress = "in_progress"
+	productionComplete   = "complete"
+	productionCancelled  = "cancelled"
 )
 
 type productionLinkKey struct {
@@ -106,9 +115,11 @@ func findProductionSources(tx *gorm.DB, links map[productionLinkKey]salesdto.Ord
 
 func (state orderProductionState) document() salesdto.OrderProduction {
 	result := salesdto.OrderProduction{
-		Revision: state.order.ProductionRevision, Editable: productionEditable(state.order),
+		Status: productionNotStarted, Revision: state.order.ProductionRevision, Editable: productionEditable(state.order),
 		Items: make([]salesdto.OrderProductionLine, 0, len(state.order.Items)),
 	}
+	cancelled := state.order.FulfilmentStatus == storage.SalesOrderFulfilmentCancelled
+	allComplete := len(state.order.Items) > 0
 	byLine := make(map[uuid.UUID][]salesdto.OrderProductionLink)
 	for key, link := range state.links {
 		source := state.sources[key.source]
@@ -120,7 +131,7 @@ func (state orderProductionState) document() salesdto.OrderProduction {
 	}
 	for _, item := range state.order.Items {
 		line := salesdto.OrderProductionLine{
-			SalesOrderItemID: item.ID, ModelName: item.ModelNameSnapshot,
+			Status: productionNotStarted, SalesOrderItemID: item.ID, ModelName: item.ModelNameSnapshot,
 			CanLink: item.ModelID != nil, UnitsRequired: int64(item.Quantity), Links: byLine[item.ID],
 		}
 		if line.Links == nil {
@@ -130,19 +141,49 @@ func (state orderProductionState) document() salesdto.OrderProduction {
 			return slices.Compare(a.PrintRunItemID[:], b.PrintRunItemID[:])
 		})
 		for _, link := range line.Links {
-			if state.order.FulfilmentStatus == storage.SalesOrderFulfilmentCancelled {
+			if cancelled {
 				continue
 			}
-			if link.Source.Status != "failed" && link.Source.Status != "cancelled" {
+			switch link.Source.Status {
+			case "planned":
 				line.UnitsPlanned += link.UnitsPlanned
+				if line.Status == productionNotStarted {
+					line.Status = productionPlanned
+				}
+			case "in_progress", "completed":
+				line.UnitsPlanned += link.UnitsPlanned
+				line.Status = productionInProgress
+			case "failed":
+				line.Status = productionInProgress
 			}
-			if link.Source.Status == "completed" {
+			if link.Source.Status == "completed" && link.UnitsAllocated <= link.Source.UnitsAccepted {
 				line.UnitsAccepted += link.UnitsAllocated
 			}
 			line.UnitsAllocated += link.UnitsAllocated
 		}
 		line.UnitsOutstanding = max(0, line.UnitsRequired-line.UnitsAccepted)
+		switch {
+		case cancelled:
+			line.Status = productionCancelled
+		case line.UnitsRequired > 0 && line.UnitsOutstanding == 0:
+			line.Status = productionComplete
+		}
+		allComplete = allComplete && line.Status == productionComplete
+		switch line.Status {
+		case productionComplete, productionInProgress:
+			result.Status = productionInProgress
+		case productionPlanned:
+			if result.Status == productionNotStarted {
+				result.Status = productionPlanned
+			}
+		}
 		result.Items = append(result.Items, line)
+	}
+	switch {
+	case cancelled:
+		result.Status = productionCancelled
+	case allComplete:
+		result.Status = productionComplete
 	}
 	return result
 }
@@ -205,7 +246,8 @@ func replaceOrderProduction(db *gorm.DB, id uuid.UUID, expected int64, links map
 		if err := saveProductionLinks(tx, state, links, sources); err != nil {
 			return err
 		}
-		if err := tx.Model(&state.order).Update("production_revision", expected+1).Error; err != nil {
+		// The preloaded items still contain the allocations that were just released.
+		if err := tx.Model(&state.order).Omit(clause.Associations).Update("production_revision", expected+1).Error; err != nil {
 			return err
 		}
 		state, err = loadOrderProduction(tx, id)

@@ -37,6 +37,7 @@ type OrderProductionLink struct {
 }
 
 type OrderProductionLine struct {
+	Status           string                `json:"status"`
 	SalesOrderItemID uuid.UUID             `json:"sales_order_item_id"`
 	ModelName        string                `json:"model_name"`
 	CanLink          bool                  `json:"can_link"`
@@ -49,6 +50,7 @@ type OrderProductionLine struct {
 }
 
 type OrderProduction struct {
+	Status   string                `json:"status"`
 	Revision int64                 `json:"revision"`
 	Editable bool                  `json:"editable"`
 	Items    []OrderProductionLine `json:"items"`

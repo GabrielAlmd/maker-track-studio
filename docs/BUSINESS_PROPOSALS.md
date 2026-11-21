@@ -143,16 +143,30 @@ without a catalog model can show demand and progress but cannot link run items.
 
 Save the plan to apply all changes together. To release a link, remove it and
 save. If the plan changed in another window, reload the saved plan before
-editing it again. Inventory records finished goods when core production posts
-verified accepted output. Sales planning and allocation record commercial links.
-Costing and production completion for proposal-backed orders are tracked by
-[#24](https://github.com/GabrielAlmd/maker-track-studio/issues/24). Physical reservation
-and fulfilment integration are tracked by [#26](https://github.com/GabrielAlmd/maker-track-studio/issues/26).
+editing it again. Use **Refresh production** to load run outcomes or allocations
+recorded elsewhere. Review actual attempted, accepted and rejected units in the
+Print Job before completing the run. An in-progress run can still be corrected
+before inspection is final. For a failed or short run, keep the original record,
+plan a replacement run, and allocate its accepted units after inspection.
+
+A line is **Complete** when its required quantity is covered by verified accepted
+units assigned to that line. The order's production is **Complete** when every
+line is complete. Reducing or releasing an assignment can make demand outstanding
+again. A production status change leaves order fulfilment, invoices, payment and
+frozen financials untouched. Inventory records finished goods when core production
+posts verified accepted output. Physical reservation and fulfilment integration
+are tracked by [#26](https://github.com/GabrielAlmd/maker-track-studio/issues/26).
 
 #### Order production API
 
 - `GET /v2/business/orders/:id/production` returns the production revision,
-  editability, line totals and links. Each link includes the Print Job,
+  editability, line totals and links. GET and PUT responses include a derived
+  `status` on the order production document and on each line. Possible values
+  are `not_started`, `planned`, `in_progress`, `complete` and `cancelled`.
+  Linked execution, including a failed attempt, can make progress
+  `in_progress` while units remain outstanding. A change in the core run may
+  change progress without changing the order's production-link revision.
+  Each link includes the Print Job,
   run and run-item IDs, status, planned and accepted source capacity, and
   remaining accepted units available to allocate.
 - `GET /v2/business/orders/:id/production/sources?line_id=<uuid>` lists compatible
@@ -171,6 +185,10 @@ The existing Sales allocation endpoints remain available. Their read response
 includes an optional `print_run_item_id` for new run-item allocations. The new
 order endpoints use a separate production revision from the commercial
 amendment revision.
+
+Production status is computed from existing facts on each read or save. This
+change needs no SQLite migration, backup schema change or data backfill. Existing
+backups restore the same production facts and recompute progress on read.
 
 ### Amend confirmed terms
 

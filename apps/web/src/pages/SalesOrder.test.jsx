@@ -59,7 +59,7 @@ describe('Sales Order workflow', () => {
       print_date: '2026-09-18T00:00:00Z', status: 'completed', units_planned: 2, units_accepted: 1, units_available: 1,
     };
     const line = {
-      sales_order_item_id: 'item-1', model_name: 'Enclosure', can_link: true, links: [],
+      status: 'not_started', sales_order_item_id: 'item-1', model_name: 'Enclosure', can_link: true, links: [],
       units_required: 2, units_planned: 0, units_accepted: 0, units_allocated: 0, units_outstanding: 2,
     };
     const link = { sales_order_item_id: 'item-1', print_run_item_id: 'run-item-1', units_planned: 0, units_allocated: 1 };
@@ -68,21 +68,23 @@ describe('Sales Order workflow', () => {
       revision: { proposal_revision: 2, confirmed_at: '2026-09-18', purchase_order: 'PO-01' },
       document: { customer_name: 'Sample workshop', terms: {} },
     });
-    salesService.getOrderProduction.mockResolvedValue({ revision: 0, editable: true, items: [line] });
+    salesService.getOrderProduction.mockResolvedValue({ status: 'not_started', revision: 0, editable: true, items: [line] });
     salesService.getOrderProductionSources.mockResolvedValue({ items: [source] });
     salesService.saveOrderProduction.mockRejectedValueOnce({
       response: { status: 409, data: { error: 'Allocation exceeds the run item’s remaining verified accepted units' } },
     }).mockResolvedValueOnce({
-      revision: 1, editable: true,
-      items: [{ ...line, links: [{ ...link, source }], units_allocated: 1, units_accepted: 1, units_outstanding: 1 }],
+      status: 'in_progress', revision: 1, editable: true,
+      items: [{ ...line, status: 'in_progress', links: [{ ...link, source }], units_allocated: 1, units_accepted: 1, units_outstanding: 1 }],
     });
     const user = userEvent.setup();
     renderOrder('/sales/order-1');
 
     const panel = within(await screen.findByRole('region', { name: 'Production plan' }));
+    expect(await panel.findByText('Order production: Not started')).toBeInTheDocument();
     await user.click(await panel.findByRole('button', { name: 'Find run items' }));
     await user.selectOptions(await panel.findByLabelText('Compatible run items'), source.print_run_item_id);
     await user.click(panel.getByRole('button', { name: 'Add run item' }));
+    expect(panel.getByRole('button', { name: 'Refresh production' })).toBeDisabled();
     expect(panel.getByLabelText('Planned')).toHaveAttribute('readonly');
     fireEvent.change(panel.getByLabelText('Allocated'), { target: { value: '-1' } });
     await user.click(panel.getByRole('button', { name: 'Save production plan' }));
@@ -97,7 +99,17 @@ describe('Sales Order workflow', () => {
     await waitFor(() => expect(panel.getByRole('button', { name: 'Save production plan' })).toBeDisabled());
     expect(salesService.saveOrderProduction).toHaveBeenLastCalledWith('order-1', 0, [link]);
     expect(panel.getByText('Outstanding').nextElementSibling).toHaveTextContent('1');
+    expect(panel.getByText('Order production: In progress')).toBeInTheDocument();
     expect(salesService.replaceSalesOrderAllocations).not.toHaveBeenCalled();
+
+    salesService.getOrderProduction.mockResolvedValueOnce({
+      status: 'complete', revision: 2, editable: true,
+      items: [{ ...line, status: 'complete', units_allocated: 2, units_accepted: 2, units_outstanding: 0 }],
+    });
+    await user.click(panel.getByRole('button', { name: 'Refresh production' }));
+    expect(await panel.findByText('Order production: Complete')).toBeInTheDocument();
+    expect(panel.getByText('Outstanding').nextElementSibling).toHaveTextContent('0');
+    expect(salesService.updateSalesOrderStatus).not.toHaveBeenCalled();
   });
 
   it('creates an order with multiple items and remaps allocations to returned item IDs', async () => {

@@ -127,12 +127,18 @@ export default function OrderProduction({ orderId }) {
       {!document && !loadError && <LoadingState />}
       {document && (
         <form onSubmit={handleSubmit(save)} noValidate className="mt-3">
+          <p role="status" className="mb-4 text-sm font-semibold ui-text-primary">
+            {t('sales.production.orderStatus', { status: t(`sales.production.states.${document.status}`) })}
+          </p>
           <fieldset disabled={isSubmitting} className="min-w-0 divide-y ui-divide-subtle">
             {document.items.map((item) => {
               const linked = fields.map((link, index) => ({ link, index })).filter(({ link }) => link.sales_order_item_id === item.sales_order_item_id);
               return (
                 <article key={item.sales_order_item_id} className="py-4 first:pt-0">
-                  <h3 className="font-semibold">{item.model_name}</h3>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="font-semibold">{item.model_name}</h3>
+                    <p className="text-sm ui-text-secondary">{t(`sales.production.states.${item.status}`)}</p>
+                  </div>
                   <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5">
                     {metrics.map((metric) => <div key={metric} className="rounded-md ui-surface-nested px-3 py-2">
                       <dt className="text-xs ui-text-muted">{t(`sales.production.${metric}`)}</dt>
@@ -157,11 +163,11 @@ export default function OrderProduction({ orderId }) {
                           })}</p>
                         </div>
                         <label className="text-sm">{t('sales.production.planned')}
-                          <input className={fieldClass} type="number" min="0" step="1" readOnly={!plannedEditable}
+                          <input className={fieldClass} type="number" min="0" max="1000000000" step="1" readOnly={!plannedEditable}
                             aria-invalid={Boolean(rowErrors?.units_planned)} {...register(`links.${index}.units_planned`)} />
                         </label>
                         <label className="text-sm">{t('sales.production.allocated')}
-                          <input className={fieldClass} type="number" min="0" step="1" readOnly={!allocatedEditable}
+                          <input className={fieldClass} type="number" min="0" max="1000000000" step="1" readOnly={!allocatedEditable}
                             aria-invalid={Boolean(rowErrors?.units_allocated)} {...register(`links.${index}.units_allocated`)} />
                         </label>
                         {document.editable && <button type="button" className="page-action page-action-secondary" onClick={() => remove(index)}>{t('common.remove')}</button>}
@@ -180,10 +186,15 @@ export default function OrderProduction({ orderId }) {
           </fieldset>
           {errors.links && <p className="page-form-error" role="alert">{t('sales.production.invalid')}</p>}
           {saveError && <p className="page-form-error" role="alert">{saveError}</p>}
-          {document.editable && <div className="mt-3 flex justify-end gap-2">
-            {saveError && <button type="button" className="page-action page-action-secondary" onClick={reload}>{t('sales.production.reload')}</button>}
-            <button type="submit" className="page-action" disabled={!isDirty || isSubmitting}>{t(isSubmitting ? 'common.saving' : 'sales.production.save')}</button>
-          </div>}
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <button type="button" className="page-action page-action-secondary" onClick={reload}
+              disabled={isSubmitting || (isDirty && !saveError)}>
+              {t(saveError ? 'sales.production.reload' : 'sales.production.refresh')}
+            </button>
+            {document.editable && <button type="submit" className="page-action" disabled={!isDirty || isSubmitting}>
+              {t(isSubmitting ? 'common.saving' : 'sales.production.save')}
+            </button>}
+          </div>
         </form>
       )}
     </section>
