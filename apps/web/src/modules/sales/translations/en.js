@@ -5,6 +5,8 @@ export default {
   dashboard: { business: 'Business', businessHelp: 'All-time financial totals from completed orders and current order activity.', orders: 'Orders', revenue: 'Revenue', netProfit: 'Net Profit', margin: 'Margin', businessOrderNote: '{{completed}} completed · {{unpaid}} unpaid', completedOrdersOnly: 'Completed orders only', salesLoading: 'Loading business metrics', salesLoadError: 'Could not load business metrics', recentOrders: 'Recent Orders', viewOrders: 'View all orders →', noRecentOrders: 'No recent orders', noRecentOrdersHelp: 'Create an order to start tracking business activity.', createOrder: 'Create an order' },
   sales: {
     production: {
+      orderStatus: 'Order production: {{status}}', refresh: 'Refresh production',
+      states: { not_started: 'Not started', planned: 'Planned', in_progress: 'In progress', complete: 'Complete', cancelled: 'Cancelled' },
       title: 'Production plan', required: 'Required', planned: 'Planned', accepted: 'Accepted', allocated: 'Allocated', outstanding: 'Outstanding',
       find: 'Find run items', more: 'Load more run items', select: 'Compatible run items', choose: 'Select a run item', add: 'Add run item',
       source: '{{date}} · Run {{run}} · Item {{item}} · {{status}}', sourceCapacity: 'Run item capacity: {{planned}} planned · {{accepted}} accepted · {{available}} available to allocate',

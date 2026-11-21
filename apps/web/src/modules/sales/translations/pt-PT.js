@@ -5,6 +5,8 @@ export default {
   dashboard: { business: 'Negócio', businessHelp: 'Totais financeiros de sempre das encomendas concluídas e atividade atual.', orders: 'Encomendas', revenue: 'Receita', netProfit: 'Lucro líquido', margin: 'Margem', businessOrderNote: '{{completed}} concluídas · {{unpaid}} por pagar', completedOrdersOnly: 'Apenas encomendas concluídas', salesLoading: 'A carregar métricas do negócio', salesLoadError: 'Não foi possível carregar as métricas do negócio', recentOrders: 'Encomendas recentes', viewOrders: 'Ver todas as encomendas →', noRecentOrders: 'Sem encomendas recentes', noRecentOrdersHelp: 'Crie uma encomenda para começar a acompanhar a atividade do negócio.', createOrder: 'Criar uma encomenda' },
   sales: {
     production: {
+      orderStatus: 'Produção da encomenda: {{status}}', refresh: 'Atualizar produção',
+      states: { not_started: 'Por iniciar', planned: 'Planeada', in_progress: 'Em curso', complete: 'Concluída', cancelled: 'Cancelada' },
       title: 'Plano de produção', required: 'Necessárias', planned: 'Planeadas', accepted: 'Aceites', allocated: 'Atribuídas', outstanding: 'Em falta',
       find: 'Procurar itens de execução', more: 'Carregar mais itens', select: 'Itens de execução compatíveis', choose: 'Selecionar um item', add: 'Adicionar item',
       source: '{{date}} · Execução {{run}} · Item {{item}} · {{status}}', sourceCapacity: 'Capacidade do item: {{planned}} planeadas · {{accepted}} aceites · {{available}} disponíveis para atribuir',

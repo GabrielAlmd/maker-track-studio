@@ -285,8 +285,9 @@ export async function installApiFixtures(pageContext) {
       profitability: { state: 'not_calculated', revenue_cents: 7899, additional_costs_cents: 0, margin: { state: 'not_calculated' } },
     };
     if (apiPath === '/v2/business/orders/formal/production') body = {
-      revision: 1, editable: true,
+      status: 'in_progress', revision: 1, editable: true,
       items: [{
+        status: 'in_progress',
         sales_order_item_id: 'soi1', model_name: salesOrders[0].items[0].model_name_snapshot, can_link: true,
         units_required: 2, units_planned: 2, units_accepted: 1, units_allocated: 1, units_outstanding: 1,
         links: [
