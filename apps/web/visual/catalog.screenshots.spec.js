@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 import { installApiFixtures } from './catalog-fixtures';
 
@@ -242,7 +243,34 @@ const scenarios = [
   },
   {
     slug: 'business-order-documents', route: 'business/orders/formal?section=documents', fullPage: true,
-    prepare: async (page) => await expect(page.getByRole('link', { name: 'View accepted proposal' })).toBeVisible(),
+    prepare: async (page) => {
+      await expect(page.getByRole('link', { name: 'View accepted proposal' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Download Sample purchase order.pdf' })).toBeVisible();
+      await page.getByLabel('Attachment file').setInputFiles({
+        name: 'Workshop collection.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7\n%%EOF\n'),
+      });
+      await page.getByRole('button', { name: 'Add attachment' }).click();
+      await expect(page.getByRole('button', { name: 'Download Workshop collection.pdf' })).toBeVisible();
+      await expect(page.getByText('Attachment added.', { exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole('button', { name: 'Download Workshop collection.pdf' })).toBeVisible();
+    },
+  },
+  {
+    slug: 'business-order-history', route: 'business/orders/formal?section=history', fullPage: true,
+    prepare: async (page) => {
+      await expect(page.getByRole('heading', { name: 'Order activity' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Issued proposal, revision 2' })).toBeVisible();
+    },
+  },
+  {
+    slug: 'business-issued-proposal', route: 'business/proposals/quote?document=2', fullPage: true,
+    prepare: async (page) => {
+      await expect(page.getByRole('heading', { name: 'Prototype batch' })).toBeVisible();
+      const download = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download proposal PDF' }).click();
+      expect((await download).suggestedFilename()).toBe('proposal-quote-r2.pdf');
+    },
   },
   { slug: 'sales', route: 'sales', fullPage: true, prepare: ready.sales },
   { slug: 'sales-compact', route: 'sales', viewport: { width: 900, height: 900 }, fullPage: true, prepare: ready.sales },

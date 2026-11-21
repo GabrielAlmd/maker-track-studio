@@ -279,6 +279,9 @@ func deleteSalesOrder(db *gorm.DB, id uuid.UUID) error {
 		if err := tx.Where("sales_order_id = ?", id).Delete(&salesmodels.SalesOrderItem{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("sales_order_id = ?", id).Delete(&salesmodels.OrderAttachment{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&order).Error
 	})
 }

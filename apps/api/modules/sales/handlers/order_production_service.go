@@ -250,6 +250,10 @@ func replaceOrderProduction(db *gorm.DB, id uuid.UUID, expected int64, links map
 		if err := tx.Model(&state.order).Omit(clause.Associations).Update("production_revision", expected+1).Error; err != nil {
 			return err
 		}
+		event := storage.OrderEvent{SalesOrderID: id, Kind: storage.OrderProductionRevised, Revision: expected + 1}
+		if err := tx.Create(&event).Error; err != nil {
+			return err
+		}
 		state, err = loadOrderProduction(tx, id)
 		if err == nil {
 			result = state.document()

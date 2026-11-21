@@ -10,6 +10,7 @@ import BusinessNavigation from '../components/BusinessNavigation';
 import EstimateEditor from '../components/EstimateEditor';
 import ProposalEditor from '../components/ProposalEditor';
 import ProposalConfirmation from '../components/ProposalConfirmation';
+import ProposalDownload from '../components/ProposalDownload';
 import useBusinessCommand from '../components/useBusinessCommand';
 import { getRecord, listRecords } from '../services/businessService';
 
@@ -131,7 +132,10 @@ function CommercialDetail({ kind, id, budgetId, documentRevision, revision }) {
   </div>;
 
   if (documentRevision) return <div className="space-y-4">
-    <Link className="page-action page-action-secondary" to={`${pathFor(kind)}/${id}`}>{t('business.backToProposal')}</Link>
+    <div className="flex flex-wrap gap-2">
+      <Link className="page-action page-action-secondary" to={`${pathFor(kind)}/${id}`}>{t('business.backToProposal')}</Link>
+      <ProposalDownload id={record.id} revision={record.revision} />
+    </div>
     <ProposalDocument document={record} />
     <ProposalConfirmation document={record} />
   </div>;

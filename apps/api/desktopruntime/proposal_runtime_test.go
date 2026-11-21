@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/budget"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/google/uuid"
 )
 
@@ -37,14 +39,10 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 				return runtime
 			}
 			runtime := open()
-			request := func(method, path string, input, result any, status int) {
+			send := func(method, path, contentType string, data []byte, status int) *httptest.ResponseRecorder {
 				t.Helper()
-				data, err := json.Marshal(input)
-				if err != nil {
-					t.Fatal(err)
-				}
 				req := httptest.NewRequest(method, path, bytes.NewReader(data))
-				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Content-Type", contentType)
 				if config.LANAccess != nil {
 					req.Host, req.RemoteAddr = "studio.home.arpa", "127.0.0.1:1234"
 					req.Header.Set("X-Maker-Proxy-Key", config.LANAccess.ProxySecret)
@@ -56,6 +54,15 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 				if rec.Code != status {
 					t.Fatalf("%s %s: got %d, want %d: %s", method, path, rec.Code, status, rec.Body.String())
 				}
+				return rec
+			}
+			request := func(method, path string, input, result any, status int) {
+				t.Helper()
+				data, err := json.Marshal(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rec := send(method, path, "application/json", data, status)
 				if result != nil {
 					if err := json.Unmarshal(rec.Body.Bytes(), result); err != nil {
 						t.Fatal(err)
@@ -126,6 +133,43 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 			request("GET", "/v2/business/orders/"+order.ID.String(), nil, &accepted, 200)
 			if accepted.ProposalID != proposal.ID || accepted.PurchaseOrder != "Sample PO" || accepted.Revision != 1 {
 				t.Fatalf("acceptance after reopening: %+v", accepted)
+			}
+			// Exercise the upgrade from the previous Sales module with real
+			// proposal/order records and a file-backed SQLite workspace.
+			if err := runtime.db.Migrator().DropTable(&storage.OrderAttachment{}, &storage.OrderEvent{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := runtime.db.Exec("UPDATE module_versions SET version = 5 WHERE id = ?", "sales_orders").Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := runtime.Shutdown(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			runtime = open()
+			pdf := send("GET", path+"/document/pdf?revision=2", "", nil, 200)
+			if !bytes.HasPrefix(pdf.Body.Bytes(), []byte("%PDF-")) || pdf.Header().Get("Content-Type") != "application/pdf" {
+				t.Fatal("issued proposal PDF missing after upgrade")
+			}
+			request("PUT", "/features", map[string]bool{"sales_orders": true}, nil, 200)
+			base := "/v2/business/orders/" + order.ID.String()
+			query := url.Values{"name": {"Sample PO.pdf"}, "operation_id": {uuid.NewString()}}
+			content := []byte("%PDF-1.7\nSample PO\n%%EOF")
+			var attachment storage.OrderAttachment
+			uploaded := send("POST", base+"/attachments?"+query.Encode(), "application/octet-stream", content, 201)
+			if err := json.Unmarshal(uploaded.Body.Bytes(), &attachment); err != nil || attachment.ID == uuid.Nil {
+				t.Fatalf("unexpected attachment: %s (%v)", uploaded.Body.String(), err)
+			}
+			if err := runtime.Shutdown(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			runtime = open()
+			download := send("GET", base+"/attachments/"+attachment.ID.String(), "", nil, 200)
+			if !bytes.Equal(download.Body.Bytes(), content) {
+				t.Fatal("attachment bytes changed after reopening workspace")
+			}
+			activity := send("GET", base+"/activity", "", nil, 200)
+			if !strings.Contains(activity.Body.String(), "proposal_accepted") || !strings.Contains(activity.Body.String(), "attachment_added") {
+				t.Fatal("timeline did not preserve acceptance and attachment")
 			}
 			request("GET", "/desktop-data/export", nil, nil, 200)
 		})

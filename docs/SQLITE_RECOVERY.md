@@ -135,8 +135,14 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share schema version 15 and ZIP format
-version 1. Schema 15 (Sales module version 5) adds order production revisions,
+Current desktop and self-hosted builds share schema version 16 and ZIP format
+version 1. Schema 16 (Sales module version 6) adds the order attachment and
+activity tables. SQLite stores attachment bytes together with their metadata.
+Restore validates the order link, names, size and type limits, SHA-256
+checksums and event references before replacing live data in a single
+transaction. Supported older backups restore without new attachment or
+production activity rows. Keep a pre-upgrade archive and use it with its
+compatible binary for rollback. Schema 15 (Sales module version 5) adds order production revisions,
 planned run-item links, and an optional run-item reference on allocations.
 Existing allocations retain their IDs, Print Job references and frozen costs.
 Restore validates link ownership, source identity, and planned and accepted
@@ -155,7 +161,7 @@ movements and their audit and retry identifiers. Restoring a pre-ledger archive
 clears local ledger history and leaves balances unverified. Schema 6 adds
 production lifecycle records. Schema 5 adds material estimate, waste and
 measurement provenance to Print Job filament rows. Supported older ZIP schemas
-(1–14) follow the existing migrations. Missing optional-module support fails
+(1–15) follow the existing migrations. Missing optional-module support fails
 closed for databases or archives containing that module's data. Tests use disposable fixtures for
 legacy migrations and current round trips; no live user data is migrated.
 

@@ -195,6 +195,9 @@ export async function installApiFixtures(pageContext) {
     };
   });
 
+  const attachments = [{ id: 'attachment-1', name: 'Sample purchase order.pdf',
+    size: 24600, created_at: '2026-09-18T09:40:00Z' }];
+
   await pageContext.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -225,6 +228,18 @@ export async function installApiFixtures(pageContext) {
 
     if (request.method() === 'POST' && apiPath === '/data-migration/preview') {
       await route.fulfill({ status: 200, headers: corsHeaders, json: { can_import: true, sections: [{ section: 'printers', source: 'printers', effective_mapping: { name: 'Name', manufacturer: 'Manufacturer', model: 'Model', notes: 'Notes' }, summary: { total: 2, ready: 1, warnings: 0, invalid: 0, duplicates: 1, skipped: 1 }, rows: [{ row: 2, status: 'ready', action: 'create', values: {}, issues: [] }, { row: 3, status: 'duplicate', action: 'skip', values: {}, issues: [] }] }] } });
+      return;
+    }
+
+    if (apiPath === '/v2/business/orders/formal/attachments' && request.method() === 'POST') {
+      const item = { id: 'attachment-2', name: url.searchParams.get('name'), size: request.postDataBuffer().length,
+        created_at: '2026-09-19T12:30:00Z' };
+      attachments.push(item);
+      await route.fulfill({ status: 201, headers: corsHeaders, json: item });
+      return;
+    }
+    if (apiPath === '/v2/business/proposals/quote/document/pdf') {
+      await route.fulfill({ contentType: 'application/pdf', body: '%PDF-1.7\n%%EOF\n' });
       return;
     }
 
@@ -282,6 +297,13 @@ export async function installApiFixtures(pageContext) {
       terms: { title: 'Prototype batch', valid_until: '2026-10-30', payment_terms: 'Due on collection' },
       lines: [{ description: 'Modular Enclosure', quantity: 2, net_cents: 7899 }], net_cents: 7899,
     };
+    if (apiPath === '/v2/business/orders/formal/attachments') body = { items: attachments };
+    if (apiPath === '/v2/business/orders/formal/activity') body = { items: [
+      { id: 'fulfilment:1', kind: 'dispatch', units: 1, detail: 'Collected at the workshop', created_at: '2026-09-19T10:30:00Z' },
+      { id: 'event:1', kind: 'run_completed', reference_id: 'aad873f3-bfc2-462e-965a-64bad09da3ab', created_at: '2026-09-19T09:30:00Z' },
+      { id: 'attachment:1', kind: 'attachment_added', detail: 'Sample purchase order.pdf', created_at: '2026-09-18T09:40:00Z' },
+      { id: 'order:1', kind: 'proposal_accepted', reference_id: 'quote', proposal_revision: 2, created_at: '2026-09-18T09:30:00Z' },
+    ], page: 1, has_more: false };
     if (apiPath === '/sales-orders/formal') body = {
       ...salesOrders[0], id: 'formal', reference: 'Prototype batch', notes: '', workflow_version: 2,
       legacy_write_supported: false, fulfilment_status: 'confirmed', payment_status: 'unpaid',

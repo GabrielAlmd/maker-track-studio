@@ -193,7 +193,10 @@ func cancelRemainder(tx *gorm.DB, id uuid.UUID, doc fulfilment) error {
 			revisions[line.RunItem] = receipt.Sequence
 		}
 	}
-	return tx.Model(&storage.SalesOrder{}).Where("id = ?", id).Update("fulfilment_status", storage.SalesOrderFulfilmentCancelled).Error
+	if err := tx.Model(&storage.SalesOrder{}).Where("id = ?", id).Update("fulfilment_status", storage.SalesOrderFulfilmentCancelled).Error; err != nil {
+		return err
+	}
+	return tx.Create(&storage.OrderEvent{SalesOrderID: id, Kind: storage.OrderRemainderCancelled}).Error
 }
 
 func OrderFulfilment(db *gorm.DB) gin.HandlerFunc {

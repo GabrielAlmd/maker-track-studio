@@ -6,6 +6,7 @@ import (
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules"
 	salesmodels "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -39,4 +40,35 @@ func (Module) CheckPrintJobDeletion(tx *gorm.DB, id string) error {
 		return modules.PrintJobDeleteConflict{Message: "Print Job is referenced by Sales allocations"}
 	}
 	return nil
+}
+
+// RecordRunTransition snapshots which active orders had a link at the time of
+// transition, so releasing or replacing a plan cannot rewrite order history.
+func (Module) RecordRunTransition(tx *gorm.DB, run models.PrintRun) error {
+	kind := salesmodels.OrderRunEventKind(run.Status)
+	if kind == "" {
+		return nil
+	}
+	var orders []uuid.UUID
+	if err := tx.Raw(`
+		SELECT DISTINCT orders.id
+		FROM sales_order_items AS line JOIN sales_orders AS orders ON orders.id = line.sales_order_id
+		WHERE orders.fulfilment_status IN ('confirmed', 'preparing')
+		AND line.id IN (
+			SELECT sales_order_item_id FROM sales_production_plans
+			WHERE print_run_item_id IN (SELECT id FROM print_run_items WHERE print_run_id = ?)
+			UNION
+			SELECT sales_order_item_id FROM sales_order_allocations
+			WHERE print_run_item_id IN (SELECT id FROM print_run_items WHERE print_run_id = ?)
+		)`, run.ID, run.ID).Scan(&orders).Error; err != nil {
+		return err
+	}
+	if len(orders) == 0 {
+		return nil
+	}
+	events := make([]salesmodels.OrderEvent, 0, len(orders))
+	for _, id := range orders {
+		events = append(events, salesmodels.OrderEvent{SalesOrderID: id, Kind: kind, Revision: run.Revision, RunID: &run.ID})
+	}
+	return tx.CreateInBatches(&events, 100).Error
 }

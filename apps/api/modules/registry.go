@@ -122,8 +122,9 @@ func (registry *Registry) Migrate(db *gorm.DB) error {
 var legacyModuleTables = map[string]string{
 	"sales_channels": "sales_orders", "sales_orders": "sales_orders",
 	"sales_order_items": "sales_orders", "sales_order_allocations": "sales_orders",
-	"sales_production_plans": "sales_orders",
-	"business_customers":     "sales_orders", "business_budgets": "sales_orders",
+	"sales_production_plans":     "sales_orders",
+	"business_order_attachments": "sales_orders", "business_order_events": "sales_orders",
+	"business_customers": "sales_orders", "business_budgets": "sales_orders",
 	"business_budget_operations": "sales_orders", "business_proposals": "sales_orders", "business_order_revisions": "sales_orders",
 }
 
@@ -245,6 +246,22 @@ func (registry *Registry) CheckRunItemPlanChange(tx *gorm.DB, before, after mode
 		})
 		if ok {
 			if err := guard.CheckRunItemPlanChange(tx, before, after); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// RecordRunTransition lets an installed module record activity within the core
+// production transaction. Core does not need to know which orders are linked.
+func (registry *Registry) RecordRunTransition(tx *gorm.DB, run models.PrintRun) error {
+	for _, module := range registry.modules {
+		recorder, ok := module.(interface {
+			RecordRunTransition(*gorm.DB, models.PrintRun) error
+		})
+		if ok {
+			if err := recorder.RecordRunTransition(tx, run); err != nil {
 				return err
 			}
 		}

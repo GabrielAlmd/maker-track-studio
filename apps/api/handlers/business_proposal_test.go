@@ -80,7 +80,7 @@ func TestBusinessProposalPricingHistoryAndCustomerDocument(t *testing.T) {
 	assertKeys(t, document["terms"].(map[string]any), "title", "valid_until", "due_date",
 		"lead_time_days", "delivery_terms", "payment_terms")
 	line := document["lines"].([]any)[0].(map[string]any)
-	assertKeys(t, line, "description", "quantity", "line_discount_cents", "order_discount_cents", "net_cents")
+	assertKeys(t, line, "description", "quantity", "unit_price_cents", "line_discount_cents", "order_discount_cents", "net_cents")
 	if document["currency"] != "EUR" || document["customer_name"] != "Sample customer" ||
 		document["net_cents"] != float64(2400) || line["description"] != "Prototype housing" {
 		t.Fatalf("unexpected customer document: %#v", document)

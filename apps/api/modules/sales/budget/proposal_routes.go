@@ -45,6 +45,7 @@ type ProposalDocument struct {
 }
 
 type ProposalDocumentLine struct {
+	UnitPriceCents     int64  `json:"unit_price_cents"`
 	Description        string `json:"description"`
 	Quantity           int64  `json:"quantity"`
 	LineDiscountCents  int64  `json:"line_discount_cents"`
@@ -70,7 +71,7 @@ func proposalDocument(record Proposal) ProposalDocument {
 	}
 	for _, line := range record.Lines {
 		document.Lines = append(document.Lines, ProposalDocumentLine{
-			Description: line.Description, Quantity: line.Quantity, LineDiscountCents: line.LineDiscountCents,
+			Description: line.Description, Quantity: line.Quantity, UnitPriceCents: line.UnitPriceCents, LineDiscountCents: line.LineDiscountCents,
 			OrderDiscountCents: line.OrderDiscountCents, NetCents: line.NetCents,
 		})
 	}
@@ -82,8 +83,9 @@ func registerProposalRoutes(internal *gin.RouterGroup, db *gorm.DB) {
 		return modules.WithRequestDB(db, factory)
 	}
 	internal.GET("/proposals", bind(list[Proposal, proposalSummary]))
-	internal.GET("/proposals/:id", bind(proposalDetail(false)))
-	internal.GET("/proposals/:id/document", bind(proposalDetail(true)))
+	internal.GET("/proposals/:id", bind(proposalDetail))
+	internal.GET("/proposals/:id/document", bind(issuedProposal(false)))
+	internal.GET("/proposals/:id/document/pdf", bind(issuedProposal(true)))
 	internal.GET("/proposals/:id/revisions", bind(proposalHistory))
 	internal.POST("/proposals", bind(command(false, proposalCommand(writeProposal))))
 	internal.PUT("/proposals/:id", bind(command(true, proposalCommand(writeProposal))))
@@ -97,7 +99,28 @@ func proposalCommand[Input any](write func(*gorm.DB, uuid.UUID, Input) (Proposal
 	}
 }
 
-func proposalDetail(document bool) func(*gorm.DB) gin.HandlerFunc {
+func proposalDetail(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := pathID(c)
+		if err != nil {
+			reply(c, 0, nil, err)
+			return
+		}
+		revision, err := positiveQuery(c, "revision", 0, maxSafeInteger)
+		if err != nil {
+			reply(c, 0, nil, err)
+			return
+		}
+		record, err := readRevision[Proposal](db, id, revision)
+		if err != nil {
+			reply(c, 0, nil, err)
+			return
+		}
+		reply(c, http.StatusOK, proposalView(record), nil)
+	}
+}
+
+func issuedProposal(pdf bool) func(*gorm.DB) gin.HandlerFunc {
 	return func(db *gorm.DB) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			id, err := pathID(c)
@@ -106,7 +129,7 @@ func proposalDetail(document bool) func(*gorm.DB) gin.HandlerFunc {
 				return
 			}
 			revision, err := positiveQuery(c, "revision", 0, maxSafeInteger)
-			if err == nil && document && revision == 0 {
+			if err == nil && revision == 0 {
 				err = invalid("revision", "Select an issued revision to export")
 			}
 			if err != nil {
@@ -114,19 +137,19 @@ func proposalDetail(document bool) func(*gorm.DB) gin.HandlerFunc {
 				return
 			}
 			record, err := readRevision[Proposal](db, id, revision)
+			if err == nil && record.IssuedAt == nil {
+				err = missing(gorm.ErrRecordNotFound, "revision", "Issued proposal revision was not found")
+			}
 			if err != nil {
 				reply(c, 0, nil, err)
 				return
 			}
-			if document {
-				if record.IssuedAt == nil {
-					reply(c, 0, nil, missing(gorm.ErrRecordNotFound, "revision", "Issued proposal revision was not found"))
-					return
-				}
-				reply(c, http.StatusOK, proposalDocument(record), nil)
+			document := proposalDocument(record)
+			if pdf {
+				downloadProposalPDF(c, document)
 				return
 			}
-			reply(c, http.StatusOK, proposalView(record), nil)
+			reply(c, http.StatusOK, document, nil)
 		}
 	}
 }

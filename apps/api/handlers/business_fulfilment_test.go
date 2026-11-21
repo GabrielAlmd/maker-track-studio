@@ -118,6 +118,15 @@ func TestBusinessFulfilmentRoundTrip(t *testing.T) {
 		t.Fatal(got.Body.String())
 	}
 	businessRequest[inventory.Receipt](t, target, "POST", path, req, 200)
+	activity := businessRequest[activityTestPage](t, target, "GET", base+"/activity", nil, 200)
+	byKind := map[string]int{}
+	for _, entry := range activity.Items {
+		byKind[entry.Kind]++
+	}
+	expected := map[string]int{"reserve": 2, "dispatch": 2, "restock": 1, "production_revised": 1, "proposal_accepted": 1}
+	if !reflect.DeepEqual(byKind, expected) {
+		t.Fatalf("unexpected fulfilment history after restore and retries: %+v", activity)
+	}
 	// Restore the outstanding reservations and cancel the unshipped remainder.
 	if got := performMultipartFileRequest(t, r, "POST", "/desktop-data/import", "file", "sample.zip", before.Body.Bytes()); got.Code != 200 {
 		t.Fatal(got.Body.String())

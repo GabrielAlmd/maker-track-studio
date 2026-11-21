@@ -15,11 +15,11 @@ type Module struct{}
 var _ modules.Module = Module{}
 
 func (Module) ID() string               { return "sales_orders" }
-func (Module) Version() int             { return 5 }
+func (Module) Version() int             { return 6 }
 func (Module) RequiresCoreVersion() int { return modules.CoreVersion }
 func (Module) EnabledByDefault() bool   { return false }
 func (Module) BackupTables() []string {
-	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations", "business_customers", "business_budgets", "business_budget_operations", "business_proposals", "business_order_revisions", "sales_production_plans"}
+	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations", "business_customers", "business_budgets", "business_budget_operations", "business_proposals", "business_order_revisions", "sales_production_plans", "business_order_attachments", "business_order_events"}
 }
 
 func (Module) Migrate(tx *gorm.DB) error {
@@ -29,6 +29,8 @@ func (Module) Migrate(tx *gorm.DB) error {
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrderAllocation{},
 		&salesmodels.SalesProductionPlan{},
+		&salesmodels.OrderAttachment{},
+		&salesmodels.OrderEvent{},
 	}, budget.Tables()...)...)
 }
 
@@ -49,6 +51,10 @@ func (Module) RegisterRoutes(router *gin.Engine, db *gorm.DB) {
 	router.PUT("/sales-orders/:id", bind(saleshandlers.UpdateSalesOrder))
 	router.PUT("/sales-orders/:id/status", bind(saleshandlers.UpdateSalesOrderStatus))
 	router.PUT("/sales-orders/:id/allocations", bind(saleshandlers.ReplaceSalesOrderAllocations))
+	business.GET("/orders/:id/attachments", bind(saleshandlers.ListOrderAttachments))
+	business.POST("/orders/:id/attachments", bind(saleshandlers.CreateOrderAttachment))
+	business.GET("/orders/:id/attachments/:attachmentID", bind(saleshandlers.DownloadOrderAttachment))
+	business.GET("/orders/:id/activity", bind(saleshandlers.GetOrderActivity))
 	business.GET("/orders/:id/fulfilment", bind(saleshandlers.OrderFulfilment))
 	business.POST("/orders/:id/fulfilment", bind(saleshandlers.OrderFulfilment))
 	business.PUT("/orders/:id/cancel-remainder", bind(saleshandlers.OrderFulfilment))

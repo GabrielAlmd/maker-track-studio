@@ -20,12 +20,13 @@ import (
 	"time"
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/diagnostics"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/internal/pdfassets"
 	"github.com/signintech/gopdf"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-//go:embed assets/inter-400.ttf assets/report-logo.png
+//go:embed assets/report-logo.png
 var reportAssets embed.FS
 
 const pdfSummaryLimit = 8 << 20
@@ -354,10 +355,6 @@ func (layout *reportPDFLayout) table(title string, headings []string, widths []f
 }
 
 func renderReportPDF(ctx context.Context, output io.Writer, request reportRequest, summaryRows, trendRows [][]string, printerNames map[string]string) error {
-	fontData, err := reportAssets.ReadFile("assets/inter-400.ttf")
-	if err != nil {
-		return err
-	}
 	logoData, err := reportAssets.ReadFile("assets/report-logo.png")
 	if err != nil {
 		return err
@@ -372,7 +369,7 @@ func renderReportPDF(ctx context.Context, output io.Writer, request reportReques
 	layout := reportPDFLayout{words: reportWords(request.language), logo: logo}
 	layout.pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
 	layout.pdf.SetInfo(gopdf.PdfInfo{Title: layout.words.title, Author: "Maker Track Studio", Creator: "Maker Track Studio"})
-	if err := layout.pdf.AddTTFFontData("Inter", fontData); err != nil {
+	if err := layout.pdf.AddTTFFontData("Inter", pdfassets.Inter()); err != nil {
 		return err
 	}
 	if err := layout.newPage(); err != nil {
