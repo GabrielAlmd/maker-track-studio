@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import PageHeader from '../../../components/ui/PageHeader';
 import HelpTooltip from '../../../components/ui/HelpTooltip';
 import { InlineError, LoadingState } from '../../../components/ui/PageState';
+import OrderProduction from '../components/OrderProduction';
 import SalesAllocationEditor from '../components/SalesAllocationEditor';
 import SalesFinancialSummary from '../components/SalesFinancialSummary';
 import SalesChannelModal from '../components/SalesChannelModal';
@@ -163,10 +164,13 @@ function SalesOrder() {
         setJobCache({});
         setPaymentStatus('unpaid');
       } else {
-        const [[loadedChannels, loadedModels], loadedOrder, allocationDocument] = await Promise.all([metadata, getSalesOrder(id), getSalesOrderAllocations(id)]);
+        const [[loadedChannels, loadedModels], loadedOrder] = await Promise.all([metadata, getSalesOrder(id)]);
+        const formal = loadedOrder.workflow_version === 2;
+        const acceptance = formal ? await getOrderAcceptance(id) : null;
+        const allocationDocument = formal ? null : await getSalesOrderAllocations(id);
         setChannels(loadedChannels);
         setModels(loadedModels);
-        setAcceptance(loadedOrder.workflow_version === 2 ? await getOrderAcceptance(id) : null);
+        setAcceptance(acceptance);
         setOrder(loadedOrder);
         applyOrder(loadedOrder, allocationDocument);
       }
@@ -207,7 +211,8 @@ function SalesOrder() {
     }
   }, [jobCache, linkedJobs, t]);
 
-  const modelKey = watchedItems.map((item) => item?.model_id).filter(Boolean).join('|');
+  const formalOrder = order?.workflow_version === 2;
+  const modelKey = formalOrder ? '' : watchedItems.map((item) => item?.model_id).filter(Boolean).join('|');
   useEffect(() => {
     [...new Set(modelKey.split('|').filter(Boolean))].forEach((modelId) => loadJobs(modelId));
   }, [loadJobs, modelKey]);
@@ -413,7 +418,8 @@ function SalesOrder() {
       ) : (
         <div className="space-y-6">
           <section className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.orderDetails')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div><dt className="text-xs ui-text-muted">{t('sales.orderDate')}</dt><dd>{formatDate(order.order_date)}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.channel')}</dt><dd>{order.sales_channel?.name ?? t('sales.noChannel')}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.notes')}</dt><dd>{order.notes || t('common.notRecorded')}</dd></div></dl></section>
-          <section className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.items')}</h2><div className="mt-4 divide-y ui-divide-subtle">{watchedItems.map((item, index) => <article key={item.client_id} className="py-5 first:pt-0 last:pb-0"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold ui-text-primary">{item.model_name_snapshot}</h3><p className="text-sm ui-text-muted">{t('sales.itemQuantityAndPrice', { quantity: formatNumber(item.quantity), price: formatCurrencyFromCents(order.items[index].unit_price_cents) })}</p></div><div className="text-right"><span className="block text-xs ui-text-muted">{t('sales.lineTotal')}</span><span className="font-semibold tabular-nums ui-text-primary">{formatCurrencyFromCents(order.items[index].net_cents ?? order.items[index].unit_price_cents * item.quantity)}</span></div></div><SalesAllocationEditor item={item} entry={jobCache[item.model_id]} allocations={allocations[item.client_id]} editable={editableAllocations} error={allocationErrors[item.client_id]} onChange={(jobId, value) => changeAllocation(item.client_id, jobId, value)} onRetry={() => loadJobs(item.model_id, true)} defaultOpen /></article>)}</div>{allocationErrors.general && <p className="mt-4 page-form-error" role="alert">{allocationErrors.general}</p>}{editableAllocations && <div className="mt-4 flex justify-end"><button type="button" onClick={saveAllocations} disabled={actionLoading} className="page-action">{t('sales.saveAllocations')}</button></div>}</section>
+          <section className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.items')}</h2><div className="mt-4 divide-y ui-divide-subtle">{watchedItems.map((item, index) => <article key={item.client_id} className="py-5 first:pt-0 last:pb-0"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold ui-text-primary">{item.model_name_snapshot}</h3><p className="text-sm ui-text-muted">{t('sales.itemQuantityAndPrice', { quantity: formatNumber(item.quantity), price: formatCurrencyFromCents(order.items[index].unit_price_cents) })}</p></div><div className="text-right"><span className="block text-xs ui-text-muted">{t('sales.lineTotal')}</span><span className="font-semibold tabular-nums ui-text-primary">{formatCurrencyFromCents(order.items[index].net_cents ?? order.items[index].unit_price_cents * item.quantity)}</span></div></div>{!formalOrder && <SalesAllocationEditor item={item} entry={jobCache[item.model_id]} allocations={allocations[item.client_id]} editable={editableAllocations} error={allocationErrors[item.client_id]} onChange={(jobId, value) => changeAllocation(item.client_id, jobId, value)} onRetry={() => loadJobs(item.model_id, true)} defaultOpen />}</article>)}</div>{allocationErrors.general && <p className="mt-4 page-form-error" role="alert">{allocationErrors.general}</p>}{editableAllocations && <div className="mt-4 flex justify-end"><button type="button" onClick={saveAllocations} disabled={actionLoading} className="page-action">{t('sales.saveAllocations')}</button></div>}</section>
+          {formalOrder && <OrderProduction key={id} orderId={id} />}
           <section className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.additionalCosts')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[['packaging_cost_cents', 'packaging'], ['shipping_cost_cents', 'shipping'], ['platform_fee_cents', 'platformFee'], ['other_cost_cents', 'other']].map(([name, key]) => <div key={name}><dt className="text-xs ui-text-muted">{t(`sales.${key}`)}</dt><dd>{formatCurrencyFromCents(order[name])}</dd></div>)}</dl></section>
           <SalesFinancialSummary profitability={order.profitability} fulfilmentStatus={order.fulfilment_status} />
         </div>

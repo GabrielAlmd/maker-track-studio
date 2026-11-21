@@ -135,8 +135,16 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share schema version 14 and ZIP format
-version 1. Schema 14 (Sales module version 4) adds immutable order revisions, an optional accepted proposal reference, and line source and discount fields. Legacy rows retain their IDs and default to zero discount. Restore validates the accepted revision, its lines and the amendment chain before replacing the workspace. Schema 13 adds [Business proposals](BUSINESS_PROPOSALS.md), including
+Current desktop and self-hosted builds share schema version 15 and ZIP format
+version 1. Schema 15 (Sales module version 5) adds order production revisions,
+planned run-item links, and an optional run-item reference on allocations.
+Existing allocations retain their IDs, Print Job references and frozen costs.
+Restore validates link ownership, source identity, and planned and accepted
+capacity before replacing the workspace. Schema 14 adds immutable order
+revisions, an optional accepted proposal reference, and line source and
+discount fields. Older Sales rows retain their IDs and default to zero
+discount. Restore validates the accepted revision, its lines and the amendment
+chain before replacing the workspace. Schema 13 adds [Business proposals](BUSINESS_PROPOSALS.md), including
 issued revisions and frozen customer terms. Schema 12 adds [Business customers and budgets](BUSINESS_BUDGETS.md),
 including estimate revisions and operation history. Schema 11 adds finished
 goods movement fields, schema 10 adds material stock thresholds, and schema 9
@@ -147,7 +155,7 @@ movements and their audit and retry identifiers. Restoring a pre-ledger archive
 clears local ledger history and leaves balances unverified. Schema 6 adds
 production lifecycle records. Schema 5 adds material estimate, waste and
 measurement provenance to Print Job filament rows. Supported older ZIP schemas
-(1–13) follow the existing migrations. Missing optional-module support fails
+(1–14) follow the existing migrations. Missing optional-module support fails
 closed for databases or archives containing that module's data. Tests use disposable fixtures for
 legacy migrations and current round trips; no live user data is migrated.
 

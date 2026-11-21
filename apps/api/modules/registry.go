@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -31,6 +32,7 @@ type Module interface {
 }
 
 var ErrPrintJobDeleteConflict = errors.New("print job is used by a module")
+var ErrRunItemPlanConflict = errors.New("Release linked Sales Order plans before changing the model or reducing planned units")
 
 type PrintJobDeleteConflict struct{ Message string }
 
@@ -120,7 +122,8 @@ func (registry *Registry) Migrate(db *gorm.DB) error {
 var legacyModuleTables = map[string]string{
 	"sales_channels": "sales_orders", "sales_orders": "sales_orders",
 	"sales_order_items": "sales_orders", "sales_order_allocations": "sales_orders",
-	"business_customers": "sales_orders", "business_budgets": "sales_orders",
+	"sales_production_plans": "sales_orders",
+	"business_customers":     "sales_orders", "business_budgets": "sales_orders",
 	"business_budget_operations": "sales_orders", "business_proposals": "sales_orders", "business_order_revisions": "sales_orders",
 }
 
@@ -228,6 +231,22 @@ func (registry *Registry) CheckPrintJobDeletion(tx *gorm.DB, id string) error {
 	for _, module := range registry.modules {
 		if err := module.CheckPrintJobDeletion(tx, id); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// CheckRunItemPlanChange protects linked model identities and planned quantities
+// while core holds SQLite's writer lock.
+func (registry *Registry) CheckRunItemPlanChange(tx *gorm.DB, before, after models.PrintRunItem) error {
+	for _, module := range registry.modules {
+		guard, ok := module.(interface {
+			CheckRunItemPlanChange(*gorm.DB, models.PrintRunItem, models.PrintRunItem) error
+		})
+		if ok {
+			if err := guard.CheckRunItemPlanChange(tx, before, after); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

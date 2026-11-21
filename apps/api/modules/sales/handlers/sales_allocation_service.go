@@ -118,6 +118,7 @@ func loadSalesOrderAllocationsDTO(db *gorm.DB, orderID uuid.UUID) (salesdto.Sale
 				ID:                  allocation.ID,
 				SalesOrderItemID:    allocation.SalesOrderItemID,
 				PrintJobID:          allocation.PrintJobID,
+				PrintRunItemID:      allocation.PrintRunItemID,
 				UnitsAllocated:      allocation.UnitsAllocated,
 				ProductionCostCents: allocation.ProductionCostCents,
 				CreatedAt:           allocation.CreatedAt,
@@ -203,7 +204,7 @@ func replaceSalesOrderAllocations(db *gorm.DB, orderID uuid.UUID, input salesdto
 		for _, requested := range input.Allocations {
 			item := itemsByID[requested.SalesOrderItemID]
 			job := jobsByID[requested.PrintJobID]
-			if item.ModelID == nil || job.ModelID == nil || *item.ModelID != *job.ModelID {
+			if job.WorkflowVersion > 1 || item.ModelID == nil || job.ModelID == nil || *item.ModelID != *job.ModelID {
 				return errSalesAllocationModelConflict
 			}
 			units := int64(requested.UnitsAllocated)

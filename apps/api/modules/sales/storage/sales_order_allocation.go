@@ -11,9 +11,10 @@ import (
 
 type SalesOrderAllocation struct {
 	ID                  uuid.UUID        `gorm:"type:uuid;primaryKey"`
-	SalesOrderItemID    uuid.UUID        `gorm:"type:uuid;not null;index"`
+	SalesOrderItemID    uuid.UUID        `gorm:"type:uuid;not null;index;uniqueIndex:idx_sales_allocation_line_run_item,priority:1"`
 	SalesOrderItem      SalesOrderItem   `gorm:"foreignKey:SalesOrderItemID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	PrintJobID          *uuid.UUID       `gorm:"type:uuid;index"`
+	PrintRunItemID      *uuid.UUID       `gorm:"type:uuid;index;uniqueIndex:idx_sales_allocation_line_run_item,priority:2"`
 	PrintJob            *models.PrintJob `gorm:"foreignKey:PrintJobID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
 	UnitsAllocated      int              `gorm:"not null;check:chk_sales_order_allocations_units,units_allocated > 0"`
 	ProductionCostCents *int64           `gorm:"check:chk_sales_order_allocations_production_cost_snapshot,production_cost_cents IS NULL OR production_cost_cents >= 0"`

@@ -18,6 +18,7 @@ type backupData struct {
 	orders      []salesmodels.SalesOrder
 	items       []salesmodels.SalesOrderItem
 	allocations []salesmodels.SalesOrderAllocation
+	plans       []salesmodels.SalesProductionPlan
 }
 
 func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) {
@@ -124,6 +125,9 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 		}
 	}
 
+	if err := data.validateProduction(sourceDB, schemaVersion); err != nil {
+		return data, err
+	}
 	return data, business.ValidateOrderLinks(data.orders, data.items)
 }
 
@@ -132,7 +136,7 @@ func (Module) DeleteBackup(tx *gorm.DB) error {
 		return err
 	}
 	deleteSession := tx.Session(&gorm.Session{AllowGlobalUpdate: true})
-	for _, table := range []any{&salesmodels.SalesOrderAllocation{}, &salesmodels.SalesOrderItem{}, &salesmodels.SalesOrder{}, &salesmodels.SalesChannel{}} {
+	for _, table := range []any{&salesmodels.SalesProductionPlan{}, &salesmodels.SalesOrderAllocation{}, &salesmodels.SalesOrderItem{}, &salesmodels.SalesOrder{}, &salesmodels.SalesChannel{}} {
 		if err := deleteSession.Delete(table).Error; err != nil {
 			return err
 		}
@@ -162,6 +166,11 @@ func (Module) RestoreBackup(tx *gorm.DB, value any) error {
 	}
 	if len(data.allocations) > 0 {
 		if err := tx.Create(&data.allocations).Error; err != nil {
+			return err
+		}
+	}
+	if len(data.plans) > 0 {
+		if err := tx.Create(&data.plans).Error; err != nil {
 			return err
 		}
 	}

@@ -77,8 +77,11 @@ func RegisterRoutesWithModules(r *gin.Engine, db *gorm.DB, installed *modules.Re
 	r.PUT("/models/:id", withRequestDB(db, handlers.UpdateModel))
 	r.DELETE("/models/:id", withRequestDB(db, handlers.DeleteModel))
 
-	r.POST("/v2/production/jobs", withRequestDB(db, handlers.WriteProduction))
-	r.PUT("/v2/production/jobs/:id", withRequestDB(db, handlers.WriteProduction))
+	writeProduction := withRequestDB(db, func(requestDB *gorm.DB) gin.HandlerFunc {
+		return handlers.WriteProduction(requestDB, installed)
+	})
+	r.POST("/v2/production/jobs", writeProduction)
+	r.PUT("/v2/production/jobs/:id", writeProduction)
 	r.GET("/v2/production/jobs/:id", withRequestDB(db, handlers.GetProduction))
 	// PrintJob routes
 	r.GET("/print-jobs", withRequestDB(db, handlers.GetPrintJobs))

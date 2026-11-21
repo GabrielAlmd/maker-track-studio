@@ -118,6 +118,62 @@ remains the source for the original customer address, price and discount details
 Confirmation creates unpaid demand in one SQLite transaction. Production,
 Inventory, invoice and payment records are separate workflows.
 
+### Plan production and allocate accepted units
+
+Open **Production plan** on a confirmed or preparing proposal-backed order.
+Each line shows the required, planned, accepted, allocated and outstanding
+units. Use **Find run items** to select items for the line's catalog model. Add
+items from several Print Jobs to split the work across jobs or plates. The
+model comes from the budget revision that fed the accepted proposal. Lines
+without a catalog model can show demand and progress but cannot link run items.
+
+- Enter planned units for a planned or in-progress run item. The plan can
+  exceed the ordered quantity for reprints or extras, within the source's
+  planned capacity. A failed or cancelled run remains visible in the links
+  while its planned units drop out of the line total.
+- Once a run is complete, enter allocated units to assign its verified accepted
+  output to the line. Different orders can share a run item's accepted units
+  up to its available capacity. A completed run shows its accepted quantity and
+  how much remains available across orders.
+- Outstanding units equal the required units minus the accepted units assigned
+  to the line, with a minimum of zero. Accepted and allocated totals are equal
+  in this workflow because allocation is how an accepted unit is assigned.
+  Legacy single-model Sales Orders continue to use their Print Job allocation
+  editor and retain their historical records.
+
+Save the plan to apply all changes together. To release a link, remove it and
+save. If the plan changed in another window, reload the saved plan before
+editing it again. Inventory records finished goods when core production posts
+verified accepted output. Sales planning and allocation record commercial links.
+Costing and production completion for proposal-backed orders are tracked by
+[#24](https://github.com/GabrielAlmd/maker-track-studio/issues/24). Physical reservation
+and fulfilment integration are tracked by [#26](https://github.com/GabrielAlmd/maker-track-studio/issues/26).
+
+#### Order production API
+
+- `GET /v2/business/orders/:id/production` returns the production revision,
+  editability, line totals and links. Each link includes the Print Job,
+  run and run-item IDs, status, planned and accepted source capacity, and
+  remaining accepted units available to allocate.
+- `GET /v2/business/orders/:id/production/sources?line_id=<uuid>` lists compatible
+  verified run items in pages of up to 50. Pass the preceding response's
+  `next_cursor` as `after` for another page.
+- `PUT /v2/business/orders/:id/production` replaces the plan and allocations
+  together. Send `expected_revision` and a `links` array. Each link has
+  `sales_order_item_id`, `print_run_item_id`, `units_planned` and
+  `units_allocated` as IDs and whole, nonnegative quantities. Omit a link to
+  release it or send an empty array to clear the plan. A link must have a
+  positive planned or allocated quantity. Saving the same set again preserves
+  allocation IDs and the revision. A changed set with a stale revision,
+  unmatched model, invalid order status or exceeded capacity returns 409.
+
+The existing Sales allocation endpoints remain available. Their read response
+includes an optional `print_run_item_id` for new run-item allocations. The new
+order endpoints use a separate production revision from the commercial
+amendment revision.
+
+### Amend confirmed terms
+
 To correct a PO or delivery instruction on a confirmed or preparing order, send
 `POST /v2/business/orders/:id/amendments` with `operation_id`, the current
 `expected_revision`, a `reason` (1–500 characters), and the changed

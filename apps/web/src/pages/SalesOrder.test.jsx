@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import SalesOrder from '../modules/sales/pages/SalesOrder';
@@ -10,6 +10,7 @@ vi.mock('../modules/sales/services/salesService', () => ({
   createSalesChannel: vi.fn(), createSalesOrder: vi.fn(), deleteSalesOrder: vi.fn(), getCompatiblePrintJobs: vi.fn(), getPrintJobAllocations: vi.fn(),
   getSalesChannels: vi.fn(), getSalesOrder: vi.fn(), getSalesOrderAllocations: vi.fn(), replaceSalesOrderAllocations: vi.fn(),
   updateSalesOrder: vi.fn(), updateSalesOrderStatus: vi.fn(),
+  getOrderAcceptance: vi.fn(), getOrderProduction: vi.fn(), getOrderProductionSources: vi.fn(), saveOrderProduction: vi.fn(),
 }));
 vi.mock('../services/modelService', () => ({ getModels: vi.fn() }));
 vi.mock('../services/printJobService', () => ({ getPrintJobCost: vi.fn() }));
@@ -49,6 +50,54 @@ describe('Sales Order workflow', () => {
     salesService.updateSalesOrder.mockResolvedValue(makeOrder());
     salesService.updateSalesOrderStatus.mockResolvedValue(makeOrder('confirmed'));
     salesService.deleteSalesOrder.mockResolvedValue();
+  });
+
+  it('saves verified run allocations for a proposal-backed order and preserves edits after a capacity conflict', async () => {
+    const order = { ...makeOrder('confirmed'), workflow_version: 2, legacy_write_supported: false };
+    const source = {
+      print_run_item_id: 'run-item-1', print_run_id: 'run-1', print_job_id: 'job-1',
+      print_date: '2026-09-18T00:00:00Z', status: 'completed', units_planned: 2, units_accepted: 1, units_available: 1,
+    };
+    const line = {
+      sales_order_item_id: 'item-1', model_name: 'Enclosure', can_link: true, links: [],
+      units_required: 2, units_planned: 0, units_accepted: 0, units_allocated: 0, units_outstanding: 2,
+    };
+    const link = { sales_order_item_id: 'item-1', print_run_item_id: 'run-item-1', units_planned: 0, units_allocated: 1 };
+    salesService.getSalesOrder.mockResolvedValue(order);
+    salesService.getOrderAcceptance.mockResolvedValue({
+      revision: { proposal_revision: 2, confirmed_at: '2026-09-18', purchase_order: 'PO-01' },
+      document: { customer_name: 'Sample workshop', terms: {} },
+    });
+    salesService.getOrderProduction.mockResolvedValue({ revision: 0, editable: true, items: [line] });
+    salesService.getOrderProductionSources.mockResolvedValue({ items: [source] });
+    salesService.saveOrderProduction.mockRejectedValueOnce({
+      response: { status: 409, data: { error: 'Allocation exceeds the run item’s remaining verified accepted units' } },
+    }).mockResolvedValueOnce({
+      revision: 1, editable: true,
+      items: [{ ...line, links: [{ ...link, source }], units_allocated: 1, units_accepted: 1, units_outstanding: 1 }],
+    });
+    const user = userEvent.setup();
+    renderOrder('/sales/order-1');
+
+    const panel = within(await screen.findByRole('region', { name: 'Production plan' }));
+    await user.click(await panel.findByRole('button', { name: 'Find run items' }));
+    await user.selectOptions(await panel.findByLabelText('Compatible run items'), source.print_run_item_id);
+    await user.click(panel.getByRole('button', { name: 'Add run item' }));
+    expect(panel.getByLabelText('Planned')).toHaveAttribute('readonly');
+    fireEvent.change(panel.getByLabelText('Allocated'), { target: { value: '-1' } });
+    await user.click(panel.getByRole('button', { name: 'Save production plan' }));
+    expect(await panel.findByText(/Enter whole units/)).toBeInTheDocument();
+    expect(salesService.saveOrderProduction).not.toHaveBeenCalled();
+
+    fireEvent.change(panel.getByLabelText('Allocated'), { target: { value: '1' } });
+    await user.click(panel.getByRole('button', { name: 'Save production plan' }));
+    expect(await panel.findByText(/remaining verified accepted units/)).toBeInTheDocument();
+    expect(panel.getByLabelText('Allocated')).toHaveValue(1);
+    await user.click(panel.getByRole('button', { name: 'Save production plan' }));
+    await waitFor(() => expect(panel.getByRole('button', { name: 'Save production plan' })).toBeDisabled());
+    expect(salesService.saveOrderProduction).toHaveBeenLastCalledWith('order-1', 0, [link]);
+    expect(panel.getByText('Outstanding').nextElementSibling).toHaveTextContent('1');
+    expect(salesService.replaceSalesOrderAllocations).not.toHaveBeenCalled();
   });
 
   it('creates an order with multiple items and remaps allocations to returned item IDs', async () => {

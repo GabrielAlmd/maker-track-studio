@@ -52,6 +52,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		&salesmodels.SalesOrder{},
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrderAllocation{},
+		&salesmodels.SalesProductionPlan{},
 	}, budget.Tables()...)...); err != nil {
 		t.Fatalf("failed to initialize desktop models: %v", err)
 	}

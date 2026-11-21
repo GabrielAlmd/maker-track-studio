@@ -19,6 +19,7 @@ func TestSalesMigrationCreatesTablesAndPreservesProductionData(t *testing.T) {
 	}
 
 	for _, table := range []any{
+		&salesmodels.SalesProductionPlan{},
 		&salesmodels.SalesOrderAllocation{},
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrder{},
@@ -65,6 +66,7 @@ func TestSalesMigrationCreatesTablesAndPreservesProductionData(t *testing.T) {
 		&salesmodels.SalesOrder{},
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrderAllocation{},
+		&salesmodels.SalesProductionPlan{},
 	} {
 		if !migrated.Migrator().HasTable(table) {
 			t.Fatalf("sales table %T was not created", table)
@@ -99,6 +101,89 @@ func TestSalesMigrationCreatesTablesAndPreservesProductionData(t *testing.T) {
 	}
 	if savedJob.UnitsPrinted != printJob.UnitsPrinted || savedJob.ModelID == nil || *savedJob.ModelID != productionModel.ID {
 		t.Fatalf("existing print job changed during migration: %#v", savedJob)
+	}
+}
+
+func TestProductionPlanMigrationRetainsLegacyAllocation(t *testing.T) {
+	t.Setenv("SQLITE_PATH", filepath.Join(t.TempDir(), "sales-module-v4.db"))
+	db, err := initSQLiteDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := salesmodels.SalesOrder{
+		Reference: "Legacy completed order", OrderDate: time.Now(),
+		FulfilmentStatus: salesmodels.SalesOrderFulfilmentCompleted,
+	}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	line := salesmodels.SalesOrderItem{
+		SalesOrderID: order.ID, ModelNameSnapshot: "Legacy enclosure", Quantity: 3, UnitPriceCents: 250,
+	}
+	if err := db.Create(&line).Error; err != nil {
+		t.Fatal(err)
+	}
+	job := models.PrintJob{PrintDate: time.Now(), UnitsPrinted: 3}
+	if err := db.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	allocation := salesmodels.SalesOrderAllocation{
+		SalesOrderItemID: line.ID, PrintJobID: &job.ID, UnitsAllocated: 3, ProductionCostCents: new(int64(145)),
+	}
+	if err := db.Create(&allocation).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Reconstruct the relevant Sales module v4 schema around the historical rows.
+	for _, statement := range []string{
+		"DROP TABLE sales_production_plans",
+		"DROP INDEX idx_sales_allocation_line_run_item",
+		"DROP INDEX idx_sales_order_allocations_print_run_item_id",
+		"ALTER TABLE sales_order_allocations DROP COLUMN print_run_item_id",
+		"ALTER TABLE sales_orders DROP COLUMN production_revision",
+		"UPDATE module_versions SET version = 4 WHERE id = 'sales_orders'",
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	connection, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := connection.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 2 {
+		migrated, err := initSQLiteDB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !migrated.Migrator().HasTable(&salesmodels.SalesProductionPlan{}) ||
+			!migrated.Migrator().HasIndex(&salesmodels.SalesOrderAllocation{}, "idx_sales_allocation_line_run_item") {
+			t.Fatal("missing production plan schema or allocation uniqueness constraint")
+		}
+		var saved salesmodels.SalesOrderAllocation
+		if err := migrated.Take(&saved, "id = ?", allocation.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if saved.SalesOrderItemID != line.ID || saved.PrintJobID == nil || *saved.PrintJobID != job.ID ||
+			saved.PrintRunItemID != nil || saved.ProductionCostCents == nil || *saved.ProductionCostCents != 145 ||
+			saved.UnitsAllocated != allocation.UnitsAllocated || !saved.CreatedAt.Equal(allocation.CreatedAt) {
+			t.Fatalf("historical allocation changed during migration: %+v", saved)
+		}
+		var savedOrder salesmodels.SalesOrder
+		if err := migrated.Take(&savedOrder, "id = ?", order.ID).Error; err != nil || savedOrder.ProductionRevision != 0 {
+			t.Fatalf("legacy order has an invalid production revision: %d %v", savedOrder.ProductionRevision, err)
+		}
+		connection, err := migrated.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := connection.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
