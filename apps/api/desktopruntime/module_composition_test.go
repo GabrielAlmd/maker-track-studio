@@ -29,7 +29,7 @@ func TestProductionOnlyStartupAndPrimaryRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sqlDB.Close()
-	if db.Migrator().HasTable("sales_orders") {
+	if db.Migrator().HasTable("sales_orders") || db.Migrator().HasTable("business_budgets") {
 		t.Fatal("Sales table initialized without the module")
 	}
 	model := models.Model{Name: "Production only", MaterialWeight: 20, PrintTime: 30}
@@ -51,6 +51,7 @@ func TestProductionOnlyStartupAndPrimaryRoutes(t *testing.T) {
 		{http.MethodGet, "/print-jobs", http.StatusOK},
 		{http.MethodGet, "/features", http.StatusOK},
 		{http.MethodGet, "/sales-orders", http.StatusNotFound},
+		{http.MethodGet, "/v2/business/budgets", http.StatusNotFound},
 		{http.MethodDelete, "/print-jobs/" + job.ID.String(), http.StatusNoContent},
 	} {
 		response := httptest.NewRecorder()

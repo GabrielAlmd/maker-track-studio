@@ -1,12 +1,13 @@
 package desktopruntime
 
 import (
-	salesmodels "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/budget"
+	salesmodels "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/google/uuid"
 )
 
@@ -157,6 +158,14 @@ func TestSalesModuleMigrationPreservesCompletedSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, table := range budget.Tables() {
+		if err := db.Migrator().DropTable(table); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Exec("UPDATE module_versions SET version = 1 WHERE id = ?", "sales_orders").Error; err != nil {
+		t.Fatal(err)
+	}
 	productionCost, totalCost, netProfit, margin := int64(250), int64(300), int64(700), int64(7000)
 	order := salesmodels.SalesOrder{
 		Reference: "EXISTING-1", OrderDate: time.Now(),
@@ -187,6 +196,11 @@ func TestSalesModuleMigrationPreservesCompletedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	for _, table := range budget.Tables() {
+		if !migrated.Migrator().HasTable(table) {
+			t.Fatalf("Sales module v2 did not create %T", table)
+		}
+	}
 	var saved salesmodels.SalesOrder
 	if err := migrated.First(&saved, "id = ?", order.ID).Error; err != nil {
 		t.Fatal(err)

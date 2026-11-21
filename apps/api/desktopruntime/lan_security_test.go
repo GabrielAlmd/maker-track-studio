@@ -25,7 +25,7 @@ func TestLANBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	adjustment := fmt.Sprintf(`{"item_type":"model","item_id":"%s","operation_id":"%s","source_id":"%s","kind":"opening","quantity":3,"actor":"operator","reason":"count"}`, item.ID, uuid.New(), uuid.New())
-	for _, path := range []string{"/health/live", "/health/ready", "/printers", "/desktop-data/export", "/reports/export", "/desktop-data/import", "/data-migration/import", "/sales-orders", "/models/id", "/v2/inventory/adjustments"} {
+	for _, path := range []string{"/health/live", "/health/ready", "/printers", "/desktop-data/export", "/reports/export", "/desktop-data/import", "/data-migration/import", "/sales-orders", "/v2/business/customers", "/v2/business/budgets", "/models/id", "/v2/inventory/adjustments"} {
 		for _, tc := range []struct {
 			name, method, secret, host, origin, peer, proto string
 			status                                          int
@@ -64,6 +64,8 @@ func TestLANBoundary(t *testing.T) {
 	}{
 		{"GET", "/health/ready", "", 200},
 		{"GET", "/printers", "", 200},
+		{"POST", "/v2/business/budgets", fmt.Sprintf(`{"operation_id":"%s","title":"LAN budget","items":[{"name":"Sample","quantity":2,"assumptions":{"other_cents":25}}]}`, uuid.New()), 201},
+		{"GET", "/v2/business/budgets", "", 200},
 		{"POST", "/v2/inventory/adjustments", adjustment, 201},
 		{"GET", "/v2/inventory/balances/model/" + item.ID.String(), "", 200},
 		{"GET", "/desktop-data/export", "", 200},

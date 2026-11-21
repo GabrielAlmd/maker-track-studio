@@ -40,6 +40,7 @@ read for setting up and changing the code.
   lifecycle, cross-module operations, and adding a built-in module.
 - [Settings architecture](SETTINGS_ARCHITECTURE.md) — settings sections,
   lazy loading, persistence, and compatibility.
+- [Customers and budgets](BUSINESS_BUDGETS.md) — internal estimates and the versioned Business API.
 - [Sales & Orders](SALES_AND_ORDERS.md) — entities, APIs, lifecycle,
   profitability, migrations, and backup rules.
 - [Printer profiles](PRINTER_PROFILES.md) — printer identity, costs, snapshots,

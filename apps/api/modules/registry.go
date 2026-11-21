@@ -116,11 +116,12 @@ func (registry *Registry) Migrate(db *gorm.DB) error {
 	})
 }
 
-// Legacy module tables predate module_versions. This compatibility map is only
-// used to recognize backups and databases written by those older builds.
+// Recognize built-in module tables even if version metadata is absent.
 var legacyModuleTables = map[string]string{
 	"sales_channels": "sales_orders", "sales_orders": "sales_orders",
 	"sales_order_items": "sales_orders", "sales_order_allocations": "sales_orders",
+	"business_customers": "sales_orders", "business_budgets": "sales_orders",
+	"business_budget_operations": "sales_orders",
 }
 
 // CheckBackupTables checks legacy module tables and recorded module versions

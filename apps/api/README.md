@@ -19,6 +19,9 @@ requirements are in the [Self-Hosted guide](../../docs/SELF_HOSTED.md). Both the
 desktop and standalone entry points bind to loopback; CORS does not protect the
 API from other local processes. Do not expose it directly on a LAN interface.
 
+The [internal Business budgets contract](../../docs/BUSINESS_BUDGETS.md)
+documents versioned customer and estimate routes, revisions and backups.
+
 ## Configuration
 
 - `SQLITE_PATH`: optional database path override.

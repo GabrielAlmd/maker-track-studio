@@ -3,6 +3,7 @@ package sales
 
 import (
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/budget"
 	saleshandlers "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/handlers"
 	salesmodels "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/gin-gonic/gin"
@@ -14,23 +15,24 @@ type Module struct{}
 var _ modules.Module = Module{}
 
 func (Module) ID() string               { return "sales_orders" }
-func (Module) Version() int             { return 1 }
+func (Module) Version() int             { return 2 }
 func (Module) RequiresCoreVersion() int { return modules.CoreVersion }
 func (Module) EnabledByDefault() bool   { return false }
 func (Module) BackupTables() []string {
-	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations"}
+	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations", "business_customers", "business_budgets", "business_budget_operations"}
 }
 
 func (Module) Migrate(tx *gorm.DB) error {
-	return tx.AutoMigrate(
+	return tx.AutoMigrate(append([]any{
 		&salesmodels.SalesChannel{},
 		&salesmodels.SalesOrder{},
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrderAllocation{},
-	)
+	}, budget.Tables()...)...)
 }
 
 func (Module) RegisterRoutes(router *gin.Engine, db *gorm.DB) {
+	budget.RegisterRoutes(router, db)
 	bind := func(factory func(*gorm.DB) gin.HandlerFunc) gin.HandlerFunc {
 		return modules.WithRequestDB(db, factory)
 	}
