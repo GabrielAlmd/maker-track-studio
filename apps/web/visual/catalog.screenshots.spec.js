@@ -38,7 +38,7 @@ const ready = {
 };
 
 const scenarios = [
-  ...[false, true].map((mobile) => ({ slug: mobile ? 'inventory-mobile' : 'inventory', route: 'inventory', setup: async (page) => { await page.route('**/api/features', (route) => route.fulfill({ json: { sales_orders: false } })); }, ...(mobile ? { viewport: { width: 390, height: 844 } } : {}), fullPage: true, prepare: async (page) => { await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible(); await expect(page.getByText('Low stock').first()).toBeVisible(); } })),
+  ...[false, true].map((mobile) => ({ slug: mobile ? 'inventory-mobile' : 'inventory', route: 'inventory', setup: async (page) => { await page.route('**/api/features', (route) => route.fulfill({ json: { sales_orders: false } })); }, ...(mobile ? { viewport: { width: 390, height: 844 } } : {}), fullPage: true, prepare: async (page) => { await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible(); await expect(page.getByText('Low stock').first()).toBeVisible(); await expect(page.getByText('Cable bracket', { exact: true })).toBeVisible(); } })),
   ...['empty', 'pending', 'error'].map((state) => ({
     slug: `purchases-first-run-${state}`, route: 'purchases',
     setup: async (page) => {

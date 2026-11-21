@@ -26,9 +26,9 @@ Submit JSON to `POST /v2/inventory/adjustments`. This example records 250.5 gram
 
 ## Integration and recovery
 
-Physical movements own on-hand stock. Reservations use a separate availability contract. Reserved is currently zero. A future hold reduces availability, release restores it, and dispatch consumes the hold and posts a physical deduction in one transaction. Consumers must check verification and revision before reserving. See the [Business architecture contract](architecture/BUSINESS_V1_1.md).
+Physical movements own on-hand stock. Reservations use a separate availability contract. A hold reduces availability, release restores it, and dispatch consumes the hold and posts a physical deduction in one transaction. Consumers must check verification and revision before reserving. See the [Business architecture contract](architecture/BUSINESS_V1_1.md).
 
-New purchases and completed/failed v2 production runs supply material events. Finished goods follow in #16. The ledger writer participates in the source transaction. Each source line and revision needs a stable event identity across retries. Historical purchases, recorded usage and financial snapshots are preserved during upgrade. Stock is never seeded from counters or cost factors.
+New purchases and completed/failed v2 production runs supply material events. Verified completed runs also supply finished model stock. The ledger writer participates in the source transaction. Each source line and revision needs a stable event identity across retries. Historical purchases, recorded usage and financial snapshots are preserved during upgrade. Stock is never seeded from counters or cost factors.
 
 Schema 8 adds indexed source references to the schema 7 ledger and advances the core inventory marker to version 2. A full backup preserves posting order, identity and audit metadata. Restoring a pre-ledger archive begins with an empty ledger. Before downgrading, use the pre-upgrade backup with its matching build. See [SQLite recovery](SQLITE_RECOVERY.md).
 
@@ -78,7 +78,7 @@ retains the original entries and loads in sequence in batches of 100.
 Set a per-material warning threshold in grams (zero by default). Verified stock
 at or below the threshold warns on Inventory and Dashboard. Print planning also
 compares selected material estimates with available stock, without blocking or
-posting deductions. Reservations remain owned by the future integration contract.
+posting deductions. Finished-goods reservations use the Inventory contract below.
 
 `GET /v2/inventory/materials` returns material identity, `threshold_mg` and the
 existing balance projection. `PUT /v2/inventory/thresholds/:id` accepts
@@ -90,3 +90,49 @@ The additive `filaments.stock_threshold_mg` column defaults to zero. Backup sche
 older accepted archives restore with zero thresholds. IDs, financial history and
 ledger data remain unchanged. Older app versions reject schema-10 backups;
 retain a pre-upgrade backup for rollback and restore it with the older binary.
+
+## Finished goods
+
+Select the catalog model for each output on a planned run. When you complete
+the run, each accepted quantity posts once to that model in whole pieces. A
+mixed plate credits each item separately. Rejected pieces, failed runs and
+commercial orders contribute zero. Uncatalogued output remains in production
+history until an explicit identity can be established. The model name alone
+cannot establish that identity.
+
+Inventory lists models with recorded movements under **Finished goods**. Use
+**Count** to verify a shelf total. A count below an active hold is rejected.
+Before a count, the displayed change covers recorded movements only.
+
+`GET /v2/inventory/finished-goods` returns model IDs, names and balances.
+Model movement history uses `source_key=output:<run-item UUID>` to link a
+credit and all subsequent fulfilment events to its original run item.
+The run item carries the parent run UUID. A completed run remains immutable.
+
+Business integrations call `inventory.OutputAvailability` for a verified
+source and `inventory.ApplyFulfilment` in the same SQLite transaction as
+their own writes. Each command supplies a stable operation UUID, unique
+external line-event UUID, model, run item, expected lot revision, positive
+units, reason and actor. The receipt sequence becomes the next lot revision.
+The reserve operation UUID identifies the hold. Dispatch operation UUIDs
+identify shipments at line level. Identical retries return the original receipt.
+
+| Kind | Reference | Physical effect |
+| --- | --- | --- |
+| reserve | Opaque owner UUID | Hold available accepted units |
+| release | Reserve operation UUID | Release remaining held units |
+| dispatch | Reserve operation UUID | Remove units from both on-hand and held |
+| restock | Dispatch operation UUID | Add inspected, accepted returns to on-hand |
+| reject_return | Dispatch operation UUID | Record inspected rejects against the remaining returnable units |
+
+Both the run-item capacity and the aggregate model balance limit a hold.
+A discrepancy in the historical opening balance still requires a physical
+count. A multi-line shipment must use one transaction and stable per-line
+event IDs. The commercial integration belongs to #26.
+
+Schema 11 adds units and reference fields to inventory movements and advances
+the core inventory marker to 4. Older movements default to zero units and an
+empty reference. Upgrades and imports preserve recorded stock, IDs and
+financial snapshots. Runs completed before the upgrade may already be included
+in shelf counts, so historical completions are never automatically replayed.
+Use the pre-upgrade backup with its original application version for rollback.

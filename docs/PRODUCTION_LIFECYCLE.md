@@ -21,14 +21,12 @@ reported units are unverified history, not newly verified finished goods.
   consumed. Estimated grams never represent recorded physical consumption.
 - Material weights are finite, positive and at most 1e9 grams. Included waste
   stays part of the total; the existing financial waste factor is cost-only.
-- Completed verified accepted units are the source for future finished goods
-  integration. This issue creates no Inventory movement or commercial record.
+- Completing a verified catalog item credits its accepted pieces to Inventory.
+  See [finished goods](INVENTORY_LEDGER.md#finished-goods) for source tracing,
+  reservations, dispatch and stock reconciliation.
 
-Corrections must preserve the original execution. There is deliberately no
-destructive terminal correction endpoint. Inventory compensation/reversal must
-be implemented with #12/#16, using a separate operation identity and downstream
-reference checks; commercial changes belong to #23/#24/#26. A new physical
-attempt is a new run, never a network retry or a reversal of consumed material.
+Terminal runs retain their original output and source IDs. Use a new run to
+record a reprint and a physical count to reconcile a shelf discrepancy.
 
 ## API contract
 

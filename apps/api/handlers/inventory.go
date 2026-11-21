@@ -179,3 +179,14 @@ func UpdateInventoryThreshold(db *gorm.DB) gin.HandlerFunc {
 		c.Status(204)
 	}
 }
+
+func InventoryFinishedGoods(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		rows, err := inventory.FinishedProducts(db)
+		if err != nil {
+			inventoryError(c, err)
+			return
+		}
+		c.JSON(200, rows)
+	}
+}

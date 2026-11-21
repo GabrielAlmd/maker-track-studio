@@ -73,7 +73,7 @@ func productionError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		c.JSON(404, gin.H{"error": "Production reference not found"})
-	case errors.Is(err, errProductionConflict), errors.Is(err, errPrintJobMaterialConflict):
+	case errors.Is(err, inventory.ErrConflict), errors.Is(err, errProductionConflict), errors.Is(err, errPrintJobMaterialConflict):
 		c.JSON(409, gin.H{"error": errProductionConflict.Error()})
 	default:
 		c.JSON(500, gin.H{"error": "Unable to persist production"})
@@ -287,6 +287,15 @@ func WriteProduction(db *gorm.DB) gin.HandlerFunc {
 				for _, item := range run.Items {
 					if err := tx.Omit("Model").Save(&item).Error; err != nil {
 						return err
+					}
+				}
+				if run.Status == "completed" && prior.Status != "completed" {
+					for _, item := range run.Items {
+						if item.ModelID != nil && item.Accepted > 0 {
+							if err := inventory.RecordOutput(tx, item); err != nil {
+								return err
+							}
+						}
 					}
 				}
 				if err := saveRunMaterials(tx, job.ID, run, prior, command.Materials); err != nil {
