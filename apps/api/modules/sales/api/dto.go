@@ -40,6 +40,7 @@ type SalesOrderAllocationDTO struct {
 	ID                  uuid.UUID                      `json:"id"`
 	SalesOrderItemID    uuid.UUID                      `json:"sales_order_item_id"`
 	PrintJobID          *uuid.UUID                     `json:"print_job_id,omitempty"`
+	PrintRunItemID      *uuid.UUID                     `json:"print_run_item_id,omitempty"`
 	UnitsAllocated      int                            `json:"units_allocated"`
 	ProductionCostCents *int64                         `json:"production_cost_cents,omitempty"`
 	PrintJob            *PrintJobAllocationCapacityDTO `json:"print_job,omitempty"`

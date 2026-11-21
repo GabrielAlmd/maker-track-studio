@@ -284,7 +284,25 @@ export async function installApiFixtures(pageContext) {
       items: [{ ...salesOrders[0].items[0], discount_cents: 501, net_cents: 7899 }],
       profitability: { state: 'not_calculated', revenue_cents: 7899, additional_costs_cents: 0, margin: { state: 'not_calculated' } },
     };
-    if (apiPath === '/sales-orders/formal/allocations') body = { sales_order_id: 'formal', items: [] };
+    if (apiPath === '/v2/business/orders/formal/production') body = {
+      revision: 1, editable: true,
+      items: [{
+        sales_order_item_id: 'soi1', model_name: salesOrders[0].items[0].model_name_snapshot, can_link: true,
+        units_required: 2, units_planned: 2, units_accepted: 1, units_allocated: 1, units_outstanding: 1,
+        links: [
+          {
+            sales_order_item_id: 'soi1', print_run_item_id: 'dfea6aa9', units_planned: 1, units_allocated: 1,
+            source: { print_job_id: 'synthetic-job-1', print_run_id: 'cc9ab041', print_run_item_id: 'dfea6aa9',
+              print_date: '2026-09-18T09:30:00Z', status: 'completed', units_planned: 2, units_accepted: 2, units_available: 1 },
+          },
+          {
+            sales_order_item_id: 'soi1', print_run_item_id: 'f031cd77', units_planned: 1, units_allocated: 0,
+            source: { print_job_id: 'synthetic-job-2', print_run_id: '2d8e0b12', print_run_item_id: 'f031cd77',
+              print_date: '2026-09-19T09:30:00Z', status: 'planned', units_planned: 1, units_accepted: 0, units_available: 0 },
+          },
+        ],
+      }],
+    };
     if (apiPath === '/sales-orders/so1') body = salesOrders[0];
     if (apiPath === '/sales-orders/so1/allocations') body = salesOrderAllocations;
     if (apiPath === '/sales-orders/so2') body = salesOrders[1];

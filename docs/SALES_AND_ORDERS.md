@@ -1,13 +1,11 @@
 # Sales and Orders — allocations and profitability
 
-This page describes the current implementation. The proposed v1.1.0
-[Business Operations workflow](architecture/BUSINESS_V1_1.md) adds budgets,
-revisioned proposals, independent production/delivery/finance states and a Quick
-Sale shortcut in later issues. Issue #19 only specifies that design; it does not
-rename the current UI or change existing orders. Existing history will retain
-its IDs, prices and frozen profitability. Legacy open orders will require an
-explicit reconciliation step before joining the verified Inventory workflow.
-Keep a pre-upgrade ZIP backup; no migration action is needed for this design PR.
+This page describes the legacy Sales Orders workflow. Proposal-backed orders
+use the [order production plan](BUSINESS_PROPOSALS.md#plan-production-and-allocate-accepted-units)
+to assign verified run items and track production progress. Existing orders
+retain their IDs, prices and frozen profitability. The [Business Operations
+architecture](architecture/BUSINESS_V1_1.md) describes how these workflows fit
+together in v1.1.0.
 
 ## Purpose
 
@@ -20,8 +18,8 @@ live profitability, and freeze the relevant production costs at completion.
 The desktop app ships Sales & Orders as a built-in module. Its transactional
 Sales and allocation routes are registered by the module; its pages, allocation
 controls, and Business Dashboard metrics appear when the feature is enabled.
-Inventory planning, invoices, marketplace integrations, and multi-currency
-support remain outside this scope.
+Inventory owns the physical stock ledger. Business Operations records
+commercial demand and allocation links.
 
 For the module contract and instructions for adding another module, see
 [Desktop module architecture](MODULE_ARCHITECTURE.md).

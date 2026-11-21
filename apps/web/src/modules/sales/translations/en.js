@@ -4,6 +4,15 @@ export default {
   printJobCard: { productionCapacity: 'Production capacity', unitsPrinted: 'Units printed', unitsAllocated: 'Units allocated', unitsAvailable: 'Units available', loadingAllocations: 'Loading allocation capacity…', allocationError: 'Could not load allocation capacity.' },
   dashboard: { business: 'Business', businessHelp: 'All-time financial totals from completed orders and current order activity.', orders: 'Orders', revenue: 'Revenue', netProfit: 'Net Profit', margin: 'Margin', businessOrderNote: '{{completed}} completed · {{unpaid}} unpaid', completedOrdersOnly: 'Completed orders only', salesLoading: 'Loading business metrics', salesLoadError: 'Could not load business metrics', recentOrders: 'Recent Orders', viewOrders: 'View all orders →', noRecentOrders: 'No recent orders', noRecentOrdersHelp: 'Create an order to start tracking business activity.', createOrder: 'Create an order' },
   sales: {
+    production: {
+      title: 'Production plan', required: 'Required', planned: 'Planned', accepted: 'Accepted', allocated: 'Allocated', outstanding: 'Outstanding',
+      find: 'Find run items', more: 'Load more run items', select: 'Compatible run items', choose: 'Select a run item', add: 'Add run item',
+      source: '{{date}} · Run {{run}} · Item {{item}} · {{status}}', sourceCapacity: 'Run item capacity: {{planned}} planned · {{accepted}} accepted · {{available}} available to allocate',
+      empty: 'No more compatible run items.', modelRequired: 'Link a catalog model in the source budget to plan production for this line.',
+      loadError: 'Could not load the production plan', sourcesError: 'Could not load run items.',
+      invalid: 'Enter whole units from 0 to 1,000,000,000 and use at most 1,000 links.',
+      save: 'Save production plan', saved: 'Production plan saved', saveError: 'Could not save the production plan', reload: 'Reload saved plan',
+    },
     acceptedProposal: 'Accepted proposal', customer: 'Customer', proposalRevision: 'Proposal revision', confirmedAt: 'Confirmed on', purchaseOrder: 'Customer PO', deliveryTerms: 'Delivery terms', paymentTerms: 'Payment terms',
     title: 'Sales & Orders', description: 'Track orders, production, costs and profit.', newOrder: 'New order', createFirst: 'Create first order',
     reference: 'Reference', orderDate: 'Order date', orderDateFormatHelp: 'The date picker follows your system’s date format.', channel: 'Sales channel', channelOptional: 'Sales channel (optional)', model: 'Model', items: 'Items', revenue: 'Revenue', costs: 'Costs', productionCost: 'Production cost', totalCost: 'Total cost', netProfit: 'Net profit', statuses: 'Statuses',

@@ -73,3 +73,22 @@ export const getPrintJobAllocations = async (id) => {
   const response = await api.get(`/print-jobs/${id}/allocations`);
   return response.data;
 };
+
+export const getOrderProduction = async (id) => {
+  const { data } = await api.get(`/v2/business/orders/${id}/production`);
+  return data;
+};
+
+export const getOrderProductionSources = async (id, lineId, after) => {
+  const { data } = await api.get(`/v2/business/orders/${id}/production/sources`, {
+    params: { line_id: lineId, after },
+  });
+  return data;
+};
+
+export const saveOrderProduction = async (id, revision, links) => {
+  const { data } = await api.put(`/v2/business/orders/${id}/production`, {
+    expected_revision: revision, links,
+  });
+  return data;
+};

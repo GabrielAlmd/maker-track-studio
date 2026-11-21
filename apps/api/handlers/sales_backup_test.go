@@ -90,8 +90,8 @@ func TestSalesBackupSchemaAndRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest["schema_version"] != float64(14) {
-		t.Fatalf("expected backup schema 14, got %#v", manifest["schema_version"])
+	if manifest["schema_version"] != float64(15) {
+		t.Fatalf("expected backup schema 15, got %#v", manifest["schema_version"])
 	}
 
 	target, targetDB := setupDesktopTestRouter(t)
@@ -179,6 +179,7 @@ func TestSchemaFourBackupWithoutSnapshotColumnsRemainsCompatible(t *testing.T) {
 	sourceSQLDB.SetMaxOpenConns(1)
 	legacySchemaStatements := []string{
 		`PRAGMA foreign_keys = OFF`,
+		`DROP TABLE sales_production_plans`,
 		`CREATE TABLE sales_orders_legacy (
 			id uuid PRIMARY KEY,
 			reference text NOT NULL,
@@ -233,8 +234,9 @@ func TestSchemaFourBackupWithoutSnapshotColumnsRemainsCompatible(t *testing.T) {
 		t.Fatalf("export legacy schema 4: %d %s", backup.Code, backup.Body.String())
 	}
 	target, targetDB := setupDesktopTestRouter(t)
+	legacyBackup := rewriteBackupSchemaVersion(t, backup.Body.Bytes(), 4)
 	result := performMultipartFileRequest(t, target, http.MethodPost,
-		"/desktop-data/import", "file", "schema-4-without-snapshots.zip", backup.Body.Bytes())
+		"/desktop-data/import", "file", "schema-4-without-snapshots.zip", legacyBackup)
 	if result.Code != http.StatusOK {
 		t.Fatalf("legacy schema-4 import: %d %s", result.Code, result.Body.String())
 	}
@@ -263,6 +265,7 @@ func TestPreviousSchemaBackupImportsWithEmptySalesData(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, table := range []any{
+		&salesmodels.SalesProductionPlan{},
 		&salesmodels.SalesOrderAllocation{},
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrder{},

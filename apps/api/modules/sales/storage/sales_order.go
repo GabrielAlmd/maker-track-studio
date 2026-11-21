@@ -28,6 +28,7 @@ const (
 )
 
 type SalesOrder struct {
+	ProductionRevision  int64                      `gorm:"not null;default:0"`
 	AcceptedProposalID  *uuid.UUID                 `gorm:"type:uuid;uniqueIndex"`
 	ID                  uuid.UUID                  `gorm:"type:uuid;primaryKey"`
 	Reference           string                     `gorm:"not null"`

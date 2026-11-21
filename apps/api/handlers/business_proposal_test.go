@@ -13,7 +13,7 @@ import (
 
 const businessProposals = "/v2/business/proposals"
 
-func seedProposal(t *testing.T, router *gin.Engine) (budget.ProposalCommand, budget.Record) {
+func seedProposal(t *testing.T, router *gin.Engine, modelIDs ...uuid.UUID) (budget.ProposalCommand, budget.Record) {
 	t.Helper()
 	customer := businessRequest[budget.Customer](t, router, "POST", businessCustomers, budget.CustomerCommand{
 		Command: budget.Command{OperationID: uuid.New()},
@@ -29,6 +29,9 @@ func seedProposal(t *testing.T, router *gin.Engine) (budget.ProposalCommand, bud
 	}, {
 		Name: "Private finishing process", Quantity: 1, Assumptions: budget.Assumptions{OtherCents: 300},
 	}}
+	for i, modelID := range modelIDs {
+		estimate.Items[i].ModelID = &modelID
+	}
 	built := businessRequest[budget.Record](t, router, "POST", businessBudgets, estimate, 201)
 	return budget.ProposalCommand{
 		Command:  budget.Command{OperationID: uuid.New()},

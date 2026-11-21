@@ -12,6 +12,7 @@ import (
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -71,6 +72,8 @@ func loadProduction(db *gorm.DB, id uuid.UUID) (ProductionResponse, error) {
 
 func productionError(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, modules.ErrRunItemPlanConflict):
+		c.JSON(409, gin.H{"error": modules.ErrRunItemPlanConflict.Error()})
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		c.JSON(404, gin.H{"error": "Production reference not found"})
 	case errors.Is(err, inventory.ErrConflict), errors.Is(err, errProductionConflict), errors.Is(err, errPrintJobMaterialConflict):
@@ -98,7 +101,7 @@ func GetProduction(db *gorm.DB) gin.HandlerFunc {
 
 // WriteProduction persists the complete aggregate and replay result under the
 // same SQLite writer lock. Terminal runs are immutable; a reprint is a new run.
-func WriteProduction(db *gorm.DB) gin.HandlerFunc {
+func WriteProduction(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var id uuid.UUID
 		creating := c.Param("id") == ""
@@ -243,6 +246,12 @@ func WriteProduction(db *gorm.DB) gin.HandlerFunc {
 					}
 					itemSeen[item.ID] = true
 					item.PrintRunID = run.ID
+					if previous, ok := priorItems[item.ID]; ok && prior.Status == "planned" &&
+						(item.Planned < previous.Planned || !reflect.DeepEqual(item.ModelID, previous.ModelID)) {
+						if err := installed.CheckRunItemPlanChange(tx, previous, *item); err != nil {
+							return err
+						}
+					}
 					if previous, ok := priorItems[item.ID]; ok && prior.Status != "planned" {
 						item.ModelName = previous.ModelName
 					} else if item.ModelID != nil {

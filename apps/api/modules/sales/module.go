@@ -15,11 +15,11 @@ type Module struct{}
 var _ modules.Module = Module{}
 
 func (Module) ID() string               { return "sales_orders" }
-func (Module) Version() int             { return 4 }
+func (Module) Version() int             { return 5 }
 func (Module) RequiresCoreVersion() int { return modules.CoreVersion }
 func (Module) EnabledByDefault() bool   { return false }
 func (Module) BackupTables() []string {
-	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations", "business_customers", "business_budgets", "business_budget_operations", "business_proposals", "business_order_revisions"}
+	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations", "business_customers", "business_budgets", "business_budget_operations", "business_proposals", "business_order_revisions", "sales_production_plans"}
 }
 
 func (Module) Migrate(tx *gorm.DB) error {
@@ -28,11 +28,12 @@ func (Module) Migrate(tx *gorm.DB) error {
 		&salesmodels.SalesOrder{},
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrderAllocation{},
+		&salesmodels.SalesProductionPlan{},
 	}, budget.Tables()...)...)
 }
 
 func (Module) RegisterRoutes(router *gin.Engine, db *gorm.DB) {
-	budget.RegisterRoutes(router, db)
+	business := budget.RegisterRoutes(router, db)
 	bind := func(factory func(*gorm.DB) gin.HandlerFunc) gin.HandlerFunc {
 		return modules.WithRequestDB(db, factory)
 	}
@@ -48,6 +49,9 @@ func (Module) RegisterRoutes(router *gin.Engine, db *gorm.DB) {
 	router.PUT("/sales-orders/:id", bind(saleshandlers.UpdateSalesOrder))
 	router.PUT("/sales-orders/:id/status", bind(saleshandlers.UpdateSalesOrderStatus))
 	router.PUT("/sales-orders/:id/allocations", bind(saleshandlers.ReplaceSalesOrderAllocations))
+	business.GET("/orders/:id/production", bind(saleshandlers.GetOrderProduction))
+	business.PUT("/orders/:id/production", bind(saleshandlers.ReplaceOrderProduction))
+	business.GET("/orders/:id/production/sources", bind(saleshandlers.GetOrderProductionSources))
 	router.DELETE("/sales-orders/:id", bind(saleshandlers.DeleteSalesOrder))
 	router.GET("/print-jobs/:id/allocations", bind(saleshandlers.GetPrintJobAllocations))
 }

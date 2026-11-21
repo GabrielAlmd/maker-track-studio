@@ -273,7 +273,11 @@ const scenarios = [
       await expect(page.getByRole('heading', { name: 'Prototype batch' })).toBeVisible();
       await expect(page.getByText('PO-104')).toBeVisible();
       await expect(page.getByText(/78[.,]99/).first()).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Save allocations' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Production plan' })).toBeVisible();
+      await expect(page.getByText('Outstanding', { exact: true })).toBeVisible();
+      await expect(page.getByText(/Run cc9ab041/)).toBeVisible();
+      await expect(page.getByText(/Run 2d8e0b12/)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Save production plan' })).toBeDisabled();
     },
   },
   {

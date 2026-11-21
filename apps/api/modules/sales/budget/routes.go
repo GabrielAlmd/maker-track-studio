@@ -20,7 +20,7 @@ type summary struct {
 	EstimatedCostCents int64 `json:"estimated_cost_cents"`
 }
 
-func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
+func RegisterRoutes(router *gin.Engine, db *gorm.DB) *gin.RouterGroup {
 	internal := router.Group("/v2/business", func(c *gin.Context) {
 		c.Header("Cache-Control", "private, no-store")
 	})
@@ -41,6 +41,7 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
 	internal.GET("/budgets/:id", bind(detail[Record]))
 	internal.POST("/budgets", bind(command(false, writeBudget)))
 	internal.PUT("/budgets/:id", bind(command(true, writeBudget)))
+	return internal
 }
 
 func pathID(c *gin.Context) (uuid.UUID, error) {

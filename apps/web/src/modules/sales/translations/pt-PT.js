@@ -4,6 +4,15 @@ export default {
   printJobCard: { productionCapacity: 'Capacidade de produção', unitsPrinted: 'Unidades impressas', unitsAllocated: 'Unidades atribuídas', unitsAvailable: 'Unidades disponíveis', loadingAllocations: 'A carregar capacidade de atribuição…', allocationError: 'Não foi possível carregar a capacidade de atribuição.' },
   dashboard: { business: 'Negócio', businessHelp: 'Totais financeiros de sempre das encomendas concluídas e atividade atual.', orders: 'Encomendas', revenue: 'Receita', netProfit: 'Lucro líquido', margin: 'Margem', businessOrderNote: '{{completed}} concluídas · {{unpaid}} por pagar', completedOrdersOnly: 'Apenas encomendas concluídas', salesLoading: 'A carregar métricas do negócio', salesLoadError: 'Não foi possível carregar as métricas do negócio', recentOrders: 'Encomendas recentes', viewOrders: 'Ver todas as encomendas →', noRecentOrders: 'Sem encomendas recentes', noRecentOrdersHelp: 'Crie uma encomenda para começar a acompanhar a atividade do negócio.', createOrder: 'Criar uma encomenda' },
   sales: {
+    production: {
+      title: 'Plano de produção', required: 'Necessárias', planned: 'Planeadas', accepted: 'Aceites', allocated: 'Atribuídas', outstanding: 'Em falta',
+      find: 'Procurar itens de execução', more: 'Carregar mais itens', select: 'Itens de execução compatíveis', choose: 'Selecionar um item', add: 'Adicionar item',
+      source: '{{date}} · Execução {{run}} · Item {{item}} · {{status}}', sourceCapacity: 'Capacidade do item: {{planned}} planeadas · {{accepted}} aceites · {{available}} disponíveis para atribuir',
+      empty: 'Não há mais itens de execução compatíveis.', modelRequired: 'Associe um modelo do catálogo no orçamento de origem para planear a produção desta linha.',
+      loadError: 'Não foi possível carregar o plano de produção', sourcesError: 'Não foi possível carregar os itens de execução.',
+      invalid: 'Introduza unidades inteiras entre 0 e 1 000 000 000 e utilize no máximo 1000 ligações.',
+      save: 'Guardar plano de produção', saved: 'Plano de produção guardado', saveError: 'Não foi possível guardar o plano de produção', reload: 'Recarregar plano guardado',
+    },
     acceptedProposal: 'Proposta aceite', customer: 'Cliente', proposalRevision: 'Revisão da proposta', confirmedAt: 'Data de confirmação', purchaseOrder: 'Referência de compra do cliente', deliveryTerms: 'Condições de entrega', paymentTerms: 'Condições de pagamento',
     title: 'Vendas e encomendas', description: 'Acompanhe encomendas, produção, custos e lucro.', newOrder: 'Nova encomenda', createFirst: 'Criar primeira encomenda',
     reference: 'Referência', orderDate: 'Data da encomenda', orderDateFormatHelp: 'O seletor de data segue o formato de data do seu sistema.', channel: 'Canal de venda', channelOptional: 'Canal de venda (opcional)', model: 'Modelo', items: 'Artigos', revenue: 'Receita', costs: 'Custos', productionCost: 'Custo de produção', totalCost: 'Custo total', netProfit: 'Lucro líquido', statuses: 'Estados',
