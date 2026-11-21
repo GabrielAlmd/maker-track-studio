@@ -32,8 +32,8 @@ function allocationDocument(rows = []) {
   return { sales_order_id: 'order-1', items: [{ sales_order_item_id: 'item-1', quantity: 2, units_allocated: rows.reduce((sum, row) => sum + row.units_allocated, 0), units_available: 2, allocations: rows }] };
 }
 
-function renderOrder(path = '/sales/new') {
-  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/sales/new" element={<SalesOrder />} /><Route path="/sales/:id" element={<SalesOrder />} /><Route path="/sales" element={<p>Sales list</p>} /></Routes></MemoryRouter>);
+function renderOrder(path = '/business/orders/new') {
+  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/business/orders/new" element={<SalesOrder />} /><Route path="/business/orders/:id" element={<SalesOrder />} /><Route path="/business/orders" element={<p>Sales list</p>} /></Routes></MemoryRouter>);
 }
 
 describe('Sales Order workflow', () => {
@@ -77,7 +77,7 @@ describe('Sales Order workflow', () => {
       items: [{ ...line, status: 'in_progress', links: [{ ...link, source }], units_allocated: 1, units_accepted: 1, units_outstanding: 1 }],
     });
     const user = userEvent.setup();
-    renderOrder('/sales/order-1');
+    renderOrder('/business/orders/order-1?section=production');
 
     const panel = within(await screen.findByRole('region', { name: 'Production plan' }));
     expect(await panel.findByText('Order production: Not started')).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe('Sales Order workflow', () => {
 
   it('keeps completed order values readable and frozen without edit or destructive actions', async () => {
     salesService.getSalesOrder.mockResolvedValue(makeOrder('completed'));
-    renderOrder('/sales/order-1');
+    renderOrder('/business/orders/order-1?section=financials');
 
     expect(await screen.findByText('Historical financial values are frozen.')).toBeInTheDocument();
     expect(screen.getByText('Frozen cost')).toBeInTheDocument();
@@ -178,7 +178,7 @@ describe('Sales Order workflow', () => {
   it('offers permanent deletion only for drafts and cancellation for active orders', async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const view = renderOrder('/sales/order-1');
+    const view = renderOrder('/business/orders/order-1');
     expect(await screen.findByRole('button', { name: 'Delete order' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel order' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Delete order' }));
@@ -186,7 +186,7 @@ describe('Sales Order workflow', () => {
 
     view.unmount();
     salesService.getSalesOrder.mockResolvedValue(makeOrder('confirmed'));
-    renderOrder('/sales/order-1');
+    renderOrder('/business/orders/order-1');
     expect(await screen.findByRole('button', { name: 'Cancel order' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete order' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel order' }));
@@ -198,7 +198,7 @@ describe('Sales Order workflow', () => {
     salesService.getSalesOrder.mockResolvedValue(makeOrder('confirmed'));
     salesService.getSalesOrderAllocations.mockResolvedValue(allocationDocument([{ id: 'allocation-1', sales_order_item_id: 'item-1', print_job_id: 'job-1', units_allocated: 1, print_job: { id: 'job-1', model_id: 'model-1', units_printed: 10, units_allocated: 2, units_available: 8 } }]));
     const user = userEvent.setup();
-    renderOrder('/sales/order-1');
+    renderOrder('/business/orders/order-1?section=production');
 
     const allocation = await screen.findByLabelText('Units assigned to Print Job job-1');
     await user.clear(allocation);
@@ -288,7 +288,7 @@ describe('Sales Order workflow', () => {
 
   it('renders an existing Order with no Sales Channel clearly', async () => {
     salesService.getSalesOrder.mockResolvedValue({ ...makeOrder('completed'), sales_channel_id: null, sales_channel: null });
-    renderOrder('/sales/order-1');
+    renderOrder('/business/orders/order-1');
 
     expect(await screen.findByText('No sales channel')).toBeInTheDocument();
     expect(screen.queryByText('Data unavailable')).not.toBeInTheDocument();
@@ -299,7 +299,7 @@ describe('Sales Order workflow', () => {
     salesService.getSalesChannels.mockResolvedValue([archived]);
     salesService.getSalesOrder.mockResolvedValue({ ...makeOrder(), sales_channel: archived });
     const user = userEvent.setup();
-    renderOrder('/sales/order-1');
+    renderOrder('/business/orders/order-1');
 
     expect(await screen.findByRole('option', { name: 'Etsy (archived)' })).toBeInTheDocument();
     expect(screen.getByLabelText('Sales channel')).toHaveValue('channel-1');
@@ -320,12 +320,13 @@ describe('Sales Order workflow', () => {
 
   it('updates refunded payment and advances fulfilment through the lifecycle controls', async () => {
     const user = userEvent.setup();
-    renderOrder('/sales/order-1');
+    renderOrder('/business/orders/order-1?section=financials');
 
     await screen.findByRole('heading', { name: 'WEB-1042' });
     await user.selectOptions(screen.getByLabelText('Payment status'), 'refunded');
     await user.click(screen.getByRole('button', { name: 'Update payment' }));
     await waitFor(() => expect(salesService.updateSalesOrderStatus).toHaveBeenCalledWith('order-1', { payment_status: 'refunded' }));
+    await user.click(await screen.findByRole('link', { name: 'Summary' }));
     await user.click(screen.getByRole('button', { name: 'Move to Confirmed' }));
     await waitFor(() => expect(salesService.updateSalesOrderStatus).toHaveBeenCalledWith('order-1', { fulfilment_status: 'confirmed' }));
   });

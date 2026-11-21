@@ -229,6 +229,21 @@ const scenarios = [
     await page.getByRole('radio', { name: 'PDF report' }).check();
     await expect(page.getByRole('button', { name: 'Generate PDF' })).toBeVisible();
   } },
+  {
+    slug: 'business-overview', route: 'business', fullPage: true,
+    prepare: async (page) => {
+      await expect(page.getByRole('heading', { name: 'Business Operations' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Review production' })).toBeVisible();
+    },
+  },
+  {
+    slug: 'business-proposals-mobile', route: 'business/proposals', viewport: { width: 390, height: 844 }, fullPage: true,
+    prepare: async (page) => await expect(page.getByRole('link', { name: 'Prototype batch' })).toBeVisible(),
+  },
+  {
+    slug: 'business-order-documents', route: 'business/orders/formal?section=documents', fullPage: true,
+    prepare: async (page) => await expect(page.getByRole('link', { name: 'View accepted proposal' })).toBeVisible(),
+  },
   { slug: 'sales', route: 'sales', fullPage: true, prepare: ready.sales },
   { slug: 'sales-compact', route: 'sales', viewport: { width: 900, height: 900 }, fullPage: true, prepare: ready.sales },
   {
@@ -263,7 +278,7 @@ const scenarios = [
     },
   },
   {
-    slug: 'sales-detail', route: 'sales/so1', fullPage: true, prepare: async (page) => {
+    slug: 'sales-detail', route: 'sales/so1?section=production', fullPage: true, prepare: async (page) => {
       await expect(page.getByRole('heading', { name: 'WEB-1042' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Production allocations' })).toBeVisible();
     },
@@ -273,6 +288,7 @@ const scenarios = [
       await expect(page.getByRole('heading', { name: 'Prototype batch' })).toBeVisible();
       await expect(page.getByText('PO-104')).toBeVisible();
       await expect(page.getByText(/78[.,]99/).first()).toBeVisible();
+      await page.getByRole('link', { name: 'Production', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Production plan' })).toBeVisible();
       await expect(page.getByText('Order production: In progress')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Refresh production' })).toBeEnabled();
@@ -283,14 +299,14 @@ const scenarios = [
     },
   },
   {
-    slug: 'sales-order-completed', route: 'sales/so2', fullPage: true, prepare: async (page) => {
+    slug: 'sales-order-completed', route: 'sales/so2?section=financials', fullPage: true, prepare: async (page) => {
       await expect(page.getByRole('heading', { name: 'DIRECT-031' })).toBeVisible();
       await expect(page.getByText('Historical financial values are frozen.')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
     },
   },
   {
-    slug: 'sales-order-production-allocation', route: 'sales/so1', fullPage: true, prepare: async (page) => {
+    slug: 'sales-order-production-allocation', route: 'sales/so1?section=production', fullPage: true, prepare: async (page) => {
       await expect(page.getByRole('heading', { name: 'WEB-1042' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Production allocations' })).toBeVisible();
       await expect(page.getByLabel('Units assigned to Print Job j1')).toHaveValue('1');
@@ -433,11 +449,11 @@ for (const theme of ['light', 'dark']) {
         }
       }, { selectedTheme: theme, selectedLocale: scenario.locale ?? 'en' });
 
-      // Report defaults read the current month at module load. Keep the
-      // catalogue independent of the date on the developer or CI machine.
-      if (['reports', 'reports-pdf'].includes(scenario.slug)) {
-        await page.clock.setFixedTime(new Date('2026-10-15T12:00:00Z'));
-      }
+      // Keep browser date defaults independent of the runner's clock.
+      const fixtureTime = ['reports', 'reports-pdf'].includes(scenario.slug)
+        ? '2026-10-15T12:00:00Z'
+        : '2026-11-21T12:00:00Z';
+      await page.clock.setFixedTime(new Date(fixtureTime));
       if (scenario.viewport) await page.setViewportSize(scenario.viewport);
       if (scenario.setup) await scenario.setup(page);
       await page.goto(`/#/${scenario.route}`);

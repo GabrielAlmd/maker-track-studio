@@ -231,7 +231,7 @@ describe('Dashboard page', () => {
     expect(screen.getByText('€200.00')).toBeInTheDocument();
     expect(screen.getByText('€120.00')).toBeInTheDocument();
     expect(screen.getByText('60.0%')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'WEB-1042' })).toHaveAttribute('href', '/sales/order-1');
+    expect(screen.getByRole('link', { name: 'WEB-1042' })).toHaveAttribute('href', '/business/orders/order-1');
     expect(screen.getByText('Etsy')).toBeInTheDocument();
     expect(getSalesSummary).toHaveBeenCalledOnce();
   });
@@ -245,7 +245,7 @@ describe('Dashboard page', () => {
     expect(await screen.findByText('€42.50')).toBeInTheDocument();
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Could not load business metrics');
-    expect(alert).toHaveTextContent('Sales unavailable');
+    expect(alert).not.toHaveTextContent('Sales unavailable');
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('link', { name: 'WEB-1042' })).toBeInTheDocument();
     expect(getDashboardSummary).toHaveBeenCalledOnce();

@@ -6,6 +6,7 @@ import PageHeader from '../../../components/ui/PageHeader';
 import ListToolbar from '../../../components/ui/ListToolbar';
 import BulkActions, { RowSelectionCheckbox, SelectAllCheckbox } from '../../../components/ui/BulkActions';
 import { EmptyState, InlineError, TableSkeleton } from '../../../components/ui/PageState';
+import BusinessNavigation from '../components/BusinessNavigation';
 import SalesOrderStatus from '../components/SalesOrderStatus';
 import { useApi } from '../../../hooks/useApi';
 import { usePaginatedList } from '../../../hooks/usePaginatedList';
@@ -46,9 +47,10 @@ function Sales() {
   return (
     <div>
       <PageHeader title={t('sales.title')} description={t('sales.description')}>
-        <Link to="/sales/new" className="page-action">{t('sales.newOrder')}</Link>
+        <Link to="/business/orders/new" className="page-action">{t('sales.newOrder')}</Link>
       </PageHeader>
 
+      <BusinessNavigation />
       <div className="list-toolbar-panel">
         <ListToolbar
           list={list}
@@ -93,7 +95,7 @@ function Sales() {
 
         {error && <div className="p-4"><InlineError title={t('sales.loadError')} message={orders ? t('common.existingDataSafe') : error} onRetry={refetch} /></div>}
         {loading && !orders ? <TableSkeleton columns={8} label={t('sales.loading')} /> : !orders || orders.length === 0 ? (
-          !error && <EmptyState icon={ReceiptText} filtered={list.hasFilters} title={list.hasFilters ? t('common.noResults') : t('sales.empty')} description={list.hasFilters ? t('common.changeSearch') : t('sales.emptyHelp')} action={list.hasFilters ? <button type="button" onClick={list.clear} className="page-action page-action-secondary">{t('common.clearFilters')}</button> : <Link to="/sales/new" className="page-action">{t('sales.createFirst')}</Link>} />
+          !error && <EmptyState icon={ReceiptText} filtered={list.hasFilters} title={list.hasFilters ? t('common.noResults') : t('sales.empty')} description={list.hasFilters ? t('common.changeSearch') : t('sales.emptyHelp')} action={list.hasFilters ? <button type="button" onClick={list.clear} className="page-action page-action-secondary">{t('common.clearFilters')}</button> : <Link to="/business/orders/new" className="page-action">{t('sales.createFirst')}</Link>} />
         ) : (
           <>
             {!wideList && <div className="divide-y ui-divide-subtle">
@@ -107,7 +109,7 @@ function Sales() {
                       <div className="flex items-start gap-3">
                         <RowSelectionCheckbox bulk={bulk} id={order.id} label={order.reference} />
                         <div>
-                          <Link to={`/sales/${order.id}`} className="font-semibold ui-text-primary-action hover:underline">{order.reference}</Link>
+                          <Link to={`/business/orders/${order.id}`} className="font-semibold ui-text-primary-action hover:underline">{order.reference}</Link>
                           <p className="mt-1 text-sm ui-text-muted">{formatDate(order.order_date)} · {order.sales_channel?.name ?? t('sales.noChannel')}</p>
                         </div>
                       </div>
@@ -146,7 +148,7 @@ function Sales() {
                   return (
                     <tr key={order.id} className="hover:ui-surface-hover">
                       <td className="w-12 px-4 py-4"><RowSelectionCheckbox bulk={bulk} id={order.id} label={order.reference} /></td>
-                      <td className="px-4 py-4 text-sm"><Link to={`/sales/${order.id}`} className="font-semibold ui-text-primary-action hover:underline">{order.reference}</Link><span className="mt-1 block whitespace-nowrap text-xs ui-text-muted">{formatDate(order.order_date)}</span></td>
+                      <td className="px-4 py-4 text-sm"><Link to={`/business/orders/${order.id}`} className="font-semibold ui-text-primary-action hover:underline">{order.reference}</Link><span className="mt-1 block whitespace-nowrap text-xs ui-text-muted">{formatDate(order.order_date)}</span></td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm ui-text-secondary">{order.sales_channel?.name ?? t('sales.noChannel')}</td>
                       <td className="px-4 py-4 text-sm ui-text-secondary"><span className="block max-w-52 truncate" title={summary.models}>{summary.models}</span><span className="text-xs ui-text-muted">{summary.units}</span></td>
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm ui-text-secondary tabular-nums">{formatCurrencyFromCents(profitability.revenue_cents)}</td>
