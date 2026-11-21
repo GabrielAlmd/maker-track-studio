@@ -198,7 +198,7 @@ func TestSalesModuleMigrationPreservesCompletedSnapshot(t *testing.T) {
 	defer connection.Close()
 	for _, table := range budget.Tables() {
 		if !migrated.Migrator().HasTable(table) {
-			t.Fatalf("Sales module v2 did not create %T", table)
+			t.Fatalf("Sales module did not create %T", table)
 		}
 	}
 	var saved salesmodels.SalesOrder

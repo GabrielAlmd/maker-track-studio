@@ -12,28 +12,34 @@ import (
 type Backup struct {
 	customers  []Customer
 	budgets    []Record
+	proposals  []Proposal
 	operations []operation
 }
 
-var errInvalidBackup = errors.New("Backup contains invalid Business customer, budget or operation data")
+var errInvalidBackup = errors.New("Backup contains invalid Business customer, budget, proposal or operation data")
 
 func ReadBackup(source *gorm.DB, schemaVersion int) (Backup, error) {
 	var data Backup
 	if schemaVersion < BackupSchema {
 		for _, table := range Tables() {
-			if source.Migrator().HasTable(table) {
-				var count int64
-				if source.Model(table).Count(&count).Error != nil || count != 0 {
-					return data, errInvalidBackup
-				}
+			if requireEmptyTable(source, table) != nil {
+				return data, errInvalidBackup
 			}
 		}
 		return data, nil
 	}
-	for _, table := range Tables() {
+	for _, table := range budgetTables() {
 		if !source.Migrator().HasTable(table) {
 			return data, errInvalidBackup
 		}
+	}
+	if schemaVersion < ProposalBackupSchema {
+		if requireEmptyTable(source, &Proposal{}) != nil {
+			return data, errInvalidBackup
+		}
+	} else if !source.Migrator().HasTable(&Proposal{}) ||
+		source.Order("id, revision").Find(&data.proposals).Error != nil {
+		return data, errInvalidBackup
 	}
 	if source.Order("id, revision").Find(&data.customers).Error != nil ||
 		source.Order("id, revision").Find(&data.budgets).Error != nil ||
@@ -41,6 +47,16 @@ func ReadBackup(source *gorm.DB, schemaVersion int) (Backup, error) {
 		return data, errInvalidBackup
 	}
 	return data, data.validate()
+}
+
+func requireEmptyTable(source *gorm.DB, table any) error {
+	if source.Migrator().HasTable(table) {
+		var count int64
+		if source.Model(table).Count(&count).Error != nil || count != 0 {
+			return errInvalidBackup
+		}
+	}
+	return nil
 }
 
 type revisionKey struct {
@@ -98,6 +114,9 @@ func (data Backup) validate() error {
 		refs[revisionKey{"budget", budget.ID, budget.Revision}] = true
 		lastBudget = budget
 	}
+	if err := data.validateProposals(refs); err != nil {
+		return err
+	}
 	usedOperations := make(map[uuid.UUID]bool)
 	for _, op := range data.operations {
 		target, digest, ok := strings.Cut(op.Hash, ":")
@@ -139,6 +158,11 @@ func RestoreBackup(tx *gorm.DB, data Backup) error {
 	}
 	if len(data.budgets) > 0 {
 		if err := tx.CreateInBatches(&data.budgets, 100).Error; err != nil {
+			return err
+		}
+	}
+	if len(data.proposals) > 0 {
+		if err := tx.CreateInBatches(&data.proposals, 100).Error; err != nil {
 			return err
 		}
 	}

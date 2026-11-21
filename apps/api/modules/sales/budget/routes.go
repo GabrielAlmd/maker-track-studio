@@ -27,6 +27,8 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
 		return modules.WithRequestDB(db, factory)
 	}
 
+	registerProposalRoutes(internal, db)
+
 	internal.GET("/customers", bind(list[Customer, Customer]))
 	internal.GET("/customers/:id", bind(detail[Customer]))
 	internal.POST("/customers", bind(command(false, writeCustomer)))
@@ -58,31 +60,34 @@ func positiveQuery(c *gin.Context, key string, fallback, maximum int64) (int64, 
 
 func list[Model, Result any](db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		page, err := positiveQuery(c, "page", 1, 100000)
-		if err != nil {
-			reply(c, 0, nil, err)
-			return
-		}
-		size, err := positiveQuery(c, "page_size", 25, 100)
-		if err != nil {
-			reply(c, 0, nil, err)
-			return
-		}
 		var model Model
-		results := make([]Result, 0)
 		latest := db.Model(&model).Select("id, MAX(revision) AS revision").Group("id")
-		err = db.Model(&model).Where("(id, revision) IN (?)", latest).Order("created_at DESC, id ASC").
-			Offset(int((page - 1) * size)).Limit(int(size + 1)).Find(&results).Error
-		if err != nil {
-			reply(c, 0, nil, err)
-			return
-		}
-		hasMore := len(results) > int(size)
-		if hasMore {
-			results = results[:size]
-		}
-		reply(c, http.StatusOK, gin.H{"items": results, "page": page, "page_size": size, "has_more": hasMore}, nil)
+		paginate[Result](c, db.Model(&model).Where("(id, revision) IN (?)", latest).Order("created_at DESC, id ASC"))
 	}
+}
+
+func paginate[Result any](c *gin.Context, query *gorm.DB) {
+	page, err := positiveQuery(c, "page", 1, 100000)
+	if err != nil {
+		reply(c, 0, nil, err)
+		return
+	}
+	size, err := positiveQuery(c, "page_size", 25, 100)
+	if err != nil {
+		reply(c, 0, nil, err)
+		return
+	}
+	results := make([]Result, 0)
+	err = query.Offset(int((page - 1) * size)).Limit(int(size + 1)).Find(&results).Error
+	if err != nil {
+		reply(c, 0, nil, err)
+		return
+	}
+	hasMore := len(results) > int(size)
+	if hasMore {
+		results = results[:size]
+	}
+	reply(c, http.StatusOK, gin.H{"items": results, "page": page, "page_size": size, "has_more": hasMore}, nil)
 }
 
 func detail[T any](db *gorm.DB) gin.HandlerFunc {

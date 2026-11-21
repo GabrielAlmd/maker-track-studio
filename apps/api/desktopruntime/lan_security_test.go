@@ -25,7 +25,7 @@ func TestLANBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	adjustment := fmt.Sprintf(`{"item_type":"model","item_id":"%s","operation_id":"%s","source_id":"%s","kind":"opening","quantity":3,"actor":"operator","reason":"count"}`, item.ID, uuid.New(), uuid.New())
-	for _, path := range []string{"/health/live", "/health/ready", "/printers", "/desktop-data/export", "/reports/export", "/desktop-data/import", "/data-migration/import", "/sales-orders", "/v2/business/customers", "/v2/business/budgets", "/models/id", "/v2/inventory/adjustments"} {
+	for _, path := range []string{"/health/live", "/health/ready", "/printers", "/desktop-data/export", "/reports/export", "/desktop-data/import", "/data-migration/import", "/sales-orders", "/v2/business/customers", "/v2/business/budgets", "/v2/business/proposals", "/v2/business/proposals/id/document", "/models/id", "/v2/inventory/adjustments"} {
 		for _, tc := range []struct {
 			name, method, secret, host, origin, peer, proto string
 			status                                          int
