@@ -6,12 +6,14 @@ import (
 	"strings"
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/budget"
 	salesmodels "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type backupData struct {
+	business    budget.Backup
 	channels    []salesmodels.SalesChannel
 	orders      []salesmodels.SalesOrder
 	items       []salesmodels.SalesOrderItem
@@ -20,6 +22,11 @@ type backupData struct {
 
 func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) {
 	var data backupData
+	business, err := budget.ReadBackup(sourceDB, schemaVersion)
+	if err != nil {
+		return data, err
+	}
+	data.business = business
 	if schemaVersion < 4 {
 		return data, nil
 	}
@@ -121,6 +128,9 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 }
 
 func (Module) DeleteBackup(tx *gorm.DB) error {
+	if err := budget.DeleteBackup(tx); err != nil {
+		return err
+	}
 	deleteSession := tx.Session(&gorm.Session{AllowGlobalUpdate: true})
 	for _, table := range []any{&salesmodels.SalesOrderAllocation{}, &salesmodels.SalesOrderItem{}, &salesmodels.SalesOrder{}, &salesmodels.SalesChannel{}} {
 		if err := deleteSession.Delete(table).Error; err != nil {
@@ -155,5 +165,5 @@ func (Module) RestoreBackup(tx *gorm.DB, value any) error {
 			return err
 		}
 	}
-	return nil
+	return budget.RestoreBackup(tx, data.business)
 }

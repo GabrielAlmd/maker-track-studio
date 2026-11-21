@@ -62,11 +62,10 @@ Imported purchases are historical financial records. New imported Print Jobs ret
 
 After import, weigh remaining filament and count finished units. Record each observed total and its current item revision using the [physical count procedure](INVENTORY_LEDGER.md#physical-stock-reconciliation). Until the first count or explicit opening balance, recorded changes carry `verified: false`, including when the displayed total is zero. Back up the reconciled workspace to retain its verification history.
 
-The [BUS-01 migration strategy](architecture/BUSINESS_V1_1.md#migration-backups-and-rollback)
-preserves Sales IDs, allocations, statuses and frozen financial snapshots.
-Historical orders will not automatically create customers, payments, shipments
-or verified stock. Moving an open legacy order into the new workflow will be an
-explicit reconciliation, with rollback on conflicting references. #19 adds no
-new import sections, database migration or backup version; current migration
-instructions above still apply. Future upgrades require a pre-upgrade backup,
-and rollback to it loses changes made after that backup.
+## Business customers and budgets
+
+Upgrade adds empty customer and budget tables. Existing Sales records keep their
+IDs, allocations, statuses and financial snapshots. Full workspace ZIP backups
+carry customers, budgets and revisions. See [Business budgets](BUSINESS_BUDGETS.md)
+for the schema 12 upgrade and rollback procedure. CSV/XLSX sections continue to
+cover the production entities listed above.

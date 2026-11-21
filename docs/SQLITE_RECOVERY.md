@@ -135,12 +135,18 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share schema version 9 / ZIP format
-version 1. Schema 9 records observed physical counts and item revisions in two additive integer columns. The core inventory marker advances to 3 so older builds reject this history. Restore verifies each count against its preceding balance and revision before replacing data. Schema 8 adds automatic material source references; schema 7 includes Inventory movements and their audit and retry identifiers.
-Restoring a pre-ledger archive clears local ledger history and leaves balances unverified.
-Schema 6 adds production lifecycle records. Schema 5 adds material estimate, waste, and measurement provenance
-to Print Job filament rows. Supported older ZIP schemas (1–8, including earlier desktop exports) follow existing printer
-and Sales migrations. Missing optional-module support fails closed for databases
+Current desktop and self-hosted builds share schema version 12 and ZIP format
+version 1. Schema 12 adds [Business customers and budgets](BUSINESS_BUDGETS.md),
+including estimate revisions and operation history. Schema 11 adds finished
+goods movement fields, schema 10 adds material stock thresholds, and schema 9
+records observed physical counts and item revisions. Restore verifies counts
+against their preceding balance and revision before replacing data. Schema 8
+adds automatic material source references. Schema 7 includes Inventory
+movements and their audit and retry identifiers. Restoring a pre-ledger archive
+clears local ledger history and leaves balances unverified. Schema 6 adds
+production lifecycle records. Schema 5 adds material estimate, waste and
+measurement provenance to Print Job filament rows. Supported older ZIP schemas
+(1–11) follow the existing migrations. Missing optional-module support fails closed for databases
 or archives containing that module's data. Tests use disposable fixtures for
 legacy migrations and current round trips; no live user data is migrated.
 

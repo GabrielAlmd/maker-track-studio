@@ -20,6 +20,7 @@ import (
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/budget"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/routes"
 )
 
@@ -41,7 +42,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		}
 	}
 
-	if err := db.AutoMigrate(
+	if err := db.AutoMigrate(append([]any{
 		&models.Printer{},
 		&models.PrintJob{},
 		&models.PrintJobFilament{},
@@ -51,7 +52,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		&salesmodels.SalesOrder{},
 		&salesmodels.SalesOrderItem{},
 		&salesmodels.SalesOrderAllocation{},
-	); err != nil {
+	}, budget.Tables()...)...); err != nil {
 		t.Fatalf("failed to initialize desktop models: %v", err)
 	}
 

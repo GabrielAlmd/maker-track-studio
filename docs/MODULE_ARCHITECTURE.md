@@ -17,7 +17,7 @@ Issue #55 makes Sales & Orders the first built-in module of the Wails desktop ap
 - `apps/web/src/modules/index.jsx` lists installed frontend descriptors. A descriptor supplies routes and navigation and may supply a feature setting, dashboard content and Print Job card content. Navigation, dashboard and Print Job card contributions render only when the persisted feature key is true. Routes remain registered when a feature is hidden, preserving existing deep links and API behavior.
 - `apps/web/src/modules/translations.js` merges module translations into the core locales before i18n initialization.
 
-The `sales_orders` module is version 1, requires core contract version 1, and defaults to disabled. Disabling it hides Sales navigation and Business dashboard content. It leaves Sales routes, data, completed profitability snapshots and backup contents intact. Removing the backend module from composition is a different operation: production-only startup has no Sales tables or routes and must use a database without retained Sales tables.
+The `sales_orders` module is version 2, requires core contract version 1, and defaults to disabled. Disabling it hides Sales navigation and Business dashboard content. It leaves Sales routes, data, completed profitability snapshots and backup contents intact. Its [customer and internal budget routes](BUSINESS_BUDGETS.md) also remain available to the local or authenticated LAN operator. Removing the backend module from composition is a different operation: production-only startup has no Sales tables or routes and must use a database without retained Sales tables.
 
 ## Sales boundaries
 

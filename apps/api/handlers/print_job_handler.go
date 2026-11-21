@@ -600,6 +600,14 @@ func CalculateProductionPrintJobCostState(pj models.PrintJob, cfg map[string]flo
 	return calculatePrintJobCostState(pj, cfg)
 }
 
+// ProductionCostParts returns the unrounded components used by the core
+// calculator. Callers supply a validated snapshot or the loaded app config.
+func ProductionCostParts(pj models.PrintJob, cfg map[string]float64) (material, energy, wear, labor float64) {
+	material, energy, wear, labor, _ = calculatePrintJobCostParts(pj, cfg["electricity_cost_kwh"],
+		cfg["printer_wear_cost_hour"], cfg["labor_cost_hour"], cfg["filament_waste_factor"])
+	return
+}
+
 func modelIDExists(db *gorm.DB, id *uuid.UUID) bool {
 	if id == nil {
 		return true
