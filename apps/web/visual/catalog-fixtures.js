@@ -290,6 +290,11 @@ export async function installApiFixtures(pageContext) {
       items: [{ ...salesOrders[0].items[0], discount_cents: 501, net_cents: 7899 }],
       profitability: { state: 'not_calculated', revenue_cents: 7899, additional_costs_cents: 0, margin: { state: 'not_calculated' } },
     };
+    if (apiPath === '/v2/business/orders/formal/fulfilment') body = {
+      status: 'unfulfilled', cancelled: false, can_cancel: true,
+      lines: [{ allocation_id: 'allocation-1', run_item_id: 'dfea6aa9', name: 'Modular Enclosure',
+        revision: 2, reservable: 1, reserved: 0, shipped: 0, returned: 0, events: [] }],
+    };
     if (apiPath === '/v2/business/orders/formal/production') body = {
       status: 'in_progress', revision: 1, editable: true,
       items: [{

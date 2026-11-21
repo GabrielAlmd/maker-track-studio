@@ -82,6 +82,20 @@ func (data *backupData) validateProduction(db *gorm.DB, schemaVersion int) error
 		}
 	}
 
+	// Include the dispatched stock retained by cancelled orders when
+	// checking the shared accepted capacity across all owners.
+	var overCapacity int64
+	if err := db.Table("sales_order_allocations AS link").
+		Joins("JOIN sales_order_items AS line ON line.id = link.sales_order_item_id").
+		Joins("JOIN sales_orders AS orders ON orders.id = line.sales_order_id").
+		Joins("JOIN print_run_items AS item ON item.id = link.print_run_item_id").
+		Group("item.id").Having("SUM(" + storage.AllocationCapacitySQL + ") > item.accepted").
+		Count(&overCapacity).Error; err != nil {
+		return err
+	}
+	if overCapacity > 0 {
+		return errInvalidProductionBackup
+	}
 	seenAllocations := make(map[linkKey]bool)
 	allocated := make(map[uuid.UUID]int64)
 	lineTotals := make(map[uuid.UUID]int64)

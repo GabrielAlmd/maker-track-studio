@@ -368,3 +368,30 @@ the next Business issue. #23 additionally waits for #11. #12 follows #11;
 #16 follows #11/#12; #26 follows #16/#23/#24. #27 follows #21/#22, #28 follows
 #22/#24/#27, and #31 integrates #25/#26/#27/#28. Open follow-on issues are not
 implemented or considered complete by this architecture PR.
+
+### Implemented order fulfilment API (#26)
+
+Desktop and Self-Hosted share the following SQLite-backed routes under
+`/v2/business/orders/:id` for proposal-backed orders.
+
+| Method and path | Contract |
+| --- | --- |
+| GET `/fulfilment` | Returns shipment/return status, cancellation state and one line per accepted allocation with lot revision, reservable units, and chronological events. Each hold and dispatch includes its remaining actionable units. |
+| POST `/fulfilment` | Send `operation_id`, `allocation_id`, `reference`, `kind`, positive integer `units`, `expected_revision` for the lot, and a nonempty `reason` (up to 512 bytes). Supply a stable `source_id` when importing an external line event. It defaults to the operation ID. Returns the Inventory receipt. |
+| PUT `/cancel-remainder` | Releases every outstanding hold and cancels remaining demand atomically. Repeating cancellation succeeds. An entirely shipped order has no remainder to cancel. |
+
+For `reserve`, reference the allocation UUID. For `dispatch` or `release`,
+reference a reserve operation on that allocation. For `restock` or
+`reject_return`, reference a dispatch operation. Use a separate event for each
+lot and preserve its operation/source IDs across retries. Stale revisions,
+over-capacity events and conflicting retries return HTTP 409. A matched retry
+returns its original receipt. Mutations require Business Operations enabled.
+
+The Inventory ledger stores event identity, quantity, reason and timestamp.
+The allocation UUID anchors its reference chain. A production edit preserves
+allocations with history and cannot reduce units below shipped plus outstanding
+holds. Existing orders, financial snapshots, and legacy routes are unchanged.
+Schema 15 already includes the required columns. Restore replays physical
+movements and validates the Business allocation linkage before replacement.
+Older backups start with no fulfilment evidence. For rollback, restore a
+pre-upgrade backup with its matching binary as described above.

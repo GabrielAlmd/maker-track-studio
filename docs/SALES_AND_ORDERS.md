@@ -325,3 +325,19 @@ This workflow does not add advanced inventory or raw-material reservation,
 printer scheduling, automatic platform-fee rules, customer CRM, invoices,
 VAT/tax accounting, multi-currency, returns/restocking, partial-payment
 accounting, or marketplace integrations.
+
+## Reserve and ship finished goods
+
+Open a confirmed proposal-backed order and choose **Production**. Assign accepted
+run output in the production plan and refresh **Order fulfilment**. Choose a
+reservation, shipment, release or inspected return, enter the units and a reason
+or shipment reference, then select **Record event**. Each entry in **History**
+identifies the action and quantity for that allocation.
+
+With 10 accepted pieces, reserving 3 leaves 10 on hand and 7 available. Shipping
+those 3 clears the hold and leaves 7 on hand and 7 available. You can ship part
+of a hold or release it. **Cancel unshipped remainder** releases all remaining
+holds and preserves shipments. A return must reference a shipment. Restocking
+makes inspected units available again. Rejecting the return records the
+inspection without adding stock. Disabling Business Operations preserves
+existing holds. Enable it again to release or ship them.

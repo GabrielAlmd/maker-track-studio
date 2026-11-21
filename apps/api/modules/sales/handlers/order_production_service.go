@@ -1,11 +1,11 @@
 package saleshandlers
 
 import (
-	"fmt"
 	"maps"
 	"math"
 	"slices"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	salesdto "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/api"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/google/uuid"
@@ -315,12 +315,15 @@ func productionSourceTotals(tx *gorm.DB, table, column string, orderID uuid.UUID
 		PrintRunItemID uuid.UUID
 		Units          int64
 	}
-	// Table and column names come from the two fixed call sites.
-	err := tx.Table(table+" AS link").Select(fmt.Sprintf("link.print_run_item_id, SUM(link.%s) AS units", column)).
+	// Both expressions and the table name are selected by the fixed call sites.
+	expression := "CASE WHEN orders.fulfilment_status <> 'cancelled' THEN link.units_planned ELSE 0 END"
+	if column == "units_allocated" {
+		expression = storage.AllocationCapacitySQL
+	}
+	err := tx.Table(table+" AS link").Select("link.print_run_item_id, SUM("+expression+") AS units").
 		Joins("JOIN sales_order_items AS line ON line.id = link.sales_order_item_id").
 		Joins("JOIN sales_orders AS orders ON orders.id = line.sales_order_id").
-		Where("link.print_run_item_id IN ? AND orders.id <> ? AND orders.fulfilment_status <> ?",
-			slices.Collect(maps.Keys(sources)), orderID, storage.SalesOrderFulfilmentCancelled).
+		Where("link.print_run_item_id IN ? AND orders.id <> ?", slices.Collect(maps.Keys(sources)), orderID).
 		Group("link.print_run_item_id").Scan(&rows).Error
 	totals := make(map[uuid.UUID]int64, len(rows))
 	for _, row := range rows {
@@ -338,6 +341,17 @@ func saveProductionLinks(tx *gorm.DB, state orderProductionState, links map[prod
 		}
 	}
 	for key, allocation := range state.allocations {
+		next := links[key].UnitsAllocated
+		if next < int64(allocation.UnitsAllocated) {
+			history, err := inventory.OutputLots(tx, []uuid.UUID{key.source})
+			if err != nil {
+				return err
+			}
+			line := projectAllocation(allocation, "", history[key.source])
+			if next < line.Reserved+line.Shipped || next == 0 && len(line.Events) > 0 {
+				return productionConflict("This allocation has fulfilment history or committed stock")
+			}
+		}
 		if links[key].UnitsAllocated == 0 {
 			if err := tx.Delete(&allocation).Error; err != nil {
 				return err

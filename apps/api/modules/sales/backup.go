@@ -128,6 +128,11 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 	if err := data.validateProduction(sourceDB, schemaVersion); err != nil {
 		return data, err
 	}
+	if schemaVersion >= 15 {
+		if err := data.validateFulfilment(sourceDB); err != nil {
+			return data, err
+		}
+	}
 	return data, business.ValidateOrderLinks(data.orders, data.items)
 }
 
