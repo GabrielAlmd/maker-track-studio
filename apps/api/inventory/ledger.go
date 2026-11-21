@@ -20,6 +20,8 @@ var (
 )
 
 type Posting struct {
+	Units            int64     `json:"units,omitempty" gorm:"not null;default:0"`
+	Reference        string    `json:"reference,omitempty" gorm:"not null;default:''"`
 	CountedQuantity  int64     `json:"counted_quantity,omitempty" gorm:"not null;default:0"`
 	ExpectedRevision int64     `json:"expected_revision,omitempty" gorm:"not null;default:0"`
 	SourceKey        string    `json:"source_key,omitempty" gorm:"not null;default:'';index"`
@@ -46,6 +48,12 @@ func (p Posting) Validate() error {
 		(p.ItemType != "filament" && p.ItemType != "model") ||
 		strings.TrimSpace(p.Reason) == "" || len(p.Reason) > 512 || strings.TrimSpace(p.Actor) == "" || len(p.Actor) > 128 ||
 		p.Quantity < -MaxQuantity || p.Quantity > MaxQuantity {
+		return ErrInvalid
+	}
+	if strings.HasPrefix(p.SourceKey, "output:") {
+		return validateOutputPosting(p)
+	}
+	if p.Units != 0 || p.Reference != "" {
 		return ErrInvalid
 	}
 	if p.Kind != "count" && (p.CountedQuantity != 0 || p.ExpectedRevision != 0) {
@@ -104,14 +112,23 @@ func itemExists(db *gorm.DB, typ string, id uuid.UUID) error {
 	return db.Select("id").Take(record, "id = ?", id).Error
 }
 
+const balanceColumns = `
+	COALESCE(SUM(quantity), 0) AS on_hand,
+	COALESCE(SUM(CASE
+		WHEN kind = 'reserve' THEN units
+		WHEN kind IN ('release', 'dispatch') THEN -units
+		ELSE 0 END), 0) AS reserved,
+	COALESCE(MAX(kind IN ('opening', 'count')), 0) AS verified,
+	COALESCE(MAX(sequence), 0) AS revision`
+
 func projection(db *gorm.DB, typ string, id uuid.UUID, through int64) (Balance, error) {
 	var b Balance
 	q := db.Model(&Movement{}).Where("item_type = ? AND item_id = ?", typ, id)
 	if through > 0 {
 		q = q.Where("sequence <= ?", through)
 	}
-	err := q.Select("COALESCE(SUM(quantity),0) AS on_hand, COALESCE(MAX(kind IN ('opening','count')),0) AS verified, COALESCE(MAX(sequence),0) AS revision").Scan(&b).Error
-	b.Available = b.OnHand
+	err := q.Select(balanceColumns).Scan(&b).Error
+	b.Available = b.OnHand - b.Reserved
 	b.Negative = b.OnHand < 0
 	return b, err
 }
@@ -173,6 +190,15 @@ func Post(tx *gorm.DB, p Posting) (Receipt, error) {
 			return r, ErrInvalid
 		}
 	}
+	if strings.HasPrefix(p.SourceKey, "output:") {
+		lot, err := loadLot(tx, p.SourceKey)
+		if err != nil {
+			return r, err
+		}
+		if err := lot.apply(p); err != nil {
+			return r, err
+		}
+	}
 	if err = b.apply(p); err != nil {
 		return r, err
 	}
@@ -196,8 +222,17 @@ func (b *Balance) apply(p Posting) error {
 	if next < -MaxQuantity || next > MaxQuantity || (p.Kind == "opening" && b.Verified) {
 		return ErrConflict
 	}
+	switch p.Kind {
+	case "reserve":
+		b.Reserved += p.Units
+	case "release", "dispatch":
+		b.Reserved -= p.Units
+	}
+	if b.Reserved < 0 || b.Reserved > 0 && next < b.Reserved || (p.Kind == "dispatch" && next < 0) {
+		return ErrConflict
+	}
 	b.OnHand = next
-	b.Available = next
+	b.Available = next - b.Reserved
 	b.Negative = next < 0
 	b.Verified = b.Verified || p.Kind == "opening" || p.Kind == "count"
 	return nil
@@ -217,12 +252,24 @@ func ValidateHistory(rows []Movement, filaments []models.Filament, products []mo
 		balances[key{"model", m.ID}] = Balance{}
 	}
 	ops, sources := map[uuid.UUID]bool{}, map[uuid.UUID]bool{}
+	lots := map[string]*outputLot{}
 	var last int64
 	for _, m := range rows {
 		k := key{m.ItemType, m.ItemID}
 		b, ok := balances[k]
 		if !ok || m.Validate() != nil || m.Sequence <= last || m.Sequence > MaxQuantity || m.CreatedAt.IsZero() || ops[m.OperationID] || sources[m.SourceID] || b.apply(m.Posting) != nil {
 			return ErrInvalid
+		}
+		if strings.HasPrefix(m.SourceKey, "output:") {
+			lot := lots[m.SourceKey]
+			if lot == nil {
+				lot = newLot()
+				lots[m.SourceKey] = lot
+			}
+			if err := lot.apply(m.Posting); err != nil {
+				return ErrInvalid
+			}
+			lot.Revision = m.Sequence
 		}
 		ops[m.OperationID], sources[m.SourceID] = true, true
 		last = m.Sequence

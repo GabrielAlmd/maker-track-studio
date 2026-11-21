@@ -71,7 +71,7 @@ func TestInventoryUpgradeFromVersionTwoOnRepeatedStartup(t *testing.T) {
 	if err := db.Create(&f).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, column := range []string{"counted_quantity", "expected_revision"} {
+	for _, column := range []string{"counted_quantity", "expected_revision", "units", "reference"} {
 		if err := db.Migrator().DropColumn(&inventory.Movement{}, column); err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +92,7 @@ func TestInventoryUpgradeFromVersionTwoOnRepeatedStartup(t *testing.T) {
 			t.Fatal(err)
 		}
 		var version int
-		if err := db.Raw("SELECT version FROM module_versions WHERE id = 'core_inventory'").Scan(&version).Error; err != nil || version != 3 {
+		if err := db.Raw("SELECT version FROM module_versions WHERE id = 'core_inventory'").Scan(&version).Error; err != nil || version != 4 {
 			t.Fatal(version, err)
 		}
 		b, err := inventory.Availability(db, "filament", f.ID)

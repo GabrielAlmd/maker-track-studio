@@ -87,7 +87,7 @@ func (registry *Registry) Migrate(db *gorm.DB) error {
 			return fmt.Errorf("initialize module version registry: %w", err)
 		}
 		if tx.Migrator().HasTable("inventory_movements") {
-			if err := tx.Save(&moduleVersion{ID: "core_inventory", Version: 3}).Error; err != nil {
+			if err := tx.Save(&moduleVersion{ID: "core_inventory", Version: 4}).Error; err != nil {
 				return err
 			}
 		}
@@ -146,8 +146,11 @@ func (registry *Registry) CheckBackupTables(db *gorm.DB) error {
 		}
 		for _, row := range recorded {
 			if row.ID == "core_inventory" {
-				if (row.Version < 1 || row.Version > 3) || !db.Migrator().HasTable("inventory_movements") || (row.Version >= 2 && !db.Migrator().HasColumn("inventory_movements", "source_key")) {
+				if (row.Version < 1 || row.Version > 4) || !db.Migrator().HasTable("inventory_movements") || (row.Version >= 2 && !db.Migrator().HasColumn("inventory_movements", "source_key")) {
 					return errors.New("unsupported or missing inventory schema")
+				}
+				if row.Version >= 4 && (!db.Migrator().HasColumn("inventory_movements", "units") || !db.Migrator().HasColumn("inventory_movements", "reference")) {
+					return errors.New("missing finished goods history fields")
 				}
 				if row.Version >= 3 && (!db.Migrator().HasColumn("inventory_movements", "counted_quantity") || !db.Migrator().HasColumn("inventory_movements", "expected_revision")) {
 					return errors.New("missing inventory count history")

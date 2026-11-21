@@ -89,11 +89,15 @@ func TestProductionMaterialStock(t *testing.T) {
 	for _, status := range []string{"completed", "failed"} {
 		t.Run(status, func(t *testing.T) {
 			r, db, printer := setupTestRouterWithDefaultPrinter(t)
+			product := models.Model{Name: "Catalog part"}
+			if err := db.Create(&product).Error; err != nil {
+				t.Fatal(err)
+			}
 			a, b, c := models.Filament{}, models.Filament{}, models.Filament{}
 			db.Create(&a)
 			db.Create(&b)
 			db.Create(&c)
-			input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-19T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "items": []any{map[string]any{"planned": 1}}, "materials": []any{}}}}
+			input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-19T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "items": []any{map[string]any{"planned": 1, "model_id": product.ID}}, "materials": []any{}}}}
 			res := performRequest(t, r, "POST", "/v2/production/jobs", input)
 			if res.Code != 201 {
 				t.Fatal(res.Body.String())
@@ -146,7 +150,15 @@ func TestProductionMaterialStock(t *testing.T) {
 			assertStock(t, db, a.ID, -12345)
 			var count int64
 			db.Model(&inventory.Movement{}).Count(&count)
-			if count != 2 {
+			wantOutput := int64(0)
+			if status == "completed" {
+				wantOutput = 1
+			}
+			stock, err := inventory.Availability(db, "model", product.ID)
+			if err != nil || stock.OnHand != wantOutput {
+				t.Fatal(stock, err)
+			}
+			if count != 2+wantOutput {
 				t.Fatalf("duplicate deductions %d", count)
 			}
 
