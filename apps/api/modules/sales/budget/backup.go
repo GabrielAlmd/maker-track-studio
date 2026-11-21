@@ -13,6 +13,7 @@ type Backup struct {
 	customers  []Customer
 	budgets    []Record
 	proposals  []Proposal
+	orders     []OrderRevision
 	operations []operation
 }
 
@@ -32,6 +33,13 @@ func ReadBackup(source *gorm.DB, schemaVersion int) (Backup, error) {
 		if !source.Migrator().HasTable(table) {
 			return data, errInvalidBackup
 		}
+	}
+	if schemaVersion < 14 {
+		if requireEmptyTable(source, &OrderRevision{}) != nil {
+			return data, errInvalidBackup
+		}
+	} else if source.Order("id, revision").Find(&data.orders).Error != nil {
+		return data, errInvalidBackup
 	}
 	if schemaVersion < ProposalBackupSchema {
 		if requireEmptyTable(source, &Proposal{}) != nil {
@@ -117,6 +125,9 @@ func (data Backup) validate() error {
 	if err := data.validateProposals(refs); err != nil {
 		return err
 	}
+	if err := data.validateOrderHistory(refs); err != nil {
+		return err
+	}
 	usedOperations := make(map[uuid.UUID]bool)
 	for _, op := range data.operations {
 		target, digest, ok := strings.Cut(op.Hash, ":")
@@ -163,6 +174,11 @@ func RestoreBackup(tx *gorm.DB, data Backup) error {
 	}
 	if len(data.proposals) > 0 {
 		if err := tx.CreateInBatches(&data.proposals, 100).Error; err != nil {
+			return err
+		}
+	}
+	if len(data.orders) > 0 {
+		if err := tx.CreateInBatches(&data.orders, 100).Error; err != nil {
 			return err
 		}
 	}

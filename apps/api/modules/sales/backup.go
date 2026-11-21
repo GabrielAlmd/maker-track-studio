@@ -124,7 +124,7 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 		}
 	}
 
-	return data, nil
+	return data, business.ValidateOrderLinks(data.orders, data.items)
 }
 
 func (Module) DeleteBackup(tx *gorm.DB) error {

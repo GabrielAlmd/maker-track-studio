@@ -20,6 +20,9 @@ type SalesChannelDTO struct {
 // SalesOrderItemDTO intentionally exposes the historical Model name snapshot
 // separately from the optional live Model link.
 type SalesOrderItemDTO struct {
+	DiscountCents     int64      `json:"discount_cents,omitempty"`
+	BudgetLineID      *uuid.UUID `json:"budget_line_id,omitempty"`
+	NetCents          int64      `json:"net_cents"`
 	ID                uuid.UUID  `json:"id"`
 	SalesOrderID      uuid.UUID  `json:"sales_order_id"`
 	ModelID           *uuid.UUID `json:"model_id,omitempty"`
@@ -112,22 +115,25 @@ type SalesOrderProfitabilityDTO struct {
 	Margin               SalesMarginDTO `json:"margin"`
 }
 type SalesOrderDTO struct {
-	ID                 uuid.UUID                              `json:"id"`
-	Reference          string                                 `json:"reference"`
-	OrderDate          time.Time                              `json:"order_date"`
-	SalesChannelID     *uuid.UUID                             `json:"sales_channel_id,omitempty"`
-	SalesChannel       *SalesChannelDTO                       `json:"sales_channel,omitempty"`
-	FulfilmentStatus   salesmodels.SalesOrderFulfilmentStatus `json:"fulfilment_status"`
-	PaymentStatus      salesmodels.SalesOrderPaymentStatus    `json:"payment_status"`
-	PackagingCostCents int64                                  `json:"packaging_cost_cents"`
-	ShippingCostCents  int64                                  `json:"shipping_cost_cents"`
-	PlatformFeeCents   int64                                  `json:"platform_fee_cents"`
-	OtherCostCents     int64                                  `json:"other_cost_cents"`
-	Notes              string                                 `json:"notes"`
-	Items              []SalesOrderItemDTO                    `json:"items"`
-	Profitability      SalesOrderProfitabilityDTO             `json:"profitability"`
-	CreatedAt          time.Time                              `json:"created_at"`
-	UpdatedAt          time.Time                              `json:"updated_at"`
+	WorkflowVersion       int                                    `json:"workflow_version"`
+	LegacyWriteSupported  bool                                   `json:"legacy_write_supported"`
+	LegacyProjectionLossy bool                                   `json:"legacy_projection_lossy"`
+	ID                    uuid.UUID                              `json:"id"`
+	Reference             string                                 `json:"reference"`
+	OrderDate             time.Time                              `json:"order_date"`
+	SalesChannelID        *uuid.UUID                             `json:"sales_channel_id,omitempty"`
+	SalesChannel          *SalesChannelDTO                       `json:"sales_channel,omitempty"`
+	FulfilmentStatus      salesmodels.SalesOrderFulfilmentStatus `json:"fulfilment_status"`
+	PaymentStatus         salesmodels.SalesOrderPaymentStatus    `json:"payment_status"`
+	PackagingCostCents    int64                                  `json:"packaging_cost_cents"`
+	ShippingCostCents     int64                                  `json:"shipping_cost_cents"`
+	PlatformFeeCents      int64                                  `json:"platform_fee_cents"`
+	OtherCostCents        int64                                  `json:"other_cost_cents"`
+	Notes                 string                                 `json:"notes"`
+	Items                 []SalesOrderItemDTO                    `json:"items"`
+	Profitability         SalesOrderProfitabilityDTO             `json:"profitability"`
+	CreatedAt             time.Time                              `json:"created_at"`
+	UpdatedAt             time.Time                              `json:"updated_at"`
 }
 
 // SalesSummaryRecentOrderDTO keeps the Dashboard payload compact while using
@@ -168,9 +174,10 @@ type SalesChannelRequest struct {
 // SalesOrderItemRequest excludes ModelNameSnapshot by design. The API always
 // reads the current Model name and owns creation of the historical snapshot.
 type SalesOrderItemRequest struct {
-	ModelID        uuid.UUID `json:"model_id"`
-	Quantity       int       `json:"quantity"`
-	UnitPriceCents int64     `json:"unit_price_cents"`
+	ID             *uuid.UUID `json:"id,omitempty"`
+	ModelID        uuid.UUID  `json:"model_id"`
+	Quantity       int        `json:"quantity"`
+	UnitPriceCents int64      `json:"unit_price_cents"`
 }
 
 type SalesOrderRequest struct {

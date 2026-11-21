@@ -15,6 +15,14 @@ export const getSalesOrder = async (id) => {
   return response.data;
 };
 
+export const getOrderAcceptance = async (id) => {
+  const { data: revision } = await api.get(`/v2/business/orders/${id}`);
+  const { data: document } = await api.get(`/v2/business/proposals/${revision.proposal_id}/document`, {
+    params: { revision: revision.proposal_revision },
+  });
+  return { revision, document };
+};
+
 export const createSalesOrder = async (data) => {
   const response = await api.post('/sales-orders', data);
   return response.data;

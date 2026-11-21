@@ -193,7 +193,10 @@ func salesOrderRevenueCents(order salesmodels.SalesOrder) (int64, error) {
 		if !ok {
 			return 0, errSalesMoneyOverflow
 		}
-		revenue, ok = checkedAddInt64(revenue, line)
+		if item.DiscountCents < 0 || item.DiscountCents > line {
+			return 0, errSalesMoneyOverflow
+		}
+		revenue, ok = checkedAddInt64(revenue, line-item.DiscountCents)
 		if !ok {
 			return 0, errSalesMoneyOverflow
 		}

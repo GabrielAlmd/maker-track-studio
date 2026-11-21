@@ -13,6 +13,8 @@ import (
 )
 
 var (
+	errFormalOrder              = errors.New("Use the Business Operations amendment endpoint for a proposal-backed order")
+	errProtectedLine            = errors.New("Use a distinct line ID belonging to this order and release affected allocations before replacing a model, removing its line, or reducing allocated demand")
 	errSalesChannelNotFound     = errors.New("Sales Channel not found")
 	errSalesChannelArchived     = errors.New("Sales Channel is archived")
 	errSalesModelNotFound       = errors.New("Model not found")
@@ -121,6 +123,7 @@ func createSalesOrder(db *gorm.DB, input salesdto.SalesOrderRequest) (salesdto.S
 }
 
 func updateSalesOrder(db *gorm.DB, id uuid.UUID, input salesdto.SalesOrderRequest) (salesdto.SalesOrderDTO, error) {
+	var saved salesdto.SalesOrderDTO
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// Take SQLite's writer lock before reading lifecycle and reference state.
 		if err := tx.Exec(
@@ -133,6 +136,9 @@ func updateSalesOrder(db *gorm.DB, id uuid.UUID, input salesdto.SalesOrderReques
 		var order salesmodels.SalesOrder
 		if err := tx.First(&order, "id = ?", id).Error; err != nil {
 			return err
+		}
+		if order.AcceptedProposalID != nil {
+			return errFormalOrder
 		}
 		if order.FulfilmentStatus != salesmodels.SalesOrderFulfilmentDraft {
 			return errSalesOrderNotEditable
@@ -175,48 +181,30 @@ func updateSalesOrder(db *gorm.DB, id uuid.UUID, input salesdto.SalesOrderReques
 		if err := tx.Save(&order).Error; err != nil {
 			return err
 		}
-		var existingItemIDs []uuid.UUID
-		if err := tx.Model(&salesmodels.SalesOrderItem{}).
-			Where("sales_order_id = ?", order.ID).
-			Pluck("id", &existingItemIDs).Error; err != nil {
+		submittedIDs, err := reconcileDraftItems(tx, order.ID, input.Items)
+		if err != nil {
 			return err
 		}
-		if len(existingItemIDs) > 0 {
-			if err := tx.Where("sales_order_item_id IN ?", existingItemIDs).
-				Delete(&salesmodels.SalesOrderAllocation{}).Error; err != nil {
-				return err
-			}
-		}
-		if err := tx.Where("sales_order_id = ?", order.ID).Delete(&salesmodels.SalesOrderItem{}).Error; err != nil {
+		saved, err = loadSalesOrderDTO(tx, id)
+		if err != nil {
 			return err
 		}
-
-		for index, requestedItem := range input.Items {
-			var product models.Model
-			if err := tx.First(&product, "id = ?", requestedItem.ModelID).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return fmt.Errorf("%w at item %d", errSalesModelNotFound, index+1)
-				}
-				return err
+		// Legacy clients associate allocations with positions in the PUT response.
+		byID := make(map[uuid.UUID]salesdto.SalesOrderItemDTO, len(saved.Items))
+		for _, item := range saved.Items {
+			byID[item.ID] = item
+		}
+		saved.Items = make([]salesdto.SalesOrderItemDTO, 0, len(submittedIDs))
+		for _, id := range submittedIDs {
+			item, ok := byID[id]
+			if !ok {
+				return errSalesAllocationConcurrentConflict
 			}
-			modelID := product.ID
-			item := salesmodels.SalesOrderItem{
-				SalesOrderID:      order.ID,
-				ModelID:           &modelID,
-				ModelNameSnapshot: product.Name,
-				Quantity:          requestedItem.Quantity,
-				UnitPriceCents:    requestedItem.UnitPriceCents,
-			}
-			if err := tx.Create(&item).Error; err != nil {
-				return err
-			}
+			saved.Items = append(saved.Items, item)
 		}
 		return nil
 	})
-	if err != nil {
-		return salesdto.SalesOrderDTO{}, err
-	}
-	return loadSalesOrderDTO(db, id)
+	return saved, err
 }
 
 func updateSalesOrderStatus(db *gorm.DB, id uuid.UUID, input salesdto.SalesOrderStatusRequest) (salesdto.SalesOrderDTO, error) {
@@ -230,6 +218,9 @@ func updateSalesOrderStatus(db *gorm.DB, id uuid.UUID, input salesdto.SalesOrder
 		var order salesmodels.SalesOrder
 		if err := tx.First(&order, "id = ?", id).Error; err != nil {
 			return err
+		}
+		if order.AcceptedProposalID != nil {
+			return errFormalOrder
 		}
 		targetFulfilment := order.FulfilmentStatus
 		if input.FulfilmentStatus != nil {
@@ -266,6 +257,9 @@ func deleteSalesOrder(db *gorm.DB, id uuid.UUID) error {
 		if err := tx.First(&order, "id = ?", id).Error; err != nil {
 			return err
 		}
+		if order.AcceptedProposalID != nil {
+			return errFormalOrder
+		}
 		if order.FulfilmentStatus != salesmodels.SalesOrderFulfilmentDraft {
 			return errSalesDeleteConflict
 		}
@@ -287,4 +281,79 @@ func deleteSalesOrder(db *gorm.DB, id uuid.UUID) error {
 		}
 		return tx.Delete(&order).Error
 	})
+}
+
+// Older clients omit IDs. Reuse their matching model lines in historical order.
+// Reserve explicit IDs first so a new row cannot claim another request row.
+func reconcileDraftItems(tx *gorm.DB, orderID uuid.UUID, requests []salesdto.SalesOrderItemRequest) ([]uuid.UUID, error) {
+	var rows []salesmodels.SalesOrderItem
+	if err := tx.Preload("Allocations").Where("sales_order_id = ?", orderID).Order("created_at, id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	byID := map[uuid.UUID]salesmodels.SalesOrderItem{}
+	for _, row := range rows {
+		byID[row.ID] = row
+	}
+	reserved := map[uuid.UUID]bool{}
+	for _, request := range requests {
+		if request.ID != nil {
+			id := *request.ID
+			if _, ok := byID[id]; !ok || reserved[id] {
+				return nil, errProtectedLine
+			}
+			reserved[id] = true
+		}
+	}
+	ids := make([]uuid.UUID, 0, len(requests))
+	for _, request := range requests {
+		var row salesmodels.SalesOrderItem
+		if request.ID != nil {
+			row = byID[*request.ID]
+		} else if len(reserved) == 0 {
+			for _, candidate := range rows {
+				if _, available := byID[candidate.ID]; available && candidate.ModelID != nil && *candidate.ModelID == request.ModelID {
+					row = candidate
+					break
+				}
+			}
+		}
+		var allocated int
+		for _, a := range row.Allocations {
+			allocated += a.UnitsAllocated
+		}
+		if allocated > request.Quantity {
+			return nil, errProtectedLine
+		}
+		if row.ModelID == nil || *row.ModelID != request.ModelID {
+			if allocated > 0 {
+				return nil, errProtectedLine
+			}
+			var model models.Model
+			if err := tx.First(&model, "id = ?", request.ModelID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, errSalesModelNotFound
+				}
+				return nil, err
+			}
+			row.ModelID = &model.ID
+			row.ModelNameSnapshot = model.Name
+		}
+		delete(byID, row.ID)
+		row.SalesOrderID = orderID
+		row.Quantity = request.Quantity
+		row.UnitPriceCents = request.UnitPriceCents
+		if err := tx.Omit("Allocations").Save(&row).Error; err != nil {
+			return nil, err
+		}
+		ids = append(ids, row.ID)
+	}
+	for _, row := range byID {
+		if len(row.Allocations) > 0 {
+			return nil, errProtectedLine
+		}
+		if err := tx.Delete(&row).Error; err != nil {
+			return nil, err
+		}
+	}
+	return ids, nil
 }

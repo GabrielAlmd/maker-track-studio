@@ -20,7 +20,7 @@ func salesOrderDTO(order salesmodels.SalesOrder, profitability salesdto.SalesOrd
 	items := make([]salesdto.SalesOrderItemDTO, 0, len(order.Items))
 	for _, item := range order.Items {
 		items = append(items, salesdto.SalesOrderItemDTO{
-			ID:                item.ID,
+			ID: item.ID, DiscountCents: item.DiscountCents, BudgetLineID: item.BudgetLineID, NetCents: int64(item.Quantity)*item.UnitPriceCents - item.DiscountCents,
 			SalesOrderID:      item.SalesOrderID,
 			ModelID:           item.ModelID,
 			ModelNameSnapshot: item.ModelNameSnapshot,
@@ -46,6 +46,12 @@ func salesOrderDTO(order salesmodels.SalesOrder, profitability salesdto.SalesOrd
 		Profitability:      profitability,
 		CreatedAt:          order.CreatedAt,
 		UpdatedAt:          order.UpdatedAt,
+	}
+	result.WorkflowVersion = 1
+	result.LegacyWriteSupported = order.AcceptedProposalID == nil
+	if !result.LegacyWriteSupported {
+		result.WorkflowVersion = 2
+		result.LegacyProjectionLossy = true
 	}
 	if order.SalesChannel != nil {
 		channel := salesChannelDTO(*order.SalesChannel)

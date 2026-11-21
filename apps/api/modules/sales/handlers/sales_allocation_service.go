@@ -153,6 +153,9 @@ func replaceSalesOrderAllocations(db *gorm.DB, orderID uuid.UUID, input salesdto
 		if err := tx.First(&order, "id = ?", orderID).Error; err != nil {
 			return err
 		}
+		if order.AcceptedProposalID != nil {
+			return errFormalOrder
+		}
 		if order.FulfilmentStatus == salesmodels.SalesOrderFulfilmentCompleted ||
 			order.FulfilmentStatus == salesmodels.SalesOrderFulfilmentCancelled {
 			return errSalesAllocationsNotEditable
@@ -226,21 +229,38 @@ func replaceSalesOrderAllocations(db *gorm.DB, orderID uuid.UUID, input salesdto
 			}
 		}
 
-		if len(itemIDs) > 0 {
-			if err := tx.Where("sales_order_item_id IN ?", itemIDs).
-				Delete(&salesmodels.SalesOrderAllocation{}).Error; err != nil {
+		var existing []salesmodels.SalesOrderAllocation
+		if err := tx.Where("sales_order_item_id IN ?", itemIDs).Find(&existing).Error; err != nil {
+			return err
+		}
+		byPair := map[string]salesmodels.SalesOrderAllocation{}
+		for _, a := range existing {
+			if a.PrintJobID != nil {
+				byPair[allocationPairKey(a.SalesOrderItemID, *a.PrintJobID)] = a
+			}
+		}
+		keep := map[uuid.UUID]bool{}
+		for _, request := range input.Allocations {
+			key := allocationPairKey(request.SalesOrderItemID, request.PrintJobID)
+			if prior, ok := byPair[key]; ok {
+				keep[prior.ID] = true
+				if prior.UnitsAllocated != request.UnitsAllocated {
+					if err := tx.Model(&prior).Update("units_allocated", request.UnitsAllocated).Error; err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			row := salesmodels.SalesOrderAllocation{SalesOrderItemID: request.SalesOrderItemID, PrintJobID: &request.PrintJobID, UnitsAllocated: request.UnitsAllocated}
+			if err := tx.Create(&row).Error; err != nil {
 				return err
 			}
 		}
-		for _, requested := range input.Allocations {
-			printJobID := requested.PrintJobID
-			allocation := salesmodels.SalesOrderAllocation{
-				SalesOrderItemID: requested.SalesOrderItemID,
-				PrintJobID:       &printJobID,
-				UnitsAllocated:   requested.UnitsAllocated,
-			}
-			if err := tx.Create(&allocation).Error; err != nil {
-				return err
+		for _, a := range existing {
+			if !keep[a.ID] {
+				if err := tx.Delete(&a).Error; err != nil {
+					return err
+				}
 			}
 		}
 		return nil

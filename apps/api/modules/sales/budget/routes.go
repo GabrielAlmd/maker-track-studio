@@ -1,6 +1,7 @@
 package budget
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -28,6 +29,9 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
 	}
 
 	registerProposalRoutes(internal, db)
+	internal.POST("/orders", bind(command(false, confirmOrder)))
+	internal.GET("/orders/:id", bind(detail[OrderRevision]))
+	internal.POST("/orders/:id/amendments", bind(command(true, amendOrder)))
 
 	internal.GET("/customers", bind(list[Customer, Customer]))
 	internal.GET("/customers/:id", bind(detail[Customer]))
@@ -136,6 +140,15 @@ func command[Input, Result any](update bool, write func(*gorm.DB, uuid.UUID, Inp
 			if !json.Valid(encoded) {
 				reply(c, 0, nil, invalid("body", "Provide exactly one JSON request object"))
 				return
+			}
+			switch any(input).(type) {
+			case AmendmentCommand, ConfirmationCommand:
+				decoder := json.NewDecoder(bytes.NewReader(encoded))
+				decoder.DisallowUnknownFields()
+				if err := decoder.Decode(&input); err != nil {
+					reply(c, 0, nil, invalid("body", "Only documented order fields can be changed. Prices, quantities, customer and proposal references are frozen after acceptance."))
+					return
+				}
 			}
 			result, err := write(db, id, input)
 			reply(c, status, result, err)

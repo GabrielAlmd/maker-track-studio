@@ -47,6 +47,8 @@ func salesOrderError(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, gin.H{"error": errSalesCompletionCostUnavailable.Error()})
 	case errors.Is(err, errSalesChannelArchived):
 		c.JSON(http.StatusConflict, gin.H{"error": "Archived Sales Channels cannot be assigned to orders"})
+	case errors.Is(err, errFormalOrder), errors.Is(err, errProtectedLine):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	case errors.Is(err, errSalesOrderNotEditable):
 		c.JSON(http.StatusConflict, gin.H{"error": "Only draft Sales Orders can be edited"})
 	case errors.Is(err, errSalesStatusRequiresRoute):

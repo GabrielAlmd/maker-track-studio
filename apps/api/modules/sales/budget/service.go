@@ -12,6 +12,7 @@ import (
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/google/uuid"
+	"github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -107,6 +108,10 @@ func execute[T any](db *gorm.DB, resource string, id uuid.UUID, command Command,
 		return tx.Model(&operation{}).Where("id = ?", op.ID).
 			Updates(map[string]any{"resource_id": op.ResourceID, "revision": op.Revision}).Error
 	})
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) && (sqliteErr.Code == sqlite3.ErrBusy || sqliteErr.Code == sqlite3.ErrLocked) {
+		return result, conflict("concurrent_update", "Another write is in progress. Retry the command.")
+	}
 	return result, err
 }
 

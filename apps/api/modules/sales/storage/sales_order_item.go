@@ -10,6 +10,8 @@ import (
 )
 
 type SalesOrderItem struct {
+	BudgetLineID      *uuid.UUID    `gorm:"type:uuid"`
+	DiscountCents     int64         `gorm:"not null;default:0"`
 	ID                uuid.UUID     `gorm:"type:uuid;primaryKey"`
 	SalesOrderID      uuid.UUID     `gorm:"type:uuid;not null;index"`
 	SalesOrder        SalesOrder    `gorm:"foreignKey:SalesOrderID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`

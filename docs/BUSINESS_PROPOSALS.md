@@ -2,8 +2,7 @@
 
 Create a proposal from an exact [budget revision](BUSINESS_BUDGETS.md) using the
 Business Operations API. Desktop uses the loopback API. Self-Hosted uses the
-authenticated HTTPS proxy. Business Operations screens are tracked in #25,
-order confirmation and acceptance in #22, and PDF generation in #27.
+authenticated HTTPS proxy. The full Business Operations screens are tracked in #25 and PDF generation in #27.
 
 1. Select an active customer and a budget revision. A budget assigned to a
    customer can be quoted to that customer. An unassigned budget can be quoted
@@ -85,8 +84,7 @@ The issue request carries only `operation_id` and `expected_revision`. An
 issued record has `issued_at` and, for a replacement, `supersedes_revision`.
 A draft keeps `issued_at` null. Saving a draft leaves the earlier issued quote
 current. Issuing its replacement records the link and timestamp atomically.
-The order-confirmation workflow in #22 will decide eligibility and associate
-acceptance with the exact issued revision. Proposal writes have no effects on
+Confirmation links the order to the exact issued revision. Proposal writes have no effects on
 orders, payments, Print Jobs or Inventory.
 
 ## Upgrade and recovery
@@ -94,7 +92,7 @@ orders, payments, Print Jobs or Inventory.
 Sales module version 3 adds the SQLite table `business_proposals` and uses the
 existing commercial operation ledger. Existing customers, budgets, legacy
 sales and frozen order snapshots retain their IDs and data. The ZIP format
-remains version 1 and full backups use schema 13. Supported schema 12 and older
+remains version 1. Schema 13 introduced proposals. Schema 14 adds order acceptance and amendment history. Supported schema 12 and older
 archives restore with no proposals. Imports validate proposal, customer and
 budget revision references, repriced totals, issued snapshots and operation
 records before replacing the workspace in a transaction.
@@ -102,3 +100,40 @@ records before replacing the workspace in a transaction.
 Export a backup before upgrading. To roll back the application version, stop
 the app, retain the upgraded workspace separately, and restore the pre-upgrade
 archive with the compatible previous binary. See [SQLite recovery](SQLITE_RECOVERY.md).
+
+## Confirm and correct an order
+
+After the customer accepts, send `POST /v2/business/orders` with a fresh
+`operation_id`, `expected_revision: 0`, `proposal_id`, `proposal_revision`
+and optional `purchase_order` (up to 160 characters). Select the latest
+**issued** revision. A newer draft leaves it eligible until another revision is
+issued or the validity date passes in UTC. A successful response (201) gives
+the new Sales Order ID, revision 1, customer ID, accepted proposal reference,
+confirmation timestamp, PO and delivery terms. Save the operation UUID for
+retries. A second independent acceptance returns 409.
+
+Open the order in Sales & Orders to view the accepted customer, revision, PO,
+terms and discounted line totals. The proposal document at the accepted revision
+remains the source for the original customer address, price and discount details.
+Confirmation creates unpaid demand in one SQLite transaction. Production,
+Inventory, invoice and payment records are separate workflows.
+
+To correct a PO or delivery instruction on a confirmed or preparing order, send
+`POST /v2/business/orders/:id/amendments` with `operation_id`, the current
+`expected_revision`, a `reason` (1–500 characters), and the changed
+`purchase_order` or `delivery_terms` (up to 2,000 characters). An empty string
+clears that field. The local desktop operator or authenticated LAN operator can
+perform this command. Read the current version with `GET /v2/business/orders/:id`
+or append `?revision=N` to inspect an earlier version. A successful correction
+returns 200 and appends the next revision. Price, customer, quantities and
+approved revision remain frozen. Unknown fields return 400. A stale revision
+or protected lifecycle state returns 409. Retry an identical command with the
+same operation ID to retrieve its original result.
+
+Legacy order reads include `workflow_version`, `legacy_write_supported`,
+`legacy_projection_lossy` and line `net_cents`. For formal orders, use the
+discounted line total or profitability revenue for financial calculations.
+Legacy writes on those orders return 409. For a legacy draft PUT, include the
+existing item `id` on retained lines. ID-less legacy requests match model
+lines in their original order. Release affected allocations before removing a
+line, changing its model or reducing quantity below the assigned units.

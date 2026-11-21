@@ -28,6 +28,7 @@ const (
 )
 
 type SalesOrder struct {
+	AcceptedProposalID  *uuid.UUID                 `gorm:"type:uuid;uniqueIndex"`
 	ID                  uuid.UUID                  `gorm:"type:uuid;primaryKey"`
 	Reference           string                     `gorm:"not null"`
 	OrderDate           time.Time                  `gorm:"not null"`
