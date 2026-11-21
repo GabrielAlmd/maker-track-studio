@@ -41,7 +41,7 @@ var exportDatasets = []exportDataset{
 	{"print_run_items", "print_jobs", "print_run_items", "id,print_run_id,model_id,model_name,planned,attempted,accepted,rejected,legacy_reported_units", "print_jobs.print_date", "JOIN print_runs ON print_runs.id = print_run_items.print_run_id JOIN print_jobs ON print_jobs.id = print_runs.print_job_id"},
 	{"sales_channels", "sales", "sales_channels", "id,name,notes,is_archived,created_at,updated_at", "", ""},
 	{"sales_orders", "sales", "sales_orders", "id,reference,order_date,sales_channel_id,fulfilment_status,payment_status,packaging_cost_cents,shipping_cost_cents,platform_fee_cents,other_cost_cents,notes,production_cost_cents,total_cost_cents,net_profit_cents,margin_basis_points,created_at,updated_at", "order_date", ""},
-	{"sales_order_items", "sales", "sales_order_items", "id,sales_order_id,model_id,model_name_snapshot,quantity,unit_price_cents,created_at,updated_at", "sales_orders.order_date", "JOIN sales_orders ON sales_orders.id = sales_order_items.sales_order_id"},
+	{"sales_order_items", "sales", "sales_order_items", "id,sales_order_id,model_id,model_name_snapshot,quantity,unit_price_cents,created_at,updated_at,discount_cents", "sales_orders.order_date", "JOIN sales_orders ON sales_orders.id = sales_order_items.sales_order_id"},
 	{"sales_order_allocations", "sales", "sales_order_allocations", "id,sales_order_item_id,print_job_id,units_allocated,production_cost_cents,created_at,updated_at", "sales_orders.order_date", "JOIN sales_order_items ON sales_order_items.id = sales_order_allocations.sales_order_item_id JOIN sales_orders ON sales_orders.id = sales_order_items.sales_order_id"},
 	{"app_config", "config", "app_config", "key,value,type,created_at,updated_at", "", ""},
 }
@@ -536,7 +536,7 @@ func writeReportSummary(ctx context.Context, gormDB *gorm.DB, db *sql.DB, output
 			return errors.New("completed order cost snapshot is unavailable")
 		}
 		var count, revenue, cost, profit int64
-		err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM((SELECT COALESCE(SUM(i.quantity*i.unit_price_cents),0) FROM sales_order_items i WHERE i.sales_order_id=o.id)),0), COALESCE(SUM(o.total_cost_cents),0), COALESCE(SUM(o.net_profit_cents),0) FROM sales_orders o WHERE o.order_date >= ? AND o.order_date < ? AND o.fulfilment_status='completed'`, start, end).Scan(&count, &revenue, &cost, &profit)
+		err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM((SELECT COALESCE(SUM(i.quantity*i.unit_price_cents-i.discount_cents),0) FROM sales_order_items i WHERE i.sales_order_id=o.id)),0), COALESCE(SUM(o.total_cost_cents),0), COALESCE(SUM(o.net_profit_cents),0) FROM sales_orders o WHERE o.order_date >= ? AND o.order_date < ? AND o.fulfilment_status='completed'`, start, end).Scan(&count, &revenue, &cost, &profit)
 		if err != nil {
 			return err
 		}
@@ -606,7 +606,7 @@ func writeReportTrends(ctx context.Context, db *sql.DB, output io.Writer, reques
 		{"print_jobs", "SELECT strftime('%Y-%m',print_date), 'job_count', COUNT(*) FROM print_jobs WHERE print_date >= ? AND print_date < ? GROUP BY 1 ORDER BY 1", "jobs", "recorded"},
 		{"materials", "SELECT strftime('%Y-%m',pj.print_date), 'consumed:'||f.type, SUM(pjf.weight_used) FROM print_job_filaments pjf JOIN print_jobs pj ON pj.id=pjf.print_job_id JOIN filaments f ON f.id=pjf.filament_id WHERE pj.print_date >= ? AND pj.print_date < ? GROUP BY 1,2 ORDER BY 1,2", "g", "recorded"},
 		{"purchases", "SELECT strftime('%Y-%m',purchase_date), 'filament_expenditure', SUM(price) FROM filament_purchases WHERE purchase_date >= ? AND purchase_date < ? GROUP BY 1 ORDER BY 1", "EUR", "recorded"},
-		{"sales", "SELECT strftime('%Y-%m',o.order_date), 'completed_order_revenue', SUM((SELECT COALESCE(SUM(i.quantity*i.unit_price_cents),0) FROM sales_order_items i WHERE i.sales_order_id=o.id)) FROM sales_orders o WHERE o.order_date >= ? AND o.order_date < ? AND o.fulfilment_status='completed' GROUP BY 1 ORDER BY 1", "EUR_cents", "recorded"},
+		{"sales", "SELECT strftime('%Y-%m',o.order_date), 'completed_order_revenue', SUM((SELECT COALESCE(SUM(i.quantity*i.unit_price_cents-i.discount_cents),0) FROM sales_order_items i WHERE i.sales_order_id=o.id)) FROM sales_orders o WHERE o.order_date >= ? AND o.order_date < ? AND o.fulfilment_status='completed' GROUP BY 1 ORDER BY 1", "EUR_cents", "recorded"},
 		{"sales", "SELECT strftime('%Y-%m',order_date), 'completed_order_cost', SUM(total_cost_cents) FROM sales_orders WHERE order_date >= ? AND order_date < ? AND fulfilment_status='completed' GROUP BY 1 ORDER BY 1", "EUR_cents", "snapshot"},
 		{"sales", "SELECT strftime('%Y-%m',order_date), 'completed_order_profit', SUM(net_profit_cents) FROM sales_orders WHERE order_date >= ? AND order_date < ? AND fulfilment_status='completed' GROUP BY 1 ORDER BY 1", "EUR_cents", "snapshot"},
 		{"printers", "SELECT strftime('%Y-%m',print_date), 'job_count:'||COALESCE(printer_id,''), COUNT(*) FROM print_jobs WHERE print_date >= ? AND print_date < ? GROUP BY 1,2 ORDER BY 1,2", "jobs", "recorded"},

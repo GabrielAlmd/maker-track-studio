@@ -263,7 +263,7 @@ func TestSalesOrderUpdateRollsBackForItemPersistenceFailure(t *testing.T) {
 
 	itemWrites := 0
 	callbackName := "test:fail_second_sales_order_update_item"
-	if err := db.Callback().Create().Before("gorm:create").Register(callbackName, func(tx *gorm.DB) {
+	if err := db.Callback().Update().Before("gorm:update").Register(callbackName, func(tx *gorm.DB) {
 		if tx.Statement.Schema != nil && tx.Statement.Schema.Table == "sales_order_items" {
 			itemWrites++
 			if itemWrites == 2 {
@@ -273,7 +273,7 @@ func TestSalesOrderUpdateRollsBackForItemPersistenceFailure(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	defer db.Callback().Create().Remove(callbackName)
+	defer db.Callback().Update().Remove(callbackName)
 
 	payload := salesOrderRequest(channel.ID, []map[string]any{
 		{"model_id": second.ID.String(), "quantity": 3, "unit_price_cents": 1400},

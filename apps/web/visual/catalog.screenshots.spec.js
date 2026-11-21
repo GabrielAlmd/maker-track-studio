@@ -269,6 +269,14 @@ const scenarios = [
     },
   },
   {
+    slug: 'sales-order-confirmed-proposal', route: 'sales/formal', fullPage: true, prepare: async (page) => {
+      await expect(page.getByRole('heading', { name: 'Prototype batch' })).toBeVisible();
+      await expect(page.getByText('PO-104')).toBeVisible();
+      await expect(page.getByText(/78[.,]99/).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Save allocations' })).toHaveCount(0);
+    },
+  },
+  {
     slug: 'sales-order-completed', route: 'sales/so2', fullPage: true, prepare: async (page) => {
       await expect(page.getByRole('heading', { name: 'DIRECT-031' })).toBeVisible();
       await expect(page.getByText('Historical financial values are frozen.')).toBeVisible();

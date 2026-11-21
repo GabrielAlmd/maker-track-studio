@@ -19,6 +19,7 @@ The catalogue covers:
 - the Sales list at wide and compact desktop widths, its active-filter menu, the new Order form at wide, compact and narrow widths, active production allocations, completed locked history and inline Sales Channel creation;
 - the Dashboard and Print Jobs list at 390px width, plus the narrow Add Print Job dialog;
 - the Portuguese (Portugal) new Order workflow, including the optional Sales Channel state;
+- a confirmed proposal order with accepted terms, a customer PO and discounted revenue;
 - backup file selection;
 - the Reports & Data Export page with period, category, and PDF format controls;
 - the spreadsheet migration wizard with automatic mapping and validated preview;

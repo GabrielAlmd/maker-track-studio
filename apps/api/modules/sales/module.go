@@ -15,11 +15,11 @@ type Module struct{}
 var _ modules.Module = Module{}
 
 func (Module) ID() string               { return "sales_orders" }
-func (Module) Version() int             { return 3 }
+func (Module) Version() int             { return 4 }
 func (Module) RequiresCoreVersion() int { return modules.CoreVersion }
 func (Module) EnabledByDefault() bool   { return false }
 func (Module) BackupTables() []string {
-	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations", "business_customers", "business_budgets", "business_budget_operations", "business_proposals"}
+	return []string{"sales_channels", "sales_orders", "sales_order_items", "sales_order_allocations", "business_customers", "business_budgets", "business_budget_operations", "business_proposals", "business_order_revisions"}
 }
 
 func (Module) Migrate(tx *gorm.DB) error {

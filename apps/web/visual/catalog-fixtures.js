@@ -269,6 +269,22 @@ export async function installApiFixtures(pageContext) {
         && (!channel || order.sales_channel_id === channel)
         && (!model || order.items.some((item) => item.model_id === model))));
     }
+    if (apiPath === '/v2/business/orders/formal') body = {
+      proposal_id: 'quote', proposal_revision: 2, purchase_order: 'PO-104',
+      delivery_terms: 'Collection', confirmed_at: '2026-09-18T09:30:00Z',
+    };
+    if (apiPath === '/v2/business/proposals/quote/document') body = {
+      customer_name: 'Sample workshop', terms: { payment_terms: 'Due on collection' },
+    };
+    if (apiPath === '/sales-orders/formal') body = {
+      ...salesOrders[0], id: 'formal', reference: 'Prototype batch', notes: '', workflow_version: 2,
+      legacy_write_supported: false, fulfilment_status: 'confirmed', payment_status: 'unpaid',
+      packaging_cost_cents: 0, shipping_cost_cents: 0, platform_fee_cents: 0,
+      sales_channel_id: null, sales_channel: null,
+      items: [{ ...salesOrders[0].items[0], discount_cents: 501, net_cents: 7899 }],
+      profitability: { state: 'not_calculated', revenue_cents: 7899, additional_costs_cents: 0, margin: { state: 'not_calculated' } },
+    };
+    if (apiPath === '/sales-orders/formal/allocations') body = { sales_order_id: 'formal', items: [] };
     if (apiPath === '/sales-orders/so1') body = salesOrders[0];
     if (apiPath === '/sales-orders/so1/allocations') body = salesOrderAllocations;
     if (apiPath === '/sales-orders/so2') body = salesOrders[1];

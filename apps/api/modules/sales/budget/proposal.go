@@ -199,6 +199,13 @@ func writeProposal(db *gorm.DB, id uuid.UUID, request ProposalCommand) (Proposal
 }
 
 func readProposalForWrite(tx *gorm.DB, id uuid.UUID, expectedRevision int64) (Proposal, error) {
+	var accepted int64
+	if err := tx.Model(&OrderRevision{}).Where("proposal_id = ?", id).Count(&accepted).Error; err != nil {
+		return Proposal{}, err
+	}
+	if accepted > 0 {
+		return Proposal{}, conflict("already_confirmed", "The accepted proposal is frozen")
+	}
 	record, err := readRevision[Proposal](tx, id, 0)
 	if err == nil && record.Revision != expectedRevision {
 		err = stale(record.Revision)

@@ -71,6 +71,19 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 				Command: budget.Command{OperationID: uuid.New()}, Header: budget.Header{Title: "Sample", CustomerID: &customer.ID},
 				Items: []budget.ItemInput{{Name: "Sample item", Quantity: 2, Assumptions: budget.Assumptions{OtherCents: 250}}},
 			}, &estimate, 201)
+			if err := runtime.db.Migrator().DropTable(&budget.OrderRevision{}); err != nil {
+				t.Fatal(err)
+			}
+			for _, statement := range []string{
+				"DROP INDEX idx_sales_orders_accepted_proposal_id",
+				"ALTER TABLE sales_orders DROP COLUMN accepted_proposal_id",
+				"ALTER TABLE sales_order_items DROP COLUMN budget_line_id",
+				"ALTER TABLE sales_order_items DROP COLUMN discount_cents",
+			} {
+				if err := runtime.db.Exec(statement).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
 			if err := runtime.db.Migrator().DropTable(&budget.Proposal{}); err != nil {
 				t.Fatal(err)
 			}
@@ -102,6 +115,17 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 			request("GET", path+"/document?revision=2", nil, &document, 200)
 			if document.ID != proposal.ID || document.Revision != 2 || document.NetCents != 1000 {
 				t.Fatalf("proposal changed after reopening the workspace: %+v", document)
+			}
+			var order budget.OrderRevision
+			request("POST", "/v2/business/orders", budget.ConfirmationCommand{Command: budget.Command{OperationID: uuid.New()}, ProposalID: proposal.ID, ProposalRevision: 2, PurchaseOrder: "Sample PO"}, &order, 201)
+			if err := runtime.Shutdown(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			runtime = open()
+			var accepted budget.OrderRevision
+			request("GET", "/v2/business/orders/"+order.ID.String(), nil, &accepted, 200)
+			if accepted.ProposalID != proposal.ID || accepted.PurchaseOrder != "Sample PO" || accepted.Revision != 1 {
+				t.Fatalf("acceptance after reopening: %+v", accepted)
 			}
 			request("GET", "/desktop-data/export", nil, nil, 200)
 		})
