@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { chromium, expect } from '@playwright/test';
 
 // Test-only generated credentials arrive over stdin, never command arguments.
@@ -9,6 +10,15 @@ const browser = await chromium.launch({
   // globally; the Python client separately verifies its private CA chain.
   args: [`--ignore-certificate-errors-spki-list=${certificatePin}`],
 });
+async function downloadFile(page, button) {
+  const pending = page.waitForEvent('download');
+  await button.click();
+  const download = await pending;
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  return { name: download.suggestedFilename(), content: Buffer.concat(chunks) };
+}
+
 async function exerciseBusinessOperations(page) {
   await page.goto(`${origin}/#/settings?section=features`);
   const feature = page.getByRole('checkbox', { name: 'Business Operations' });
@@ -40,6 +50,9 @@ async function exerciseBusinessOperations(page) {
   await page.getByRole('link', { name: 'View issued document' }).click();
   await expect(page.getByText('Proposal total €24.00')).toBeVisible();
   await expect(page.getByText('Internal estimate', { exact: true })).toHaveCount(0);
+  const proposalFile = await downloadFile(page, page.getByRole('button', { name: 'Download proposal PDF' }));
+  expect(proposalFile.name).toMatch(/^proposal-[a-f0-9-]+-r2\.pdf$/);
+  expect(proposalFile.content.subarray(0, 5).toString()).toBe('%PDF-');
   await page.getByLabel('Customer PO').fill('SYNTH-PO-1');
   await page.getByRole('button', { name: 'Confirm customer acceptance' }).click();
   await expect(page).toHaveURL(/#\/business\/orders\/[a-f0-9-]+$/);
@@ -54,9 +67,21 @@ async function exerciseBusinessOperations(page) {
 
   await page.goto(`${origin}/#/sales/${orderId}?section=history`);
   await expect(page).toHaveURL(/#\/business\/orders\/[a-f0-9-]+\?section=history$/);
-  await expect(page.getByText('Synthetic correction')).toBeVisible();
+  const amendment = page.getByRole('listitem').filter({ hasText: 'Order amended · revision 2' });
+  await expect(amendment.getByText('Synthetic correction', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Previous revision' }).click();
   await expect(page.getByText('SYNTH-PO-1', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Documents', exact: true }).click();
+  await page.getByLabel('Attachment file').setInputFiles({
+    name: 'Synthetic issued proposal.pdf', mimeType: 'application/pdf', buffer: proposalFile.content,
+  });
+  await page.getByRole('button', { name: 'Add attachment' }).click();
+  const attachmentFile = await downloadFile(page, page.getByRole('button', { name: 'Download Synthetic issued proposal.pdf' }));
+  expect(attachmentFile.name).toBe('Synthetic issued proposal.pdf');
+  expect(attachmentFile.content.equals(proposalFile.content)).toBe(true);
+  await page.getByRole('link', { name: 'History', exact: true }).click();
+  const attachmentEvent = page.getByRole('listitem').filter({ hasText: 'Attachment added' });
+  await expect(attachmentEvent.getByText('Synthetic issued proposal.pdf', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Documents', exact: true }).click();
   await page.getByRole('link', { name: 'View accepted proposal' }).click();
   await expect(page.getByText('Proposal total €24.00')).toBeVisible();
