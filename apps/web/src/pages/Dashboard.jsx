@@ -1,3 +1,4 @@
+import StockWarnings from '../components/StockWarnings';
 import PageHeader from '../components/ui/PageHeader';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -165,6 +166,8 @@ function Dashboard() {
         <CostBreakdown stats={costStats} formatCost={costs.value} />
         <InventoryPanel summary={summary} />
       </div>
+
+      <StockWarnings />
 
       <ExpensesPanel expenses={summary?.expenses} />
 

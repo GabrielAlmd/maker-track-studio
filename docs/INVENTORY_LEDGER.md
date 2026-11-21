@@ -63,3 +63,30 @@ After an upgrade or historical import, count each material in milligrams or each
 Use revision 0 for an item with no movements. Supply both count fields explicitly, including for an empty shelf. Omit `quantity`; the server records the signed difference. If the prior on-hand value was 300000 mg, the movement is −49500 mg and verified on-hand becomes 250500 mg. A matching count still records verification. A later recount uses the latest revision. Both the observed total and the signed difference must fit the ledger's safe integer range.
 
 On a lost response, repeat the identical request to retrieve its original receipt, including after restoring a backup. A stale revision returns 409. Refresh the balance and confirm the count against any intervening movements before submitting a new event. Historical purchases, job material rows, and reported production units retain their provenance. Subsequent startup and archive restore preserve posted movements and their IDs without replaying these records.
+
+## Inventory screen and thresholds (INV-07)
+
+Inventory is always available in the core navigation, including with Business disabled.
+Search by brand, type or color. Balances and warnings come from physical ledger
+movements, never purchase or usage counters. Unknown historical stock shows
+recorded changes separately until a physical count verifies the balance.
+Choose **Count and audit** to enter total counted grams, a reason and an operator.
+Counts use the displayed ledger revision; concurrent movements require reloading
+and recounting. Identical retries retain operation identifiers. Movement history
+retains the original entries and loads in sequence in batches of 100.
+
+Set a per-material warning threshold in grams (zero by default). Verified stock
+at or below the threshold warns on Inventory and Dashboard. Print planning also
+compares selected material estimates with available stock, without blocking or
+posting deductions. Reservations remain owned by the future integration contract.
+
+`GET /v2/inventory/materials` returns material identity, `threshold_mg` and the
+existing balance projection. `PUT /v2/inventory/thresholds/:id` accepts
+`{"threshold_mg": 100000}`: a required nonnegative safe integer in milligrams.
+It returns 204, 400 for invalid input, or 404 for an unknown identity.
+
+The additive `filaments.stock_threshold_mg` column defaults to zero. Backup schema
+10 includes thresholds and rejects schema-10 archives missing that column;
+older accepted archives restore with zero thresholds. IDs, financial history and
+ledger data remain unchanged. Older app versions reject schema-10 backups;
+retain a pre-upgrade backup for rollback and restore it with the older binary.

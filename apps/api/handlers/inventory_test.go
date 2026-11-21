@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
@@ -288,5 +289,61 @@ func TestSchemaEightUpgradeAndRestore(t *testing.T) {
 				t.Fatal(replay.Body.String())
 			}
 		}
+	}
+}
+
+func TestInventoryThresholdsAndMaterialProjection(t *testing.T) {
+	r, db := setupTestRouter(t)
+	item := models.Filament{Brand: "Test", TimesUsed: 99, TimesPurchased: 40}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	path := "/v2/inventory/thresholds/" + item.ID.String()
+	for _, input := range []any{map[string]any{}, map[string]any{"threshold_mg": -1}, map[string]any{"threshold_mg": 1.5}, map[string]any{"threshold_mg": 9007199254740992}} {
+		if res := performRequest(t, r, "PUT", path, input); res.Code != 400 {
+			t.Fatal(res.Code, res.Body.String())
+		}
+	}
+	if res := performRequest(t, r, "PUT", path, map[string]any{"threshold_mg": 5000}); res.Code != 204 {
+		t.Fatal(res.Body.String())
+	}
+	var rows []struct {
+		Threshold int64             `json:"threshold_mg"`
+		Balance   inventory.Balance `json:"balance"`
+	}
+	res := performRequest(t, r, "GET", "/v2/inventory/materials", nil)
+	decodeBody(t, res, &rows)
+	if res.Code != 200 || len(rows) != 1 || rows[0].Threshold != 5000 || rows[0].Balance.Verified || rows[0].Balance.OnHand != 0 {
+		t.Fatal(res.Body.String())
+	}
+	opening := posting("filament", item.ID, 4000)
+	opening.Kind = "opening"
+	if res := performRequest(t, r, "POST", adjustments, opening); res.Code != 201 {
+		t.Fatal(res.Body.String())
+	}
+	low := performRequest(t, r, "GET", "/filaments?page=1&page_size=20&low_stock=true", nil)
+	if low.Code != 200 || !strings.Contains(low.Body.String(), item.ID.String()) {
+		t.Fatal(low.Body.String())
+	}
+}
+
+func TestInventoryThresholdBackupRoundTrip(t *testing.T) {
+	source, db := setupDesktopTestRouter(t)
+	item := models.Filament{Brand: "Threshold fixture", StockThresholdMG: 123456}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	archive := performRequest(t, source, "GET", "/desktop-data/export", nil)
+	if archive.Code != 200 {
+		t.Fatal(archive.Body.String())
+	}
+	target, restored := setupDesktopTestRouter(t)
+	response := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "inventory.zip", archive.Body.Bytes())
+	if response.Code != 200 {
+		t.Fatal(response.Body.String())
+	}
+	var got models.Filament
+	if err := restored.First(&got, "id = ?", item.ID).Error; err != nil || got.StockThresholdMG != 123456 {
+		t.Fatal(err, got)
 	}
 }

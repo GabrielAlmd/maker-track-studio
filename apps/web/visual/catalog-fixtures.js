@@ -205,6 +205,8 @@ export async function installApiFixtures(pageContext) {
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     };
 
+    if (apiPath === '/v2/inventory/materials') { await route.fulfill({ json: filaments.map((item, index) => ({ ...item, threshold_mg: 100000, balance: { on_hand: index ? 45000 : 800000, available: index ? 45000 : 800000, reserved: 0, verified: index !== 2, revision: 1 } })) }); return; }
+    if (apiPath.startsWith('/v2/inventory/movements/')) { await route.fulfill({ json: [] }); return; }
     if (request.method() === 'OPTIONS') {
       await route.fulfill({ status: 204, headers: corsHeaders });
       return;

@@ -1,3 +1,4 @@
+import StockWarnings from '../components/StockWarnings';
 import ProductionModal from '../components/ProductionModal';
 import PageHeader from '../components/ui/PageHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -364,6 +365,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
           {filamentRows.length > 0 && <p className="mt-2 text-xs ui-text-secondary">
             {t('printJobs.totalMaterial')}: {filamentRows.reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g · {t('printJobs.verifiedMaterial')}: {filamentRows.filter((row) => row.measurement_state === 'verified').reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g
           </p>}
+          <StockWarnings requirements={filamentRows} />
           <p className="mt-1 text-xs ui-text-muted">{t('printJobs.materialHelp')}</p>
         </div>
 

@@ -8,16 +8,17 @@ import (
 )
 
 type Filament struct {
-	ID             uuid.UUID `gorm:"type:uuid;primaryKey"`
-	Brand          string    `gorm:"not null"`
-	Type           string    `gorm:"not null"`
-	Color          string    `gorm:"not null"`
-	AvgPrice       float64   `gorm:"not null"`
-	PersonalScore  int
-	TimesUsed      int
-	TimesPurchased int
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	StockThresholdMG int64     `gorm:"not null;default:0"`
+	ID               uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Brand            string    `gorm:"not null"`
+	Type             string    `gorm:"not null"`
+	Color            string    `gorm:"not null"`
+	AvgPrice         float64   `gorm:"not null"`
+	PersonalScore    int
+	TimesUsed        int
+	TimesPurchased   int
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 
 	Purchases []FilamentPurchase `gorm:"foreignKey:FilamentID"`
 	PrintJobs []PrintJobFilament `gorm:"foreignKey:FilamentID"`

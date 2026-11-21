@@ -38,6 +38,7 @@ function Layout() {
     { name: t('nav.printJobs'), href: '/print-jobs', icon: Printer },
     { name: t('nav.printers'), href: '/printers', icon: Printer },
     { name: t('nav.models'), href: '/models', icon: Boxes },
+    { name: 'Inventory', href: '/inventory', icon: Package },
     { name: t('nav.filaments'), href: '/filaments', icon: Package },
     { name: t('nav.purchases'), href: '/purchases', icon: ShoppingCart },
     { name: t('nav.reports'), href: '/reports', icon: FileArchive },
