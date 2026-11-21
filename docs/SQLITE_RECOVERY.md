@@ -135,8 +135,13 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share schema version 16 and ZIP format
-version 1. Schema 16 (Sales module version 6) adds the order attachment and
+Current desktop and self-hosted builds share backup schema version 17 and ZIP format
+version 1. Schema 17 (Sales module version 7) adds immutable finance entries
+and uses the existing command history for retry identity. Restore checks order
+ownership, entry sequence, invoice limits, receipt balances and linked
+reversals before replacing the workspace. Earlier backups import with empty
+finance history. Migration preserves historical order IDs and cost snapshots.
+Use the pre-upgrade ZIP and prior binary for rollback. Schema 16 (Sales module version 6) adds the order attachment and
 activity tables. SQLite stores attachment bytes together with their metadata.
 Restore validates the order link, names, size and type limits, SHA-256
 checksums and event references before replacing live data in a single

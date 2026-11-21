@@ -14,6 +14,7 @@ type Backup struct {
 	budgets    []Record
 	proposals  []Proposal
 	orders     []OrderRevision
+	finance    []FinanceEntry
 	operations []operation
 }
 
@@ -28,6 +29,13 @@ func ReadBackup(source *gorm.DB, schemaVersion int) (Backup, error) {
 			}
 		}
 		return data, nil
+	}
+	if schemaVersion < 17 {
+		if requireEmptyTable(source, &FinanceEntry{}) != nil {
+			return data, errInvalidBackup
+		}
+	} else if source.Order("id, revision").Find(&data.finance).Error != nil {
+		return data, errInvalidBackup
 	}
 	for _, table := range budgetTables() {
 		if !source.Migrator().HasTable(table) {
@@ -128,13 +136,16 @@ func (data Backup) validate() error {
 	if err := data.validateOrderHistory(refs); err != nil {
 		return err
 	}
+	for _, entry := range data.finance {
+		refs[revisionKey{"finance", entry.ID, entry.Revision}] = true
+	}
 	usedOperations := make(map[uuid.UUID]bool)
 	for _, op := range data.operations {
 		target, digest, ok := strings.Cut(op.Hash, ":")
 		decoded, err := hex.DecodeString(digest)
 		key := revisionKey{op.Resource, op.ResourceID, op.Revision}
 		wantTarget := op.ResourceID
-		if op.Revision == 1 {
+		if op.Revision == 1 && op.Resource != "finance" {
 			wantTarget = uuid.Nil
 		}
 		if op.ID == uuid.Nil || usedOperations[op.ID] || !ok || err != nil || len(decoded) != 32 ||
@@ -179,6 +190,11 @@ func RestoreBackup(tx *gorm.DB, data Backup) error {
 	}
 	if len(data.orders) > 0 {
 		if err := tx.CreateInBatches(&data.orders, 100).Error; err != nil {
+			return err
+		}
+	}
+	if len(data.finance) > 0 {
+		if err := tx.CreateInBatches(&data.finance, 100).Error; err != nil {
 			return err
 		}
 	}

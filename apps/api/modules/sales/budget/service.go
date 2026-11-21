@@ -72,9 +72,13 @@ func execute[T any](db *gorm.DB, resource string, id uuid.UUID, command Command,
 	if command.OperationID == uuid.Nil {
 		return result, invalid("operation_id", "Provide an operation UUID")
 	}
+	minRevision := int64(1)
+	if resource == "finance" {
+		minRevision = 0
+	}
 	if (id == uuid.Nil && command.ExpectedRevision != 0) ||
-		(id != uuid.Nil && (command.ExpectedRevision < 1 || command.ExpectedRevision >= maxSafeInteger)) {
-		return result, invalid("expected_revision", "Provide the current positive revision for an edit or 0 for a create")
+		(id != uuid.Nil && (command.ExpectedRevision < minRevision || command.ExpectedRevision >= maxSafeInteger)) {
+		return result, invalid("expected_revision", "Provide the current revision for this command")
 	}
 	payload, err := json.Marshal(input)
 	if err != nil {

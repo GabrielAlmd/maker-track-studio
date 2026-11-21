@@ -136,7 +136,7 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 			}
 			// Exercise the upgrade from the previous Sales module with real
 			// proposal/order records and a file-backed SQLite workspace.
-			if err := runtime.db.Migrator().DropTable(&storage.OrderAttachment{}, &storage.OrderEvent{}); err != nil {
+			if err := runtime.db.Migrator().DropTable(&budget.FinanceEntry{}, &storage.OrderAttachment{}, &storage.OrderEvent{}); err != nil {
 				t.Fatal(err)
 			}
 			if err := runtime.db.Exec("UPDATE module_versions SET version = 5 WHERE id = ?", "sales_orders").Error; err != nil {
@@ -152,6 +152,7 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 			}
 			request("PUT", "/features", map[string]bool{"sales_orders": true}, nil, 200)
 			base := "/v2/business/orders/" + order.ID.String()
+			request("POST", base+"/finance", budget.FinanceCommand{Command: budget.Command{OperationID: uuid.New()}, FinanceInput: budget.FinanceInput{Kind: "payment", Reference: "Deposit", Date: "2026-01-02", AmountCents: 303}}, nil, 200)
 			query := url.Values{"name": {"Sample PO.pdf"}, "operation_id": {uuid.NewString()}}
 			content := []byte("%PDF-1.7\nSample PO\n%%EOF")
 			var attachment storage.OrderAttachment
@@ -163,6 +164,11 @@ func TestProposalSQLiteRuntimeUpgrade(t *testing.T) {
 				t.Fatal(err)
 			}
 			runtime = open()
+			var finance budget.FinanceSummary
+			request("GET", base+"/finance", nil, &finance, 200)
+			if finance.Balance != 697 || finance.PaymentStatus != "partially_paid" {
+				t.Fatalf("finance after reopen: %+v", finance)
+			}
 			download := send("GET", base+"/attachments/"+attachment.ID.String(), "", nil, 200)
 			if !bytes.Equal(download.Body.Bytes(), content) {
 				t.Fatal("attachment bytes changed after reopening workspace")

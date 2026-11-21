@@ -242,6 +242,13 @@ const scenarios = [
     prepare: async (page) => await expect(page.getByRole('link', { name: 'Prototype batch' })).toBeVisible(),
   },
   {
+    slug: 'business-order-finance', route: 'business/orders/formal?section=financials', fullPage: true,
+    prepare: async (page) => {
+      await expect(page.getByText('Workshop deposit', { exact: false })).toBeVisible();
+      await page.getByLabel('Entry date', { exact: true }).fill('2026-09-19');
+    },
+  },
+  {
     slug: 'business-order-documents', route: 'business/orders/formal?section=documents', fullPage: true,
     prepare: async (page) => {
       await expect(page.getByRole('link', { name: 'View accepted proposal' })).toBeVisible();

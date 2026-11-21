@@ -277,3 +277,51 @@ SQLite stores attachment bytes, metadata and order activity in the Business
 module. The upgrade introduces Sales module version 6 and backup schema 16
 with the same ZIP format. See [SQLite recovery](SQLITE_RECOVERY.md) for restore
 validation and rollback.
+
+### Record invoices and payments
+
+Open **Financials → Invoices and payments** on a proposal-backed order.
+Enter the external invoice reference, issue date, amount and optional due date.
+You can record an invoice before or after shipping. This is an administrative
+register. Use your invoicing system to issue legal fiscal documents.
+
+Record each receipt as a **Payment**. The outstanding balance is the agreed
+price after discounts minus net receipts. Receipts cover overdue invoiced
+amounts first. An invoice is overdue from the day after its due date (UTC)
+when those amounts exceed net receipts. The estimated proposal profit uses the
+accepted revision's price and estimated costs. Actual profitability uses the
+existing order cost data and completed snapshots.
+
+For a correction, choose **Invoice void** and select the original invoice,
+enter its full amount and give a reason. Record a replacement if appropriate.
+Choose **Refund** to reverse all or part of a particular payment. Original
+entries, reversals and their references remain visible in Financials and their
+events appear in History. Legacy Sales orders retain their existing payment
+labels and frozen profitability.
+
+#### Finance API
+
+`GET /v2/business/orders/:id/finance` returns the ordered entry history,
+payable, invoiced, net paid, outstanding and estimated profit in EUR cents,
+independent invoice/payment statuses and the overdue flag.
+`POST` to the same resource appends one entry. For example, the first receipt
+on an order can be recorded as follows.
+
+```json
+{
+  "operation_id": "5f5d90e0-b52b-4954-a756-2261daa812c6",
+  "expected_revision": 0,
+  "kind": "payment",
+  "reference": "Workshop deposit",
+  "date": "2026-09-19",
+  "amount_cents": 2500
+}
+```
+
+Send the current entry count as the expected revision. Keep the operation UUID
+and payload for retries. Success returns the immutable entry and its revision.
+Dates use YYYY-MM-DD. Only invoices accept an optional `due_date`. Refunds
+and voids require `original_revision` on the same order. Amounts are positive
+integer cents. Malformed entries return 400, missing formal orders return 404
+and stale revisions, excessive payments, invoice totals or reversals return
+409. Writes update the legacy payment projection in the same transaction.
