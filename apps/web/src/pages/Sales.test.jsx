@@ -44,7 +44,7 @@ describe('Sales list', () => {
 
     renderSales();
 
-    expect(await screen.findByRole('link', { name: 'WEB-1042' })).toHaveAttribute('href', '/sales/order-1');
+    expect(await screen.findByRole('link', { name: 'WEB-1042' })).toHaveAttribute('href', '/business/orders/order-1');
     expect(screen.getAllByText('Etsy')).toHaveLength(1);
     expect(screen.getByText('Modular Enclosure')).toBeInTheDocument();
     expect(screen.getByText('1 item · 3 units')).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('Sales list', () => {
     expect(screen.getByRole('status', { name: 'Loading Sales Orders' })).toBeInTheDocument();
     resolveOrders({ items: [], total: 0, page: 1, page_size: 25 });
     expect(await screen.findByText('No orders yet')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create first order' })).toHaveAttribute('href', '/sales/new');
+    expect(screen.getByRole('link', { name: 'Create first order' })).toHaveAttribute('href', '/business/orders/new');
     view.unmount();
   });
 

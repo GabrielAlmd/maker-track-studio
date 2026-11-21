@@ -1,12 +1,15 @@
 # Customers and internal production budgets
 
 Issue #20 adds the Business Operations API for reusable customers and internal
-production estimates. It is available to the local operator through the
-existing Desktop API and authenticated Self-Hosted API. The Business
-Operations screens are tracked in #25. Existing Sales & Orders screens and
-records follow their current workflow.
+production estimates. Enable **Business Operations** in **Settings > Features**
+to use **Customers** and **Budgets** in Desktop or Self-Hosted. The feature
+preference is stored as `sales_orders`. Legacy order records are available from
+**Orders**, and Inventory stays available with Business Operations disabled.
 
 ## Prepare an estimate
+
+Use **Customers > New customer** and **Budgets > New budget** to enter a first
+estimate. The saved budget shows its internal total and can start a proposal.
 
 1. Create a customer with a display name and optional email, phone and address,
    or leave the budget unassigned. Archive a customer to remove it from new

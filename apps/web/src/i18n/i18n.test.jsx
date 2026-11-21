@@ -4,6 +4,8 @@ import Layout from '../components/layout/Layout';
 import i18n from '.';
 import en from './resources/en';
 import ptPT from './resources/pt-PT';
+import businessEn from '../modules/sales/translations/en';
+import businessPtPT from '../modules/sales/translations/pt-PT';
 
 function keys(value, prefix = '') {
   return Object.entries(value).flatMap(([key, child]) => {
@@ -15,6 +17,7 @@ function keys(value, prefix = '') {
 describe('translation resources', () => {
   it('keeps Portuguese and English translation keys in sync', () => {
     expect(keys(ptPT)).toEqual(keys(en));
+    expect(keys(businessPtPT)).toEqual(keys(businessEn));
   });
 
   it.each([
@@ -27,8 +30,8 @@ describe('translation resources', () => {
     expect(screen.getByRole('link', { name: settings })).toBeInTheDocument();
   });
   it.each([
-    ['en', 'Sales & Orders', 'New order', 'Units allocated', 'No sales channel', 'Add Sales Channel'],
-    ['pt-PT', 'Vendas e encomendas', 'Nova encomenda', 'Unidades atribuídas', 'Sem canal de venda', 'Adicionar canal de venda'],
+    ['en', 'Orders', 'New order', 'Units allocated', 'No sales channel', 'Add Sales Channel'],
+    ['pt-PT', 'Encomendas', 'Nova encomenda', 'Unidades atribuídas', 'Sem canal de venda', 'Adicionar canal de venda'],
   ])('provides representative Sales workflow strings in %s', async (locale, title, newOrder, unitsAllocated, noChannel, addChannel) => {
     await i18n.changeLanguage(locale);
     expect(i18n.t('sales.title')).toBe(title);

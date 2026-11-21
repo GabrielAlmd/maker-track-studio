@@ -5,7 +5,7 @@ import { afterEach } from 'vitest';
 import Layout from './Layout';
 import { FeatureContext } from '../../contexts/featureState';
 
-const navigationItems = ['Dashboard', 'Print Jobs', 'Printers', 'Models', 'Filaments', 'Purchases', 'Sales & Orders', 'Settings'];
+const navigationItems = ['Dashboard', 'Print Jobs', 'Printers', 'Models', 'Filaments', 'Purchases', 'Business Operations', 'Settings'];
 
 function renderLayout(initialEntry = '/dashboard', salesOrders = true) {
   const features = { features: { sales_orders: salesOrders }, loading: false };
@@ -30,9 +30,9 @@ describe('compact sidebar', () => {
     navigationItems.forEach((name) => expect(screen.getByRole('link', { name })).toBeInTheDocument());
   });
 
-  it('hides Sales & Orders when the feature is disabled', () => {
+  it('hides Business Operations when the feature is disabled', () => {
     renderLayout('/dashboard', false);
-    expect(screen.queryByRole('link', { name: 'Sales & Orders' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Business Operations' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Print Jobs' })).toBeInTheDocument();
   });
 
@@ -43,7 +43,7 @@ describe('compact sidebar', () => {
     ['/models', 'Models'],
     ['/filaments', 'Filaments'],
     ['/purchases', 'Purchases'],
-    ['/sales', 'Sales & Orders'],
+    ['/business', 'Business Operations'],
     ['/settings', 'Settings'],
   ])('makes %s visibly active for %s', (path, name) => {
     renderLayout(path);

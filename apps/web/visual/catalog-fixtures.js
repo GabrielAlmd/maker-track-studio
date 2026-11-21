@@ -237,6 +237,10 @@ export async function installApiFixtures(pageContext) {
       ['/features', { sales_orders: true }],
       ['/print-jobs/dashboard-summary', dashboardSummary],
       ['/sales/summary', salesSummary],
+      ['/v2/business/proposals', { items: [{
+        id: 'quote', revision: 2, customer_name: 'Sample workshop', terms: { title: 'Prototype batch' },
+        net_cents: 7899, issued_at: '2026-09-17T09:30:00Z',
+      }], has_more: false }],
       ['/filament-types', ['PLA', 'PETG', 'ABS', 'TPU']],
       ['/filament-brands', ['Bambu Lab', 'Prusament']],
       ['/app-config', appConfig],
@@ -270,11 +274,13 @@ export async function installApiFixtures(pageContext) {
         && (!model || order.items.some((item) => item.model_id === model))));
     }
     if (apiPath === '/v2/business/orders/formal') body = {
-      proposal_id: 'quote', proposal_revision: 2, purchase_order: 'PO-104',
+      id: 'formal', revision: 1, proposal_id: 'quote', proposal_revision: 2, purchase_order: 'PO-104',
       delivery_terms: 'Collection', confirmed_at: '2026-09-18T09:30:00Z',
     };
     if (apiPath === '/v2/business/proposals/quote/document') body = {
-      customer_name: 'Sample workshop', terms: { payment_terms: 'Due on collection' },
+      id: 'quote', revision: 2, issued_at: '2026-09-17T09:30:00Z', customer_name: 'Sample workshop',
+      terms: { title: 'Prototype batch', valid_until: '2026-10-30', payment_terms: 'Due on collection' },
+      lines: [{ description: 'Modular Enclosure', quantity: 2, net_cents: 7899 }], net_cents: 7899,
     };
     if (apiPath === '/sales-orders/formal') body = {
       ...salesOrders[0], id: 'formal', reference: 'Prototype batch', notes: '', workflow_version: 2,

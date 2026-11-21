@@ -1,8 +1,11 @@
 # Customer proposals
 
-Create a proposal from an exact [budget revision](BUSINESS_BUDGETS.md) using the
-Business Operations API. Desktop uses the loopback API. Self-Hosted uses the
-authenticated HTTPS proxy. The full Business Operations screens are tracked in #25 and PDF generation in #27.
+Open **Business Operations > Proposals > Choose a budget to quote** or use
+**Create proposal from budget** on a saved [budget](BUSINESS_BUDGETS.md).
+The draft uses that budget revision. Save the draft to see its internal cost
+comparison. After setting a validity date, use **Issue proposal**, then **View
+issued document** to review the customer-facing terms and prices. PDF export
+and attachments are tracked in #27.
 
 1. Select an active customer and a budget revision. A budget assigned to a
    customer can be quoted to that customer. An unassigned budget can be quoted
@@ -112,15 +115,19 @@ the new Sales Order ID, revision 1, customer ID, accepted proposal reference,
 confirmation timestamp, PO and delivery terms. Save the operation UUID for
 retries. A second independent acceptance returns 409.
 
-Open the order in Sales & Orders to view the accepted customer, revision, PO,
-terms and discounted line totals. The proposal document at the accepted revision
-remains the source for the original customer address, price and discount details.
-Confirmation creates unpaid demand in one SQLite transaction. Production,
-Inventory, invoice and payment records are separate workflows.
+In the browser or desktop app, open the issued document and choose **Confirm
+customer acceptance**. This creates the order and opens its **Summary**. Use
+**Production** to assign verified work, **Financials** to review order totals,
+**Documents** to open the exact accepted revision, and **History** to review the
+original acceptance and later corrections. Use **Correct order terms** in
+Summary on confirmed or preparing orders to update the PO or delivery terms.
+Confirmation creates unpaid demand in one SQLite transaction. Production
+assignments leave Inventory reservations, invoice records and payment
+records to their own workflows.
 
 ### Plan production and allocate accepted units
 
-Open **Production plan** on a confirmed or preparing proposal-backed order.
+Open **Production** on a confirmed or preparing proposal-backed order.
 Each line shows the required, planned, accepted, allocated and outstanding
 units. Use **Find run items** to select items for the line's catalog model. Add
 items from several Print Jobs to split the work across jobs or plates. The

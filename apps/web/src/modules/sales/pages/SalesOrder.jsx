@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import PageHeader from '../../../components/ui/PageHeader';
 import HelpTooltip from '../../../components/ui/HelpTooltip';
 import { InlineError, LoadingState } from '../../../components/ui/PageState';
+import OrderHistory from '../components/OrderHistory';
+import OrderAmendment from '../components/OrderAmendment';
 import OrderProduction from '../components/OrderProduction';
 import SalesAllocationEditor from '../components/SalesAllocationEditor';
 import SalesFinancialSummary from '../components/SalesFinancialSummary';
@@ -79,9 +81,14 @@ function fieldError(error, id) {
   return error && <p id={id} className="mt-1 text-xs ui-text-danger" role="alert">{error.message}</p>;
 }
 
+const sections = ['summary', 'production', 'financials', 'documents', 'history'];
+
 function SalesOrder() {
   const { id } = useParams();
   const isNew = !id;
+  const [params] = useSearchParams();
+  const activeSection = sections.includes(params.get('section')) ? params.get('section') : 'summary';
+  const visible = (section) => isNew || activeSection === section;
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [order, setOrder] = useState(null);
@@ -274,7 +281,7 @@ function SalesOrder() {
       const saved = isNew ? await createSalesOrder(formPayload(data)) : await updateSalesOrder(id, formPayload(data));
       await replaceSalesOrderAllocations(saved.id, allocationRequest(prepared, saved.items));
       toast.success(t(isNew ? 'sales.created' : 'sales.updated'));
-      if (isNew) navigate(`/sales/${saved.id}`, { replace: true });
+      if (isNew) navigate(`/business/orders/${saved.id}`, { replace: true });
       else await load();
     } catch (error) {
       setSubmitError(apiMessage(error, t('sales.saveError')));
@@ -321,7 +328,7 @@ function SalesOrder() {
   const removeOrder = async () => {
     if (!window.confirm(t('sales.confirmDelete'))) return;
     setActionLoading(true);
-    try { await deleteSalesOrder(id); toast.success(t('sales.deleted')); navigate('/sales'); }
+    try { await deleteSalesOrder(id); toast.success(t('sales.deleted')); navigate('/business/orders'); }
     catch (error) { setSubmitError(apiMessage(error, t('sales.deleteError'))); setActionLoading(false); }
   };
 
@@ -337,13 +344,22 @@ function SalesOrder() {
   return (
     <div>
       <PageHeader title={isNew ? t('sales.newOrder') : order.reference} description={isNew ? t('sales.newOrderHelp') : t('sales.orderDetailHelp')}>
-        <Link to="/sales" className="page-action page-action-secondary">{t('sales.backToOrders')}</Link>
+        <Link to="/business/orders" className="page-action page-action-secondary">{t('sales.backToOrders')}</Link>
       </PageHeader>
+      {!isNew && <nav aria-label={t('business.orderSections')} className="mb-5 flex flex-wrap gap-2">
+        {sections.map((section) => {
+          const next = new URLSearchParams(params);
+          if (section === 'summary') next.delete('section');
+          else next.set('section', section);
+          return <Link key={section} to={{ search: next.toString() }} aria-current={activeSection === section ? 'page' : undefined}
+            className={`page-action ${activeSection === section ? '' : 'page-action-secondary'}`}>{t(`business.${section}`)}</Link>;
+        })}
+      </nav>}
       {submitError && <div className="mb-5 page-form-error" role="alert">{submitError}</div>}
       {actionLoading && <p className="mb-5 flex items-center gap-2 text-sm ui-text-secondary" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />{t('sales.updatingOrder')}</p>}
       {!isNew && <div className="mb-5 flex flex-wrap items-center gap-4"><SalesOrderStatus fulfilmentStatus={order.fulfilment_status} paymentStatus={order.payment_status} labelled />{order.fulfilment_status === 'completed' && <span className="text-sm ui-text-secondary">{t('sales.completedFrozen')}</span>}</div>}
 
-      {!isNew && acceptance && (
+      {!isNew && acceptance && visible('summary') && (
         <section className="page-panel mb-6 p-5 sm:p-6">
           <h2 className="text-lg font-semibold ui-text-primary">{t('sales.acceptedProposal')}</h2>
           <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -359,8 +375,11 @@ function SalesOrder() {
         </section>
       )}
 
+      {acceptance?.revision.id && visible('summary') && ['confirmed', 'preparing'].includes(order.fulfilment_status) &&
+        <OrderAmendment key={acceptance.revision.revision} revision={acceptance.revision} onSaved={load} />}
+
       {editableDetails ? (
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate hidden={!visible('summary')} className="space-y-6">
           <section className="page-panel p-5 sm:p-6" aria-labelledby="sales-order-details"><h2 id="sales-order-details" className="text-lg font-semibold ui-text-primary">{t('sales.orderDetails')}</h2>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <label className="text-sm ui-text-secondary">{t('sales.reference')}<input {...register('reference')} maxLength="200" aria-invalid={Boolean(errors.reference)} aria-describedby={errors.reference ? 'sales-reference-error' : undefined} className="mt-1 w-full rounded-md border ui-border-default px-3 py-2" />{fieldError(errors.reference, 'sales-reference-error')}</label>
@@ -417,15 +436,29 @@ function SalesOrder() {
         </form>
       ) : (
         <div className="space-y-6">
-          <section className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.orderDetails')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div><dt className="text-xs ui-text-muted">{t('sales.orderDate')}</dt><dd>{formatDate(order.order_date)}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.channel')}</dt><dd>{order.sales_channel?.name ?? t('sales.noChannel')}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.notes')}</dt><dd>{order.notes || t('common.notRecorded')}</dd></div></dl></section>
-          <section className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.items')}</h2><div className="mt-4 divide-y ui-divide-subtle">{watchedItems.map((item, index) => <article key={item.client_id} className="py-5 first:pt-0 last:pb-0"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold ui-text-primary">{item.model_name_snapshot}</h3><p className="text-sm ui-text-muted">{t('sales.itemQuantityAndPrice', { quantity: formatNumber(item.quantity), price: formatCurrencyFromCents(order.items[index].unit_price_cents) })}</p></div><div className="text-right"><span className="block text-xs ui-text-muted">{t('sales.lineTotal')}</span><span className="font-semibold tabular-nums ui-text-primary">{formatCurrencyFromCents(order.items[index].net_cents ?? order.items[index].unit_price_cents * item.quantity)}</span></div></div>{!formalOrder && <SalesAllocationEditor item={item} entry={jobCache[item.model_id]} allocations={allocations[item.client_id]} editable={editableAllocations} error={allocationErrors[item.client_id]} onChange={(jobId, value) => changeAllocation(item.client_id, jobId, value)} onRetry={() => loadJobs(item.model_id, true)} defaultOpen />}</article>)}</div>{allocationErrors.general && <p className="mt-4 page-form-error" role="alert">{allocationErrors.general}</p>}{editableAllocations && <div className="mt-4 flex justify-end"><button type="button" onClick={saveAllocations} disabled={actionLoading} className="page-action">{t('sales.saveAllocations')}</button></div>}</section>
-          {formalOrder && <OrderProduction key={id} orderId={id} />}
-          <section className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.additionalCosts')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[['packaging_cost_cents', 'packaging'], ['shipping_cost_cents', 'shipping'], ['platform_fee_cents', 'platformFee'], ['other_cost_cents', 'other']].map(([name, key]) => <div key={name}><dt className="text-xs ui-text-muted">{t(`sales.${key}`)}</dt><dd>{formatCurrencyFromCents(order[name])}</dd></div>)}</dl></section>
-          <SalesFinancialSummary profitability={order.profitability} fulfilmentStatus={order.fulfilment_status} />
+          <section hidden={!visible('summary')} className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.orderDetails')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div><dt className="text-xs ui-text-muted">{t('sales.orderDate')}</dt><dd>{formatDate(order.order_date)}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.channel')}</dt><dd>{order.sales_channel?.name ?? t('sales.noChannel')}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.notes')}</dt><dd>{order.notes || t('common.notRecorded')}</dd></div></dl></section>
+          <section hidden={!visible('summary') && (formalOrder || !visible('production'))} className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.items')}</h2><div className="mt-4 divide-y ui-divide-subtle">{watchedItems.map((item, index) => <article key={item.client_id} className="py-5 first:pt-0 last:pb-0"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold ui-text-primary">{item.model_name_snapshot}</h3><p className="text-sm ui-text-muted">{t('sales.itemQuantityAndPrice', { quantity: formatNumber(item.quantity), price: formatCurrencyFromCents(order.items[index].unit_price_cents) })}</p></div><div className="text-right"><span className="block text-xs ui-text-muted">{t('sales.lineTotal')}</span><span className="font-semibold tabular-nums ui-text-primary">{formatCurrencyFromCents(order.items[index].net_cents ?? order.items[index].unit_price_cents * item.quantity)}</span></div></div>{!formalOrder && <div hidden={!visible('production')}><SalesAllocationEditor item={item} entry={jobCache[item.model_id]} allocations={allocations[item.client_id]} editable={editableAllocations} error={allocationErrors[item.client_id]} onChange={(jobId, value) => changeAllocation(item.client_id, jobId, value)} onRetry={() => loadJobs(item.model_id, true)} defaultOpen /></div>}</article>)}</div>{allocationErrors.general && <p className="mt-4 page-form-error" role="alert">{allocationErrors.general}</p>}{editableAllocations && visible('production') && <div className="mt-4 flex justify-end"><button type="button" onClick={saveAllocations} disabled={actionLoading} className="page-action">{t('sales.saveAllocations')}</button></div>}</section>
+          {formalOrder && <div hidden={!visible('production')}><OrderProduction key={id} orderId={id} /></div>}
+          <section hidden={!visible('financials')} className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.additionalCosts')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[['packaging_cost_cents', 'packaging'], ['shipping_cost_cents', 'shipping'], ['platform_fee_cents', 'platformFee'], ['other_cost_cents', 'other']].map(([name, key]) => <div key={name}><dt className="text-xs ui-text-muted">{t(`sales.${key}`)}</dt><dd>{formatCurrencyFromCents(order[name])}</dd></div>)}</dl></section>
+          {visible('financials') && <SalesFinancialSummary profitability={order.profitability} fulfilmentStatus={order.fulfilment_status} />}
         </div>
       )}
 
-      {!isNew && order.legacy_write_supported !== false && <section className="page-panel mt-6 p-5 sm:p-6" aria-labelledby="sales-lifecycle"><h2 id="sales-lifecycle" className="text-lg font-semibold ui-text-primary">{t('sales.lifecycle')}</h2><p className="mt-1 text-sm ui-text-muted">{t('sales.lifecycleHelp')}</p><div className="mt-5 grid gap-5 xl:grid-cols-2"><div><h3 className="text-sm font-semibold ui-text-primary">{t('sales.paymentStatus')}</h3><div className="mt-2 flex flex-wrap items-end gap-3"><label className="sr-only" htmlFor="sales-payment-status">{t('sales.paymentStatus')}</label><select id="sales-payment-status" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} className="rounded-md border ui-border-default px-3 py-2">{PAYMENT.map((status) => <option key={status} value={status}>{t(`sales.payment.${status}`)}</option>)}</select><button type="button" onClick={savePayment} disabled={actionLoading || paymentStatus === order.payment_status} className="page-action page-action-secondary">{t('sales.updatePayment')}</button></div></div>{NEXT_STATUS[order.fulfilment_status] && <div><h3 className="text-sm font-semibold ui-text-primary">{t('sales.fulfilmentStatus')}</h3><p className="mt-1 text-xs ui-text-muted">{t('sales.nextStatusHelp', { status: t(`sales.fulfilment.${NEXT_STATUS[order.fulfilment_status]}`) })}</p><button type="button" onClick={() => changeStatus(NEXT_STATUS[order.fulfilment_status])} disabled={actionLoading} className="page-action mt-2">{t('sales.moveToStatus', { status: t(`sales.fulfilment.${NEXT_STATUS[order.fulfilment_status]}`) })}</button></div>}</div>{!['completed', 'cancelled'].includes(order.fulfilment_status) && <div className="mt-5 border-t ui-border-subtle pt-4"><h3 className="text-sm font-semibold ui-text-danger">{t(order.fulfilment_status === 'draft' ? 'sales.dangerZone' : 'sales.cancelOrder')}</h3><p className="mt-1 text-xs ui-text-muted">{t(order.fulfilment_status === 'draft' ? 'sales.dangerZoneHelp' : 'sales.cancelHelp')}</p><div className="mt-3 flex flex-wrap gap-3"><button type="button" onClick={() => changeStatus('cancelled')} disabled={actionLoading} className="rounded-md border ui-border-danger px-4 py-2 text-sm ui-text-danger">{t('sales.cancelOrder')}</button>{order.fulfilment_status === 'draft' && <button type="button" onClick={removeOrder} disabled={actionLoading} className="button-danger rounded-md px-4 py-2 text-sm">{t('sales.deleteOrder')}</button>}</div></div>}</section>}
+      {!isNew && editableDetails && activeSection === 'production' && <section className="page-panel p-6">
+        <p>{t('business.draftProduction')}</p><Link className="page-action mt-3" to="?">{t('business.summary')}</Link>
+      </section>}
+      {!isNew && editableDetails && activeSection === 'financials' &&
+        <SalesFinancialSummary profitability={order.profitability} fulfilmentStatus={order.fulfilment_status} preview={preview} />}
+      {!isNew && activeSection === 'financials' && formalOrder &&
+        <p className="mt-4 text-sm ui-text-secondary">{t('business.formalFinancials')}</p>}
+      {!isNew && activeSection === 'documents' && <section className="page-panel p-6">
+        <h2 className="text-lg font-semibold">{t('business.documents')}</h2>
+        {acceptance?.revision.proposal_id
+          ? <Link className="page-action page-action-secondary mt-3" to={`/business/proposals/${acceptance.revision.proposal_id}?document=${acceptance.revision.proposal_revision}`}>{t('business.viewAcceptedDocument')}</Link>
+          : <p className="mt-3 ui-text-secondary">{t('business.noDocuments')}</p>}
+      </section>}
+      {!isNew && activeSection === 'history' && <OrderHistory key={acceptance?.revision.revision} order={order} latest={acceptance?.revision} />}
+      {!isNew && (visible('summary') || visible('financials')) && order.legacy_write_supported !== false && <section className="page-panel mt-6 p-5 sm:p-6" aria-labelledby="sales-lifecycle"><h2 id="sales-lifecycle" className="text-lg font-semibold ui-text-primary">{t('sales.lifecycle')}</h2><p className="mt-1 text-sm ui-text-muted">{t('sales.lifecycleHelp')}</p><div className="mt-5 grid gap-5 xl:grid-cols-2"><div hidden={!visible('financials')}><h3 className="text-sm font-semibold ui-text-primary">{t('sales.paymentStatus')}</h3><div className="mt-2 flex flex-wrap items-end gap-3"><label className="sr-only" htmlFor="sales-payment-status">{t('sales.paymentStatus')}</label><select id="sales-payment-status" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} className="rounded-md border ui-border-default px-3 py-2">{PAYMENT.map((status) => <option key={status} value={status}>{t(`sales.payment.${status}`)}</option>)}</select><button type="button" onClick={savePayment} disabled={actionLoading || paymentStatus === order.payment_status} className="page-action page-action-secondary">{t('sales.updatePayment')}</button></div></div>{visible('summary') && NEXT_STATUS[order.fulfilment_status] && <div><h3 className="text-sm font-semibold ui-text-primary">{t('sales.fulfilmentStatus')}</h3><p className="mt-1 text-xs ui-text-muted">{t('sales.nextStatusHelp', { status: t(`sales.fulfilment.${NEXT_STATUS[order.fulfilment_status]}`) })}</p><button type="button" onClick={() => changeStatus(NEXT_STATUS[order.fulfilment_status])} disabled={actionLoading} className="page-action mt-2">{t('sales.moveToStatus', { status: t(`sales.fulfilment.${NEXT_STATUS[order.fulfilment_status]}`) })}</button></div>}</div>{visible('summary') && !['completed', 'cancelled'].includes(order.fulfilment_status) && <div className="mt-5 border-t ui-border-subtle pt-4"><h3 className="text-sm font-semibold ui-text-danger">{t(order.fulfilment_status === 'draft' ? 'sales.dangerZone' : 'sales.cancelOrder')}</h3><p className="mt-1 text-xs ui-text-muted">{t(order.fulfilment_status === 'draft' ? 'sales.dangerZoneHelp' : 'sales.cancelHelp')}</p><div className="mt-3 flex flex-wrap gap-3"><button type="button" onClick={() => changeStatus('cancelled')} disabled={actionLoading} className="rounded-md border ui-border-danger px-4 py-2 text-sm ui-text-danger">{t('sales.cancelOrder')}</button>{order.fulfilment_status === 'draft' && <button type="button" onClick={removeOrder} disabled={actionLoading} className="button-danger rounded-md px-4 py-2 text-sm">{t('sales.deleteOrder')}</button>}</div></div>}</section>}
       {showChannelModal && <SalesChannelModal onClose={() => setShowChannelModal(false)} onSaved={(channel) => {
         setChannels((current) => [...current.filter((entry) => entry.id !== channel.id), channel].sort((left, right) => left.name.localeCompare(right.name)));
         setPendingChannelID(channel.id);

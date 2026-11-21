@@ -10,17 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useFeatures } from '../contexts/featureState';
 import { dashboardContributions } from '../modules';
 
-function KpiCard({ label, value, tone, icon, to, note }) {
-  const Icon = icon;
-  return <Link to={to} className="dashboard-kpi-card" data-tone={tone}>
-    <div className="dashboard-kpi-heading">
-      <h2 className="dashboard-kpi-label">{label}</h2>
-      <span className="dashboard-kpi-icon" aria-hidden="true"><Icon className="h-4 w-4" /></span>
-    </div>
-    <p className="dashboard-kpi-value">{value}</p>
-    {note && <p className="dashboard-kpi-note">{note}</p>}
-  </Link>;
-}
+import KpiCard from '../components/ui/KpiCard';
 
 function formatLaborHours(value) {
   const formatted = formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1, fallback: VALUE_FALLBACKS.notRecorded });
@@ -160,7 +150,7 @@ function Dashboard() {
         <KpiCard label={t('dashboard.estimatedCost')} value={costs.value(costStats?.total_cost)} tone="green" icon={Euro} to="/print-jobs" note={costs.note} />
       </section>
 
-      {dashboardContributions(features).map((contribution) => <contribution.Component key={contribution.id} KpiCard={KpiCard} DashboardSectionHeading={DashboardSectionHeading} />)}
+      {dashboardContributions(features).map((contribution) => <contribution.Component key={contribution.id} DashboardSectionHeading={DashboardSectionHeading} />)}
 
       <div className="dashboard-secondary-grid">
         <CostBreakdown stats={costStats} formatCost={costs.value} />

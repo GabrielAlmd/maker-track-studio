@@ -181,14 +181,13 @@ Payment states:
 Payment changes remain independent of fulfilment changes. Partial payments are
 not represented.
 
-## Desktop workflow
+## Desktop and Self-Hosted workflow
 
-Sales & Orders is disabled by default. Enable it in **Settings > Features** to
-show the Sales navigation, Business Dashboard content, and Print Job allocation
-capacity. Disabling the feature hides those presentation surfaces without
-deleting Orders, Channels, allocations, or frozen snapshots. Its routes remain
-registered in a build that includes the module, so existing deep links and API
-calls continue to work.
+Business Operations is disabled by default. Enable it in **Settings > Features** to
+show Business navigation, Dashboard metrics, and Print Job allocation capacity.
+Disabling the feature hides these views while retaining Orders, Channels,
+allocations and frozen snapshots. The installed module continues to register
+its HTTP API routes.
 
 The new Order form supports multiple Items, additional costs, and production
 allocations. A Sales Channel is optional: **No sales channel** is a valid saved
@@ -219,6 +218,20 @@ Content`. If any allocation references it—including a cancelled or completed
 historical allocation—deletion returns `409 Conflict`. The reference check and
 deletion take SQLite's writer lock so a concurrent allocation cannot race with
 deletion. Allocations are neither cascaded nor silently nulled by the API.
+
+### Navigation and compatibility in v1.1.0
+
+**Business Operations** opens the Overview with recent orders and pending
+actions. Open **Orders** for existing records and the direct order form. Use
+[Customers, Budgets](BUSINESS_BUDGETS.md) and [Proposals](BUSINESS_PROPOSALS.md)
+for formal orders. The order detail sections use the same persistent order ID.
+
+Browser and desktop bookmarks under `#/sales`, `#/sales/new` and
+`#/sales/:id` redirect to their matching `#/business/orders` views.
+Business Operations hides its views when disabled, including those bookmarks.
+Inventory is always available. The `sales_orders` preference, Sales API
+endpoints, SQLite schema and backup format are unchanged by this UI work.
+Existing recovery and rollback instructions apply.
 
 ## Money representation
 
