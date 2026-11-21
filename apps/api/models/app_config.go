@@ -1,7 +1,11 @@
 package models
 
 import (
+	"encoding/json"
+	"errors"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -18,4 +22,23 @@ type AppConfig struct {
 
 func (AppConfig) TableName() string {
 	return "app_config"
+}
+
+func LoadFeatureConfig(db *gorm.DB) (map[string]bool, error) {
+	var config AppConfig
+	err := db.Where("key = ?", AppFeaturesConfigKey).First(&config).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var features map[string]bool
+	if err := json.Unmarshal([]byte(config.Value), &features); err != nil {
+		return nil, err
+	}
+	if features == nil {
+		return map[string]bool{}, nil
+	}
+	return features, nil
 }

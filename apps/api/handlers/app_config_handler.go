@@ -49,28 +49,9 @@ func isManagedAppConfigKey(key string) bool {
 	return ok
 }
 
-func loadFeatureConfig(db *gorm.DB) (map[string]bool, error) {
-	var config models.AppConfig
-	err := db.Where("key = ?", models.AppFeaturesConfigKey).First(&config).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return map[string]bool{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var features map[string]bool
-	if err := json.Unmarshal([]byte(config.Value), &features); err != nil {
-		return nil, err
-	}
-	if features == nil {
-		return map[string]bool{}, nil
-	}
-	return features, nil
-}
-
 func GetFeatures(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		stored, err := loadFeatureConfig(db)
+		stored, err := models.LoadFeatureConfig(db)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to retrieve feature settings"})
 			return
@@ -102,7 +83,7 @@ func UpdateFeatures(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc {
 				return
 			}
 		}
-		stored, err := loadFeatureConfig(db)
+		stored, err := models.LoadFeatureConfig(db)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to save feature settings"})
 			return

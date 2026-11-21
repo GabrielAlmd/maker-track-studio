@@ -1,11 +1,11 @@
 package saleshandlers
 
 import (
-	"fmt"
 	"maps"
 	"math"
 	"slices"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	salesdto "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/api"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/google/uuid"
@@ -291,36 +291,35 @@ func validateProductionLinks(tx *gorm.DB, state orderProductionState, links map[
 	if len(sources) == 0 {
 		return nil
 	}
-	otherPlans, err := productionSourceTotals(tx, "sales_production_plans", "units_planned", state.order.ID, sources)
+	otherPlans, err := otherProductionPlans(tx, state.order.ID, sources)
 	if err != nil {
 		return err
 	}
-	otherAllocations, err := productionSourceTotals(tx, "sales_order_allocations", "units_allocated", state.order.ID, sources)
-	if err != nil {
-		return err
+	priorAllocations := make(map[uuid.UUID]int64)
+	for key, a := range state.allocations {
+		priorAllocations[key.source] += int64(a.UnitsAllocated)
 	}
 	for id, source := range sources {
 		if planned[id] > source.UnitsPlanned-otherPlans[id] {
 			return productionConflict("Planning exceeds the run item's remaining planned quantity")
 		}
-		if allocated[id] > source.UnitsAccepted-otherAllocations[id] {
+		if allocated[id] > source.UnitsAccepted || allocated[id]-priorAllocations[id] > source.UnitsAvailable {
 			return productionConflict("Allocation exceeds the run item's remaining verified accepted units")
 		}
 	}
 	return nil
 }
 
-func productionSourceTotals(tx *gorm.DB, table, column string, orderID uuid.UUID, sources map[uuid.UUID]salesdto.ProductionSource) (map[uuid.UUID]int64, error) {
+func otherProductionPlans(tx *gorm.DB, orderID uuid.UUID, sources map[uuid.UUID]salesdto.ProductionSource) (map[uuid.UUID]int64, error) {
 	var rows []struct {
 		PrintRunItemID uuid.UUID
 		Units          int64
 	}
-	// Table and column names come from the two fixed call sites.
-	err := tx.Table(table+" AS link").Select(fmt.Sprintf("link.print_run_item_id, SUM(link.%s) AS units", column)).
+	err := tx.Table("sales_production_plans AS link").Select("link.print_run_item_id, SUM(link.units_planned) AS units").
+		Where("orders.fulfilment_status <> ?", storage.SalesOrderFulfilmentCancelled).
 		Joins("JOIN sales_order_items AS line ON line.id = link.sales_order_item_id").
 		Joins("JOIN sales_orders AS orders ON orders.id = line.sales_order_id").
-		Where("link.print_run_item_id IN ? AND orders.id <> ? AND orders.fulfilment_status <> ?",
-			slices.Collect(maps.Keys(sources)), orderID, storage.SalesOrderFulfilmentCancelled).
+		Where("link.print_run_item_id IN ? AND orders.id <> ?", slices.Collect(maps.Keys(sources)), orderID).
 		Group("link.print_run_item_id").Scan(&rows).Error
 	totals := make(map[uuid.UUID]int64, len(rows))
 	for _, row := range rows {
@@ -338,6 +337,17 @@ func saveProductionLinks(tx *gorm.DB, state orderProductionState, links map[prod
 		}
 	}
 	for key, allocation := range state.allocations {
+		next := links[key].UnitsAllocated
+		if next < int64(allocation.UnitsAllocated) {
+			history, err := inventory.OutputLots(tx, []uuid.UUID{key.source})
+			if err != nil {
+				return err
+			}
+			line := projectAllocation(allocation, "", history[key.source])
+			if next < line.Reserved+line.Shipped || next == 0 && len(line.Events) > 0 {
+				return productionConflict("This allocation has fulfilment history or committed stock")
+			}
+		}
 		if links[key].UnitsAllocated == 0 {
 			if err := tx.Delete(&allocation).Error; err != nil {
 				return err

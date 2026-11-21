@@ -199,3 +199,40 @@ func FinishedProducts(db *gorm.DB) ([]FinishedProduct, error) {
 	}
 	return rows, err
 }
+
+// OutputLot carries the current physical availability and supporting receipts.
+type OutputLot struct {
+	Balance
+	Movements []Movement
+}
+
+// OutputLots reads all requested lots in one query. Older production without
+// an output credit has no verified lot and cannot be reserved.
+func OutputLots(db *gorm.DB, items []uuid.UUID) (map[uuid.UUID]OutputLot, error) {
+	keys := make([]string, 0, len(items))
+	for _, item := range items {
+		keys = append(keys, outputKey(item))
+	}
+	var rows []Movement
+	if len(keys) > 0 {
+		if err := db.Where("source_key IN ?", keys).Order("sequence").Find(&rows).Error; err != nil {
+			return nil, err
+		}
+	}
+	lots := make(map[uuid.UUID]OutputLot)
+	for _, row := range rows {
+		id, err := uuid.Parse(strings.TrimPrefix(row.SourceKey, "output:"))
+		if err != nil {
+			return nil, ErrInvalid
+		}
+		lot := lots[id]
+		if err := lot.Balance.apply(row.Posting); err != nil {
+			return nil, err
+		}
+		lot.Verified = lot.Verified || row.Kind == "output"
+		lot.Revision = row.Sequence
+		lot.Movements = append(lot.Movements, row)
+		lots[id] = lot
+	}
+	return lots, nil
+}

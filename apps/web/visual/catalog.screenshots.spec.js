@@ -291,6 +291,7 @@ const scenarios = [
       await page.getByRole('link', { name: 'Production', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Production plan' })).toBeVisible();
       await expect(page.getByText('Order production: In progress')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Record event' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Refresh production' })).toBeEnabled();
       await expect(page.getByText('Outstanding', { exact: true })).toBeVisible();
       await expect(page.getByText(/Run cc9ab041/)).toBeVisible();
