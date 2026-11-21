@@ -144,8 +144,12 @@ Keep previous patch-release work out of the new release view unless explicitly i
 - Do not start a blocked task; prefer one `In Progress` coding task at a time for a solo maintainer.
 - Use `.agents/prompts/implement-issue.md` when executing a ticket.
 - PRs target `develop`; require review and applicable CI, regression and compatibility checks.
+- Use focused commit subjects in the existing `type: concise imperative summary` style (for example, `fix: validate filament cost`). Keep commits coherent and avoid filler messages.
+- Give each PR a concise title in the same style that describes its overall outcome; use a scope when useful, for example `feat(inventory): track material stock`. Write a proportionate description covering the problem, resulting behavior, relevant compatibility or migration impact, and validation performed or still pending. Link the issue and report checks honestly.
+- Squash merge issue PRs into `develop` as required by its squash-only PR rule. Before merging, ensure the squash commit title summarizes the entire PR and its body retains useful context, issue references and any material compatibility notes; do not concatenate unrelated commit messages. Do not merge without authorization.
 - Only after the issue is verified and merged into `develop` should it be closed/marked `Done`. Do not rely on automatic closure from a non-default base branch.
 - Release to `main` only after all committed release scope has been integrated and end-to-end release validation passes.
+- For an approved release PR from `develop` into `main`, select **Squash and merge**. Summarize the release in the squash commit and tag the resulting commit on `main` after its checks pass and publication is authorized. See `docs/development/branching-and-releases.md`.
 - Never auto-merge into `main` or publish releases without explicit approval.
 
 ## 9. Honest issue/checklist synchronization

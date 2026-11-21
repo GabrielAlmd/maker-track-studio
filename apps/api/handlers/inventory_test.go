@@ -9,6 +9,7 @@ import (
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -184,6 +185,108 @@ func TestInventoryValidation(t *testing.T) {
 		tc.edit(&p)
 		if res := performRequest(t, r, http.MethodPost, adjustments, p); res.Code != tc.code {
 			t.Fatal(res.Body.String())
+		}
+	}
+}
+
+func TestPhysicalCountAfterRecordedMovements(t *testing.T) {
+	r, db := setupTestRouter(t)
+	item := models.Filament{}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	initial := performRequest(t, r, "POST", adjustments, posting("filament", item.ID, 1000))
+	var prior inventory.Receipt
+	decodeBody(t, initial, &prior)
+	if initial.Code != 201 || prior.Balance.Verified {
+		t.Fatal(initial.Body.String())
+	}
+	req := map[string]any{"kind": "count", "operation_id": uuid.New(), "source_id": uuid.New(),
+		"item_type": "filament", "item_id": item.ID, "actor": "operator", "reason": "empty shelf"}
+	for _, tc := range []struct {
+		revision, counted any
+		status            int
+	}{
+		{nil, 0, 400}, {prior.Sequence, nil, 400}, {prior.Sequence, -1, 400}, {0, 0, 409},
+	} {
+		req["expected_revision"], req["counted_quantity"] = tc.revision, tc.counted
+		if res := performRequest(t, r, "POST", adjustments, req); res.Code != tc.status {
+			t.Fatal(res.Code, res.Body.String())
+		}
+	}
+	req["expected_revision"], req["counted_quantity"] = prior.Sequence, 0
+	first := performRequest(t, r, "POST", adjustments, req)
+	var counted inventory.Receipt
+	decodeBody(t, first, &counted)
+	if first.Code != 201 || counted.Quantity != -1000 || counted.Balance.OnHand != 0 || !counted.Balance.Verified {
+		t.Fatal(first.Body.String())
+	}
+	if res := performRequest(t, r, "POST", adjustments, posting("filament", item.ID, 25)); res.Code != 201 {
+		t.Fatal(res.Body.String())
+	}
+	target, targetDB := setupTestRouter(t)
+	archive := performRequest(t, r, "GET", "/desktop-data/export", nil)
+	for i := 0; i < 2; i++ {
+		res := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "count.zip", archive.Body.Bytes())
+		if res.Code != 200 {
+			t.Fatal(res.Body.String())
+		}
+		retry := performRequest(t, target, "POST", adjustments, req)
+		if retry.Code != 201 || retry.Body.String() != first.Body.String() {
+			t.Fatal(retry.Body.String())
+		}
+	}
+	req["counted_quantity"] = 10
+	if res := performRequest(t, target, "POST", adjustments, req); res.Code != 409 {
+		t.Fatal(res.Body.String())
+	}
+	if err := db.Model(&inventory.Movement{}).Where("kind = ?", "count").Update("counted_quantity", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	corrupt := performRequest(t, r, "GET", "/desktop-data/export", nil)
+	res := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "invalid.zip", corrupt.Body.Bytes())
+	if res.Code != 400 {
+		t.Fatal(res.Body.String())
+	}
+	b, err := inventory.Availability(targetDB, "filament", item.ID)
+	if err != nil || !b.Verified || b.OnHand != 25 {
+		t.Fatalf("%+v %v", b, err)
+	}
+}
+
+func TestSchemaEightUpgradeAndRestore(t *testing.T) {
+	r, db := setupTestRouter(t)
+	item := models.Filament{}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	old := posting("filament", item.ID, 500)
+	original := performRequest(t, r, "POST", adjustments, old)
+	if original.Code != 201 {
+		t.Fatal(original.Body.String())
+	}
+	for _, column := range []string{"counted_quantity", "expected_revision"} {
+		if err := db.Migrator().DropColumn(&inventory.Movement{}, column); err != nil {
+			t.Fatal(err)
+		}
+	}
+	archive := performRequest(t, r, "GET", "/desktop-data/export", nil)
+	legacy := rewriteBackupSchemaVersion(t, archive.Body.Bytes(), 8)
+	target, restored := setupTestRouter(t)
+	for i := 0; i < 2; i++ {
+		res := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "schema8.zip", legacy)
+		if res.Code != 200 {
+			t.Fatal(res.Body.String())
+		}
+		assertStock(t, restored, item.ID, 500)
+		if err := db.AutoMigrate(&inventory.Movement{}); err != nil {
+			t.Fatal(err)
+		}
+		for _, router := range []*gin.Engine{r, target} {
+			replay := performRequest(t, router, "POST", adjustments, old)
+			if replay.Code != 201 || replay.Body.String() != original.Body.String() {
+				t.Fatal(replay.Body.String())
+			}
 		}
 	}
 }

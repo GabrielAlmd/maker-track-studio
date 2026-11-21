@@ -3,8 +3,8 @@
 `develop` is the integration branch; `main` contains validated releases. Fork the
 repository, branch from current `develop` as `feature/name` or `fix/name`, and
 open a pull request to `develop`. Resolve review conversations and pass CI.
-Maintainers squash merge contributions; neither permanent branch accepts direct
-pushes. Delete temporary branches after integration when appropriate.
+Maintainers use **Squash and merge** for contributions. Both permanent branches
+require pull requests. Delete temporary branches after integration when appropriate.
 
 ```mermaid
 flowchart LR
@@ -22,9 +22,11 @@ flowchart LR
    requires preflight, browser and visual tests, Windows installer and archive
    smoke tests, Linux archive smoke tests, and native self-hosted AMD64 and ARM64
    image scans and smoke tests. Complete manual qualification in PUBLIC_RELEASE.
-3. A maintainer approves the version for publication and merges with a **merge
-   commit**, preserving ancestry. Fetch `main`, verify the merge commit and its
-   checks, and create an annotated `vMAJOR.MINOR.PATCH` tag on that commit;
+3. After approval for publication, a maintainer selects **Squash and merge**.
+   Use a title that identifies the release and a description that summarizes its
+   changes, compatibility impact and validation. Fetch `main`, verify the
+   resulting squash commit and its checks, and create an annotated
+   `vMAJOR.MINOR.PATCH` tag on that commit;
    prerelease suffixes are supported. Push the tag only after authorization.
 4. Monitor Desktop CI and Release. It builds artifacts from the tagged commit,
    scans and publishes the same self-hosted image archives, then publishes the
@@ -37,7 +39,7 @@ flowchart LR
 flowchart LR
   D[develop] --> P[PR to main]
   P --> V[Release validation and approval]
-  V -->|merge commit| M[main]
+  V -->|squash| M[main]
   M --> T[Version tag]
   T --> B[Build and validate]
   B --> I[Publish scanned images]
@@ -76,12 +78,12 @@ administrator should configure GitHub Actions as the source for each context:
   only; retain existing required preflight and LAN checks.
 - **main**: active, target default branch, restrict deletion and force pushes,
   require PRs, zero approvals, resolve conversations, disable linear history,
-  permit merge commits, require branch up to date. Require existing preflight,
+  allow squash only, require branch up to date. Require existing preflight,
   dependency, LAN and visual contexts plus `Release validation gate` and
   `Only develop can merge to main`. Verify exact displayed context names from
-  actual runs. Remove squash as an allowed method for this branch.
+  actual runs.
 - Restrict release tag creation, update and deletion to trusted maintainers.
-  Repository-wide merge methods must allow both squash and merge commits.
+  Enable squash merging at repository level for both protected branches.
 
 A skipped job can report success as a required check; the release gate itself
 runs unconditionally on main PRs and rejects any non-success dependency. A

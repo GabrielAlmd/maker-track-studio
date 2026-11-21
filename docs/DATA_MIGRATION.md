@@ -56,13 +56,11 @@ workflow uses the existing tables and UUID hooks, so there is no schema or ZIP
 backup format change. Export a normal desktop backup before a large migration
 and retain the original source file for recovery and audit purposes.
 
-## Planned production upgrade (v1.1.0)
+## Inventory after migration
 
-Issue #9 adds a [production migration design](architecture/PRODUCTION_V1_1.md).
-Issue #10 adds nullable material provenance fields and backup schema 5, without
-new CSV/XLSX fields. Historical unit counts must retain their IDs and provenance; they
-will not automatically become verified physical stock. Future schema and backup
-implementation is gated on BUS-01 agreement and the INV-06 compatibility tests.
+Imported purchases are historical financial records. New imported Print Jobs retain reported production units and unverified material usage. Neither establishes a physical quantity. Updating a purchase that already posted stock applies only its change. Structured production runs retain their lifecycle and cannot be overwritten by a historical job import.
+
+After import, weigh remaining filament and count finished units. Record each observed total and its current item revision using the [physical count procedure](INVENTORY_LEDGER.md#physical-stock-reconciliation). Until the first count or explicit opening balance, recorded changes carry `verified: false`, including when the displayed total is zero. Back up the reconciled workspace to retain its verification history.
 
 The [BUS-01 migration strategy](architecture/BUSINESS_V1_1.md#migration-backups-and-rollback)
 preserves Sales IDs, allocations, statuses and frozen financial snapshots.

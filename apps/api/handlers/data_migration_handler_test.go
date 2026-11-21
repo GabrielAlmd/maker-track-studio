@@ -199,6 +199,11 @@ func TestDataMigrationImportsRepresentativeXLSXWithRelationships(t *testing.T) {
 	if err := db.First(&job).Error; err != nil {
 		t.Fatal(err)
 	}
+	var usage models.PrintJobFilament
+	if err := db.First(&usage, "print_job_id = ?", job.ID).Error; err != nil || usage.PrintRunID == nil || usage.MeasurementState != "legacy_unverified" {
+		t.Fatalf("legacy material classification: %+v %v", usage, err)
+	}
+	assertStock(t, db, usage.FilamentID, 0)
 	if job.PrinterID == nil || job.ModelID == nil || job.PrinterCost == nil {
 		t.Fatalf("relationships or cost snapshot missing: %#v", job)
 	}
@@ -291,5 +296,29 @@ func TestDataMigrationRollsBackOnWriteFailure(t *testing.T) {
 	var printers int64
 	if err := db.Model(&models.Printer{}).Count(&printers).Error; err != nil || printers != 0 {
 		t.Fatalf("transaction did not roll back printer: %d %v", printers, err)
+	}
+}
+
+func TestHistoricalImportUpdatesOnlyPostedPurchaseContribution(t *testing.T) {
+	router, db := setupTestRouter(t)
+	f := models.Filament{Brand: "Example", Type: "PLA", Color: "Black"}
+	if err := db.Create(&f).Error; err != nil {
+		t.Fatal(err)
+	}
+	res := performRequest(t, router, "POST", "/filament-purchases", map[string]any{
+		"filament_id": f.ID, "price": 20, "amount": 1, "purchase_date": "2026-10-02T00:00:00Z",
+	})
+	if res.Code != 201 {
+		t.Fatal(res.Body.String())
+	}
+	plan := migrationPlan(map[string]any{"section": "purchases", "source": "history", "duplicate_strategy": "update"})
+	// The first row corrects an already posted purchase. The second is historical.
+	file := []byte("filament,price,amount,purchase_date\nExample | PLA | Black,25,0.75,2026-10-02\nExample | PLA | Black,20,1,2025-10-02\n")
+	for i := 0; i < 2; i++ {
+		res = performMigrationRequest(t, router, "/data-migration/import", "history.csv", file, plan)
+		if res.Code != 201 {
+			t.Fatal(res.Body.String())
+		}
+		assertStock(t, db, f.ID, 750000)
 	}
 }

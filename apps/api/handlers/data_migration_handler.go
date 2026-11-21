@@ -163,6 +163,7 @@ type preparedPrintJob struct {
 }
 
 type migrationLookups struct {
+	structuredJobs map[uuid.UUID]bool
 	printers       map[string][]uuid.UUID
 	activePrinters map[string][]uuid.UUID
 	filaments      map[string][]uuid.UUID
@@ -734,6 +735,9 @@ func validateMigrationRow(section string, rowNumber int, values map[string]strin
 		prepared := preparedPrintJob{Job: job, FilamentID: filamentID, FilamentWeight: weight}
 		key := printJobLookupKey(job.PrinterID, modelID, date)
 		row.prepared, duplicate = prepared, lookups.jobs[key]
+		if strategy == "update" && len(duplicate) > 0 && lookups.structuredJobs[duplicate[0]] {
+			issue("", "production_workflow", "Choose Skip to preserve the existing production runs")
+		}
 		if len(row.Issues) == 0 {
 			addLookup(lookups.jobs, key, selectedMigrationID(job.ID, duplicate, strategy))
 		}
@@ -766,7 +770,7 @@ func selectedMigrationID(created uuid.UUID, duplicates []uuid.UUID, strategy str
 }
 
 func loadMigrationLookups(db *gorm.DB) (*migrationLookups, error) {
-	lookups := &migrationLookups{printers: map[string][]uuid.UUID{}, activePrinters: map[string][]uuid.UUID{}, filaments: map[string][]uuid.UUID{}, models: map[string][]uuid.UUID{}, purchases: map[string][]uuid.UUID{}, jobs: map[string][]uuid.UUID{}}
+	lookups := &migrationLookups{structuredJobs: map[uuid.UUID]bool{}, printers: map[string][]uuid.UUID{}, activePrinters: map[string][]uuid.UUID{}, filaments: map[string][]uuid.UUID{}, models: map[string][]uuid.UUID{}, purchases: map[string][]uuid.UUID{}, jobs: map[string][]uuid.UUID{}}
 	var printers []models.Printer
 	if err := db.Find(&printers).Error; err != nil {
 		return nil, err
@@ -803,6 +807,7 @@ func loadMigrationLookups(db *gorm.DB) (*migrationLookups, error) {
 		return nil, err
 	}
 	for _, item := range jobs {
+		lookups.structuredJobs[item.ID] = item.WorkflowVersion > 1
 		addLookup(lookups.jobs, printJobLookupKey(item.PrinterID, item.ModelID, item.PrintDate), item.ID)
 	}
 	return lookups, nil
@@ -891,6 +896,10 @@ func commitMigration(db *gorm.DB, preview migrationPreviewResponse) (map[string]
 						if err := tx.Model(&models.FilamentPurchase{}).Where("id = ?", row.existing).Updates(map[string]any{"filament_id": value.FilamentID, "price": value.Price, "amount": value.Amount, "purchase_date": value.Date}).Error; err != nil {
 							return err
 						}
+						purchase.ID = row.existing
+						if err := syncPurchaseStock(tx, purchase, false); err != nil {
+							return err
+						}
 					} else if err := tx.Create(&purchase).Error; err != nil {
 						return err
 					}
@@ -902,6 +911,9 @@ func commitMigration(db *gorm.DB, preview migrationPreviewResponse) (map[string]
 						var current models.PrintJob
 						if err := tx.First(&current, "id = ?", row.existing).Error; err != nil {
 							return err
+						}
+						if current.WorkflowVersion > 1 {
+							return errors.New("historical import cannot replace a production workflow")
 						}
 						job.ID, job.PrinterID, job.PrinterCost, job.CreatedAt = current.ID, current.PrinterID, current.PrinterCost, current.CreatedAt
 						if !row.provided["model"] {
@@ -937,6 +949,9 @@ func commitMigration(db *gorm.DB, preview migrationPreviewResponse) (map[string]
 						if err := tx.Create(&usage).Error; err != nil {
 							return err
 						}
+					}
+					if err := models.SyncLegacyProduction(tx, job); err != nil {
+						return err
 					}
 				}
 				counts[section.Section]++

@@ -190,6 +190,10 @@ Check for:
 
 Fix any problems found.
 
+## Commits and pull requests
+
+Before pushing, validate commit subjects and the PR title and description against the commit and PR conventions in section 8 of `.agents/prompts/plan-release.md`. Use `.github/PULL_REQUEST_TEMPLATE.md` and distinguish executed checks from pending CI.
+
 ## 8. Final report
 
 When complete, provide a concise implementation report containing:

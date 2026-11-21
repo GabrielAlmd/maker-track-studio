@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/google/uuid"
 )
@@ -57,5 +58,53 @@ func TestInitDBSQLiteSeedsDefaultsAndSupportsUUIDInserts(t *testing.T) {
 
 	if filament.ID == uuid.Nil {
 		t.Fatal("expected filament UUID to be generated before insert")
+	}
+}
+
+func TestInventoryUpgradeFromVersionTwoOnRepeatedStartup(t *testing.T) {
+	t.Setenv("SQLITE_PATH", filepath.Join(t.TempDir(), "inventory.db"))
+	db, err := initSQLiteDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := models.Filament{TimesPurchased: 10}
+	if err := db.Create(&f).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, column := range []string{"counted_quantity", "expected_revision"} {
+		if err := db.Migrator().DropColumn(&inventory.Movement{}, column); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Exec("UPDATE module_versions SET version = 2 WHERE id = 'core_inventory'").Error; err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		conn, err := db.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.Close(); err != nil {
+			t.Fatal(err)
+		}
+		db, err = initSQLiteDB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var version int
+		if err := db.Raw("SELECT version FROM module_versions WHERE id = 'core_inventory'").Scan(&version).Error; err != nil || version != 3 {
+			t.Fatal(version, err)
+		}
+		b, err := inventory.Availability(db, "filament", f.ID)
+		if err != nil || b != (inventory.Balance{}) {
+			t.Fatal(b, err)
+		}
+	}
+	conn, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
