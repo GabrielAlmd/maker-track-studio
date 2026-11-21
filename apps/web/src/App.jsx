@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Layout from './components/layout/Layout';
+import Inventory from './pages/Inventory';
 import Dashboard from './pages/Dashboard';
 import Models from './pages/Models';
 import Filaments from './pages/Filaments';
@@ -29,6 +30,7 @@ function AppContent() {
         <Route path="/" element={<Layout />}>
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="models" element={<Models />} />
+          <Route path="inventory" element={<Inventory />} />
           <Route path="filaments" element={<Filaments />} />
           <Route path="print-jobs" element={<PrintJobs />} />
           <Route path="printers" element={<Printers />} />

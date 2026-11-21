@@ -26,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 9
+	desktopDataSchemaVersion   = 10
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -167,6 +167,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 		}
 		if manifest.SchemaVersion >= 9 && (!sourceDB.Migrator().HasColumn(&inventory.Movement{}, "counted_quantity") || !sourceDB.Migrator().HasColumn(&inventory.Movement{}, "expected_revision")) {
 			c.JSON(400, gin.H{"error": "Backup is missing inventory count history"})
+			return
+		}
+		if manifest.SchemaVersion >= 10 && !sourceDB.Migrator().HasColumn(&models.Filament{}, "stock_threshold_mg") {
+			c.JSON(400, gin.H{"error": "Backup is missing inventory thresholds"})
 			return
 		}
 		backupData, err := installed.ValidateBackups(sourceDB, manifest.SchemaVersion)
@@ -464,6 +468,11 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 	appConfigs = managedConfigs
 	if err := sourceDB.Order("created_at asc").Find(&filaments).Error; err != nil {
 		return err
+	}
+	for _, filament := range filaments {
+		if filament.StockThresholdMG < 0 || filament.StockThresholdMG > inventory.MaxQuantity {
+			return fmt.Errorf("invalid inventory threshold")
+		}
 	}
 	if err := sourceDB.Order("created_at asc").Find(&modelsList).Error; err != nil {
 		return err
