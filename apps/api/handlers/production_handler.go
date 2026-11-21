@@ -307,6 +307,11 @@ func WriteProduction(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc {
 						}
 					}
 				}
+				if prior.ID != uuid.Nil && prior.Status != run.Status {
+					if err := installed.RecordRunTransition(tx, run); err != nil {
+						return err
+					}
+				}
 				if err := saveRunMaterials(tx, job.ID, run, prior, command.Materials); err != nil {
 					return err
 				}

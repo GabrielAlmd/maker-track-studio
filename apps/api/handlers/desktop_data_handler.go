@@ -26,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 15
+	desktopDataSchemaVersion   = 16
 	desktopDataMaxImportSize   = 64 << 20
 )
 

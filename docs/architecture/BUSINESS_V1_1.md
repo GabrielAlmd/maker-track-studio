@@ -323,10 +323,13 @@ change in #19. Later implementation must:
    supported schema 1–4 archives using the same migrations; schemas 1–3 have no
    Sales rows. Validate orphan links, duplicate source operations, monetary
    ranges and snapshots before replacing the target in one transaction.
-6. #27 must include attachment bytes and metadata in backup validation/restore,
-   with bounded type/size, safe generated object IDs, checksum and path traversal
-   checks. Stage files before committing references; a failed restore must keep
-   old data/files usable. This is an implementation gate, not an existing ability.
+6. #27 stores attachments as managed SQLite BLOBs in backup schema 16.
+   The attachment data and its owner commit together with no separate filesystem
+   objects. Upload and restore check safe names, type, size and SHA-256
+   checksums. Legacy archives restore with empty new tables. The activity
+   timeline reads existing order revisions and Inventory movements by reference.
+   Production transitions and plan changes append module-owned events in
+   the originating transaction.
 7. Never replay historical orders/jobs/purchases to seed physical balances.
    INV-06 reconciliation establishes verified opening stock and tracks already
    represented sources; adoption cannot also mint those goods as fresh output.

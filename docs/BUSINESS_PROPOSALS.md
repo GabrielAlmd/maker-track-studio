@@ -218,3 +218,62 @@ Legacy writes on those orders return 409. For a legacy draft PUT, include the
 existing item `id` on retained lines. ID-less legacy requests match model
 lines in their original order. Release affected allocations before removing a
 line, changing its model or reducing quantity below the assigned units.
+
+## Proposal PDFs and order documents
+
+Open an issued proposal and select **Download proposal PDF**. A confirmed
+order also provides the accepted revision under **Documents**. Desktop opens a
+native Save dialog. Self-Hosted downloads the file through the browser. The
+PDF uses the interface language and prints the frozen customer details, unit
+prices, applied line and proposal discounts, net total, expiry and agreed
+delivery and payment terms. You can export an earlier issued revision even
+after issuing a replacement. Budget assumptions, costs, profit, margin,
+markup and internal notes are excluded. Check your customer-facing descriptions
+and terms before sharing the PDF.
+
+Under **Documents**, attach a PDF, PNG or JPEG to keep purchase orders,
+collection evidence and other supporting files with the order. Each file can
+be up to 5 MiB, with up to 50 attachments on an order and 32 MiB of attachment
+data across the workspace. Images can contain up to 16 million pixels. Files
+are available as downloads. ZIP backups include the original attachment bytes.
+Deleting a legacy draft also deletes its attachments.
+
+Open **History** for the accepted proposal revision, amendment reasons,
+production plan revisions, linked run transitions, fulfilment movements and
+attachment activity. Existing commercial revisions and stock movements appear
+after upgrade. Linked run and plan events start when the upgraded app records
+them. Earlier legacy orders can have an empty activity history.
+
+### API contracts
+
+These endpoints are under `/v2/business` and return `Cache-Control: private,
+no-store`.
+
+- `GET /proposals/:id/document/pdf?revision=N&language=en` returns an
+  `application/pdf` download for an explicit issued revision. Pass `pt-PT`
+  for Portuguese. The existing JSON document includes `unit_price_cents`
+  on each line as an additive field.
+- `GET /orders/:id/attachments` lists each attachment's stable ID, name,
+  validated media type, size in bytes, SHA-256 checksum and creation timestamp.
+- `POST /orders/:id/attachments?name=<filename>&operation_id=<uuid>` accepts
+  a bounded raw body with `Content-Type: application/octet-stream`. The
+  server validates the filename and checks the payload against the extension.
+  It checks PDF signatures and decodes images within the pixel limit. PDFs
+  are handled as opaque downloads. Business Operations must be enabled to
+  upload. Success returns 201 and metadata. A matching retry returns 200 and
+  the same metadata. A different order, name or payload with that operation
+  ID returns 409.
+- `GET /orders/:id/attachments/:attachmentID` verifies attachment ownership
+  and checksum and serves an octet-stream download with a safe filename and
+  `X-Content-Type-Options: nosniff`.
+- `GET /orders/:id/activity?page=1` returns `items`, `page` and `has_more`
+  in pages of 25, newest first. Entries include a stable event identity, kind
+  and timestamp plus the applicable revision, reference ID, detail or
+  quantity. Order revisions and fulfilment movements keep their existing
+  authoritative records. Production and cancellation activity is appended in
+  the same transaction as the underlying change.
+
+SQLite stores attachment bytes, metadata and order activity in the Business
+module. The upgrade introduces Sales module version 6 and backup schema 16
+with the same ZIP format. See [SQLite recovery](SQLITE_RECOVERY.md) for restore
+validation and rollback.

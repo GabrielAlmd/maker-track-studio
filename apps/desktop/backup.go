@@ -70,11 +70,15 @@ func saveDesktopFile(ctx context.Context, dialog func(context.Context, runtime.S
 	if endpoint == "/desktop-data/export" {
 		kind = "backup"
 	}
-	path, err := dialog(ctx, runtime.SaveDialogOptions{
+	return saveDesktopDownload(ctx, dialog, client, runtime.SaveDialogOptions{
 		Title:           title,
 		DefaultFilename: prefix + time.Now().Format("20060102-150405") + "." + extension,
 		Filters:         []runtime.FileFilter{{DisplayName: strings.ToUpper(extension) + " " + kind + " (*." + extension + ")", Pattern: "*." + extension}},
-	})
+	}, kind, endpoint, query, mimeType)
+}
+
+func saveDesktopDownload(ctx context.Context, dialog func(context.Context, runtime.SaveDialogOptions) (string, error), client *http.Client, options runtime.SaveDialogOptions, kind, endpoint, query, mimeType string) (string, error) {
+	path, err := dialog(ctx, options)
 	if err != nil {
 		return "", errors.New("Could not open the " + kind + " save dialog")
 	}
@@ -97,7 +101,7 @@ func saveDesktopFile(ctx context.Context, dialog func(context.Context, runtime.S
 	}
 
 	// Stage beside the destination so a failed download leaves existing backups intact.
-	file, err := os.CreateTemp(filepath.Dir(path), ".backup-*.tmp")
+	file, err := os.CreateTemp(filepath.Dir(path), ".maker-track-*.tmp")
 	if err != nil {
 		return "", errors.New("Could not write to the selected folder")
 	}
@@ -107,7 +111,7 @@ func saveDesktopFile(ctx context.Context, dialog func(context.Context, runtime.S
 		return "", errors.New("Could not save the complete " + kind)
 	}
 	if err := file.Sync(); err != nil {
-		return "", errors.New("Could not write the backup to disk")
+		return "", errors.New("Could not write the " + kind + " to disk")
 	}
 	if err := file.Close(); err != nil {
 		return "", errors.New("Could not finish saving the " + kind)

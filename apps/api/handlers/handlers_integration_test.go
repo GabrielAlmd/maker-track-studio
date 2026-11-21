@@ -4,7 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
-	salesmodels "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales"
 	"math"
 	"mime/multipart"
 	"net/http"
@@ -20,7 +20,6 @@ import (
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
-	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/budget"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/routes"
 )
 
@@ -42,19 +41,17 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		}
 	}
 
-	if err := db.AutoMigrate(append([]any{
+	if err := db.AutoMigrate(
 		&models.Printer{},
 		&models.PrintJob{},
 		&models.PrintJobFilament{},
 		&inventory.Movement{},
 		&models.PrintRun{}, &models.PrintRunItem{}, &models.ProductionOperation{},
-		&salesmodels.SalesChannel{},
-		&salesmodels.SalesOrder{},
-		&salesmodels.SalesOrderItem{},
-		&salesmodels.SalesOrderAllocation{},
-		&salesmodels.SalesProductionPlan{},
-	}, budget.Tables()...)...); err != nil {
+	); err != nil {
 		t.Fatalf("failed to initialize desktop models: %v", err)
+	}
+	if err := (sales.Module{}).Migrate(db); err != nil {
+		t.Fatalf("failed to initialize Sales models: %v", err)
 	}
 
 	r := gin.New()

@@ -19,6 +19,8 @@ type backupData struct {
 	items       []salesmodels.SalesOrderItem
 	allocations []salesmodels.SalesOrderAllocation
 	plans       []salesmodels.SalesProductionPlan
+	attachments []salesmodels.OrderAttachment
+	events      []salesmodels.OrderEvent
 }
 
 func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) {
@@ -29,7 +31,7 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 	}
 	data.business = business
 	if schemaVersion < 4 {
-		return data, nil
+		return data, data.validateDocuments(sourceDB, schemaVersion)
 	}
 	for _, table := range []any{&salesmodels.SalesChannel{}, &salesmodels.SalesOrder{}, &salesmodels.SalesOrderItem{}, &salesmodels.SalesOrderAllocation{}} {
 		if !sourceDB.Migrator().HasTable(table) {
@@ -133,6 +135,9 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 			return data, err
 		}
 	}
+	if err := data.validateDocuments(sourceDB, schemaVersion); err != nil {
+		return data, err
+	}
 	return data, business.ValidateOrderLinks(data.orders, data.items)
 }
 
@@ -141,7 +146,7 @@ func (Module) DeleteBackup(tx *gorm.DB) error {
 		return err
 	}
 	deleteSession := tx.Session(&gorm.Session{AllowGlobalUpdate: true})
-	for _, table := range []any{&salesmodels.SalesProductionPlan{}, &salesmodels.SalesOrderAllocation{}, &salesmodels.SalesOrderItem{}, &salesmodels.SalesOrder{}, &salesmodels.SalesChannel{}} {
+	for _, table := range []any{&salesmodels.OrderAttachment{}, &salesmodels.OrderEvent{}, &salesmodels.SalesProductionPlan{}, &salesmodels.SalesOrderAllocation{}, &salesmodels.SalesOrderItem{}, &salesmodels.SalesOrder{}, &salesmodels.SalesChannel{}} {
 		if err := deleteSession.Delete(table).Error; err != nil {
 			return err
 		}
@@ -179,5 +184,16 @@ func (Module) RestoreBackup(tx *gorm.DB, value any) error {
 			return err
 		}
 	}
-	return budget.RestoreBackup(tx, data.business)
+	if err := budget.RestoreBackup(tx, data.business); err != nil {
+		return err
+	}
+	if len(data.attachments) > 0 {
+		if err := tx.CreateInBatches(&data.attachments, 5).Error; err != nil {
+			return err
+		}
+	}
+	if len(data.events) > 0 {
+		return tx.CreateInBatches(&data.events, 100).Error
+	}
+	return nil
 }
