@@ -291,36 +291,32 @@ func validateProductionLinks(tx *gorm.DB, state orderProductionState, links map[
 	if len(sources) == 0 {
 		return nil
 	}
-	otherPlans, err := productionSourceTotals(tx, "sales_production_plans", "units_planned", state.order.ID, sources)
+	otherPlans, err := otherProductionPlans(tx, state.order.ID, sources)
 	if err != nil {
 		return err
 	}
-	otherAllocations, err := productionSourceTotals(tx, "sales_order_allocations", "units_allocated", state.order.ID, sources)
-	if err != nil {
-		return err
+	priorAllocations := make(map[uuid.UUID]int64)
+	for key, a := range state.allocations {
+		priorAllocations[key.source] += int64(a.UnitsAllocated)
 	}
 	for id, source := range sources {
 		if planned[id] > source.UnitsPlanned-otherPlans[id] {
 			return productionConflict("Planning exceeds the run item's remaining planned quantity")
 		}
-		if allocated[id] > source.UnitsAccepted-otherAllocations[id] {
+		if allocated[id] > source.UnitsAccepted || allocated[id]-priorAllocations[id] > source.UnitsAvailable {
 			return productionConflict("Allocation exceeds the run item's remaining verified accepted units")
 		}
 	}
 	return nil
 }
 
-func productionSourceTotals(tx *gorm.DB, table, column string, orderID uuid.UUID, sources map[uuid.UUID]salesdto.ProductionSource) (map[uuid.UUID]int64, error) {
+func otherProductionPlans(tx *gorm.DB, orderID uuid.UUID, sources map[uuid.UUID]salesdto.ProductionSource) (map[uuid.UUID]int64, error) {
 	var rows []struct {
 		PrintRunItemID uuid.UUID
 		Units          int64
 	}
-	// Both expressions and the table name are selected by the fixed call sites.
-	expression := "CASE WHEN orders.fulfilment_status <> 'cancelled' THEN link.units_planned ELSE 0 END"
-	if column == "units_allocated" {
-		expression = storage.AllocationCapacitySQL
-	}
-	err := tx.Table(table+" AS link").Select("link.print_run_item_id, SUM("+expression+") AS units").
+	err := tx.Table("sales_production_plans AS link").Select("link.print_run_item_id, SUM(link.units_planned) AS units").
+		Where("orders.fulfilment_status <> ?", storage.SalesOrderFulfilmentCancelled).
 		Joins("JOIN sales_order_items AS line ON line.id = link.sales_order_item_id").
 		Joins("JOIN sales_orders AS orders ON orders.id = line.sales_order_id").
 		Where("link.print_run_item_id IN ? AND orders.id <> ?", slices.Collect(maps.Keys(sources)), orderID).

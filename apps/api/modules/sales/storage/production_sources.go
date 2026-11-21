@@ -6,11 +6,14 @@ const FulfilmentActor = "Business Operations"
 
 // AllocationCapacitySQL uses the link and orders aliases. Cancelled orders
 // retain capacity only for dispatched units that have not returned to stock.
-const AllocationCapacitySQL = `CASE WHEN orders.fulfilment_status <> 'cancelled' THEN link.units_allocated ELSE
-	COALESCE((SELECT SUM(d.units - COALESCE((SELECT SUM(r.units) FROM inventory_movements r
-		WHERE r.kind = 'restock' AND r.reference = d.operation_id), 0))
-		FROM inventory_movements h JOIN inventory_movements d ON d.reference = h.operation_id AND d.kind = 'dispatch'
-		WHERE h.kind = 'reserve' AND h.actor = 'Business Operations' AND h.reference = link.id), 0) END`
+const AllocationCapacitySQL = `(CASE WHEN orders.fulfilment_status <> 'cancelled' THEN link.units_allocated ELSE
+	(SELECT COALESCE(SUM(d.units), 0)
+	 FROM inventory_movements h JOIN inventory_movements d ON d.reference = h.operation_id AND d.kind = 'dispatch'
+	 WHERE h.source_key = 'output:' || link.print_run_item_id AND h.kind = 'reserve' AND h.actor = '` + FulfilmentActor + `' AND h.reference = link.id) END
+	- (SELECT COALESCE(SUM(r.units), 0) FROM inventory_movements r
+	   JOIN inventory_movements d ON r.reference = d.operation_id AND d.kind = 'dispatch'
+	   JOIN inventory_movements h ON d.reference = h.operation_id AND h.kind = 'reserve'
+	   WHERE r.source_key = 'output:' || link.print_run_item_id AND r.kind = 'restock' AND h.actor = '` + FulfilmentActor + `' AND h.reference = link.id))`
 
 // ProductionSources selects verified run items. Only completed output is
 // accepted supply, even if an in-progress run carries tentative counts.

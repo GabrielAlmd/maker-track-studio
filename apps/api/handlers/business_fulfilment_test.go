@@ -98,6 +98,10 @@ func TestBusinessFulfilmentRoundTrip(t *testing.T) {
 	req := command("restock", allocations[0], shipments[0].OperationID, 1)
 	businessRequest[inventory.Receipt](t, r, "POST", path, req, 200)
 	stock(8, 0, 8)
+	available := businessRequest[salesdto.ProductionSources](t, r, "GET", base+"/production/sources?line_id="+order.Items[0].ID.String(), nil, 200)
+	if len(available.Items) != 1 || available.Items[0].UnitsAvailable != 8 {
+		t.Fatal("restocked units unavailable for another order", available)
+	}
 	target, _ := setupDesktopTestRouter(t)
 	archive := performRequest(t, r, "GET", "/desktop-data/export", nil)
 	if got := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "sample.zip", archive.Body.Bytes()); got.Code != 200 {

@@ -91,6 +91,9 @@ func orderFulfilment(tx *gorm.DB, id uuid.UUID) (fulfilment, error) {
 	if order.AcceptedProposalID == nil {
 		return doc, errProductionOrder
 	}
+	if !productionEditable(order) && order.FulfilmentStatus != storage.SalesOrderFulfilmentCancelled {
+		return doc, productionConflict("This order is protected from fulfilment changes")
+	}
 	doc.Cancelled = order.FulfilmentStatus == storage.SalesOrderFulfilmentCancelled
 	var ids []uuid.UUID
 	for _, item := range order.Items {

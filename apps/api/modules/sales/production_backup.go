@@ -97,7 +97,6 @@ func (data *backupData) validateProduction(db *gorm.DB, schemaVersion int) error
 		return errInvalidProductionBackup
 	}
 	seenAllocations := make(map[linkKey]bool)
-	allocated := make(map[uuid.UUID]int64)
 	lineTotals := make(map[uuid.UUID]int64)
 	for _, allocation := range data.allocations {
 		if allocation.PrintRunItemID == nil {
@@ -113,12 +112,6 @@ func (data *backupData) validateProduction(db *gorm.DB, schemaVersion int) error
 		}
 		seenAllocations[key] = true
 		lineTotals[key.line] += units
-		if orders[items[key.line].SalesOrderID].FulfilmentStatus != storage.SalesOrderFulfilmentCancelled {
-			if units > source.UnitsAccepted-allocated[key.source] {
-				return errInvalidProductionBackup
-			}
-			allocated[key.source] += units
-		}
 	}
 	return nil
 }
