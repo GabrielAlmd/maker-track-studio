@@ -123,6 +123,7 @@ var legacyModuleTables = map[string]string{
 	"sales_channels": "sales_orders", "sales_orders": "sales_orders",
 	"sales_order_items": "sales_orders", "sales_order_allocations": "sales_orders",
 	"sales_production_plans":     "sales_orders",
+	"business_finance_entries":   "sales_orders",
 	"business_order_attachments": "sales_orders", "business_order_events": "sales_orders",
 	"business_customers": "sales_orders", "business_budgets": "sales_orders",
 	"business_budget_operations": "sales_orders", "business_proposals": "sales_orders", "business_order_revisions": "sales_orders",

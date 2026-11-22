@@ -55,6 +55,8 @@ SELECT id, kind, created_at, revision, reference_id, proposal_revision, detail, 
 	SELECT 'event:' || id, kind, created_at, revision, run_id, 0, '', 0
 	FROM business_order_events WHERE sales_order_id = @id
 	UNION ALL
+	SELECT 'finance:' || revision, kind, created_at, revision, NULL, 0, reference, 0 FROM business_finance_entries WHERE id = @id
+	UNION ALL
 	SELECT 'attachment:' || id, 'attachment_added', created_at, 0, id, 0, name, 0
 	FROM business_order_attachments WHERE sales_order_id = @id
 	UNION ALL

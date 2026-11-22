@@ -82,5 +82,38 @@ func (data Backup) ValidateOrderLinks(orders []storage.SalesOrder, items []stora
 			return errInvalidBackup
 		}
 	}
+	return data.validateFinance(orders, proposals)
+}
+
+func (data Backup) validateFinance(salesOrders []storage.SalesOrder, proposals map[revisionKey]Proposal) error {
+	statuses := make(map[uuid.UUID]storage.SalesOrderPaymentStatus, len(salesOrders))
+	for _, order := range salesOrders {
+		statuses[order.ID] = order.PaymentStatus
+	}
+	orders := map[uuid.UUID]OrderRevision{}
+	for _, order := range data.orders {
+		orders[order.ID] = order
+	}
+	for start := 0; start < len(data.finance); {
+		id := data.finance[start].ID
+		order, ok := orders[id]
+		if !ok {
+			return errInvalidBackup
+		}
+		end := start
+		for end < len(data.finance) && data.finance[end].ID == id {
+			entry := data.finance[end]
+			if entry.CreatedAt.IsZero() {
+				return errInvalidBackup
+			}
+
+			end++
+		}
+		summary, err := summarizeFinance(proposals[revisionKey{"proposal", order.ProposalID, order.ProposalRevision}], data.finance[start:end], time.Now().UTC().Format(time.DateOnly))
+		if err != nil || summary.legacyPayment() != statuses[id] {
+			return errInvalidBackup
+		}
+		start = end
+	}
 	return nil
 }

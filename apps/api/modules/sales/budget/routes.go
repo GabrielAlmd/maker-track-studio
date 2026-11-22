@@ -29,6 +29,8 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) *gin.RouterGroup {
 	}
 
 	registerProposalRoutes(internal, db)
+	internal.GET("/orders/:id/finance", bind(orderFinance))
+	internal.POST("/orders/:id/finance", bind(command(true, recordFinance)))
 	internal.POST("/orders", bind(command(false, confirmOrder)))
 	internal.GET("/orders/:id", bind(detail[OrderRevision]))
 	internal.POST("/orders/:id/amendments", bind(command(true, amendOrder)))
@@ -143,7 +145,7 @@ func command[Input, Result any](update bool, write func(*gorm.DB, uuid.UUID, Inp
 				return
 			}
 			switch any(input).(type) {
-			case AmendmentCommand, ConfirmationCommand:
+			case AmendmentCommand, ConfirmationCommand, FinanceCommand:
 				decoder := json.NewDecoder(bytes.NewReader(encoded))
 				decoder.DisallowUnknownFields()
 				if err := decoder.Decode(&input); err != nil {

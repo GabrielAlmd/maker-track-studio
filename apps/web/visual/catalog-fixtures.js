@@ -298,6 +298,14 @@ export async function installApiFixtures(pageContext) {
       lines: [{ description: 'Modular Enclosure', quantity: 2, net_cents: 7899 }], net_cents: 7899,
     };
     if (apiPath === '/v2/business/orders/formal/attachments') body = { items: attachments };
+    if (apiPath === '/v2/business/orders/formal/finance') body = {
+      payable_cents: 7899, balance_cents: 5899, net_paid_cents: 2000, estimated_profit_cents: 3490,
+      invoiced_cents: 7899, invoice_status: 'recorded', payment_status: 'partially_paid', overdue: false,
+      entries: [
+        { revision: 1, kind: 'invoice', amount_cents: 7899, reference: 'INV-104', date: '2026-09-18', due_date: '2026-10-18' },
+        { revision: 2, kind: 'payment', amount_cents: 2000, reference: 'Workshop deposit', date: '2026-09-19' },
+      ],
+    };
     if (apiPath === '/v2/business/orders/formal/activity') body = { items: [
       { id: 'fulfilment:1', kind: 'dispatch', units: 1, detail: 'Collected at the workshop', created_at: '2026-09-19T10:30:00Z' },
       { id: 'event:1', kind: 'run_completed', reference_id: 'aad873f3-bfc2-462e-965a-64bad09da3ab', created_at: '2026-09-19T09:30:00Z' },

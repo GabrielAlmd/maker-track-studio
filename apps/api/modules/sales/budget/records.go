@@ -133,4 +133,4 @@ func (operation) TableName() string { return "business_budget_operations" }
 
 func budgetTables() []any { return []any{&Customer{}, &Record{}, &operation{}} }
 
-func Tables() []any { return append(budgetTables(), &Proposal{}, &OrderRevision{}) }
+func Tables() []any { return append(budgetTables(), &Proposal{}, &OrderRevision{}, &FinanceEntry{}) }
