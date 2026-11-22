@@ -127,7 +127,7 @@ func TestLegacyProductionNormalizationPreservesIdentity(t *testing.T) {
 func TestProductionBackupPreservesRetryResult(t *testing.T) {
 	source, _ := setupDesktopTestRouter(t)
 	printer := addTestPrinter(t, source, "Lifecycle backup printer", "A1")
-	input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-17T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "items": []any{map[string]any{"planned": 1}}, "materials": []any{}}}}
+	input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-17T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "estimated_time_minutes": 63, "items": []any{map[string]any{"planned": 1}}, "materials": []any{}}}}
 	created := performRequest(t, source, http.MethodPost, "/v2/production/jobs", input)
 	if created.Code != 201 {
 		t.Fatal(created.Body.String())
@@ -141,6 +141,15 @@ func TestProductionBackupPreservesRetryResult(t *testing.T) {
 		restored := performMultipartFileRequest(t, target, http.MethodPost, "/desktop-data/import", "file", "production.zip", backup.Body.Bytes())
 		if restored.Code != 200 {
 			t.Fatalf("restore: %d %s", restored.Code, restored.Body.String())
+		}
+		var saved map[string]any
+		decodeBody(t, created, &saved)
+		loaded := performRequest(t, target, http.MethodGet, "/v2/production/jobs/"+saved["id"].(string), nil)
+		var restoredData map[string]any
+		decodeBody(t, loaded, &restoredData)
+		run := restoredData["runs"].([]any)[0].(map[string]any)
+		if run["estimated_time_minutes"] != float64(63) || run["print_time_minutes"] != nil {
+			t.Fatal("estimate lost or became actual after restore")
 		}
 		replay := performRequest(t, target, http.MethodPost, "/v2/production/jobs", input)
 		if replay.Code != 201 || replay.Body.String() != created.Body.String() {
@@ -199,5 +208,94 @@ func TestProductionCompletedOutputAndLegacyGuards(t *testing.T) {
 	result = performRequest(t, r, http.MethodPut, "/v2/production/jobs/"+id, input)
 	if result.Code != 409 {
 		t.Fatalf("terminal correction: %d", result.Code)
+	}
+}
+
+func TestProductionEstimatedTimeValidationAndRollback(t *testing.T) {
+	r, db, printer := setupTestRouterWithDefaultPrinter(t)
+	run := map[string]any{"status": "planned", "estimated_time_minutes": 63, "items": []any{map[string]any{"planned": 1}}, "materials": []any{}}
+	input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-17T00:00:00Z", "runs": []any{run}}
+	for _, bad := range []any{-1, 1000000001, 1.5} {
+		run["estimated_time_minutes"] = bad
+		response := performRequest(t, r, http.MethodPost, "/v2/production/jobs", input)
+		if response.Code != 400 {
+			t.Fatalf("invalid estimate accepted: %s", response.Body.String())
+		}
+	}
+	var count int64
+	db.Model(&models.PrintJob{}).Count(&count)
+	if count != 0 {
+		t.Fatal("invalid command wrote data")
+	}
+	run["estimated_time_minutes"] = 63
+	response := performRequest(t, r, http.MethodPost, "/v2/production/jobs", input)
+	if response.Code != 201 {
+		t.Fatal(response.Body.String())
+	}
+	var result map[string]any
+	decodeBody(t, response, &result)
+	run = result["runs"].([]any)[0].(map[string]any)
+	if run["estimated_time_minutes"] != float64(63) || run["print_time_minutes"] != nil {
+		t.Fatal("estimate became actual")
+	}
+	input["runs"] = []any{run}
+	input["expected_revision"] = result["revision"]
+	input["operation_id"] = uuid.NewString()
+	run["estimated_time_minutes"] = 80
+	if err := db.Exec("CREATE TRIGGER fail_estimate BEFORE INSERT ON production_operations BEGIN SELECT RAISE(ABORT, 'injected'); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	response = performRequest(t, r, http.MethodPut, "/v2/production/jobs/"+result["id"].(string), input)
+	if response.Code != 500 {
+		t.Fatal(response.Code)
+	}
+	var stored models.PrintRun
+	if err := db.First(&stored, "id = ?", run["id"]).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.EstimatedTimeMinutes == nil || *stored.EstimatedTimeMinutes != 63 {
+		t.Fatal("failed update changed estimate")
+	}
+}
+
+func TestProductionOlderBackupRestoresUnknownEstimateAndRejectsFalseSchema19(t *testing.T) {
+	source, db := setupDesktopTestRouter(t)
+	printer := addTestPrinter(t, source, "Synthetic legacy printer", "Test")
+	input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-17T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "items": []any{map[string]any{"planned": 1}}, "materials": []any{}}}}
+	created := performRequest(t, source, http.MethodPost, "/v2/production/jobs", input)
+	if created.Code != 201 {
+		t.Fatal(created.Body.String())
+	}
+	var data map[string]any
+	decodeBody(t, created, &data)
+	if err := db.Migrator().DropColumn(&models.PrintRun{}, "estimated_time_minutes"); err != nil {
+		t.Fatal(err)
+	}
+	backup := performRequest(t, source, http.MethodGet, "/desktop-data/export", nil)
+	if backup.Code != 200 {
+		t.Fatal(backup.Body.String())
+	}
+	target, targetDB := setupDesktopTestRouter(t)
+	invalid := performMultipartFileRequest(t, target, http.MethodPost, "/desktop-data/import", "file", "layout.zip", backup.Body.Bytes())
+	if invalid.Code != 400 {
+		t.Fatal("schema 19 accepted missing column")
+	}
+	var count int64
+	targetDB.Model(&models.PrintJob{}).Count(&count)
+	if count != 0 {
+		t.Fatal("failed restore wrote data")
+	}
+	older := rewriteBackupSchemaVersion(t, backup.Body.Bytes(), 18)
+	for i := 0; i < 2; i++ {
+		restored := performMultipartFileRequest(t, target, http.MethodPost, "/desktop-data/import", "file", "older.zip", older)
+		if restored.Code != 200 {
+			t.Fatal(restored.Body.String())
+		}
+		loaded := performRequest(t, target, http.MethodGet, "/v2/production/jobs/"+data["id"].(string), nil)
+		var result map[string]any
+		decodeBody(t, loaded, &result)
+		if result["runs"].([]any)[0].(map[string]any)["estimated_time_minutes"] != nil {
+			t.Fatal("fabricated estimate for older backup")
+		}
 	}
 }

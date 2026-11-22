@@ -92,3 +92,10 @@ Back up before upgrading. Rollback means restoring the pre-upgrade backup with
 its compatible binary; there is no destructive downgrade. Changes made after
 that backup will not be present in the restored copy. Full packaged Desktop,
 LAN and joint v1.1.0 Inventory/Business qualification remain release gates.
+
+## Slicer estimates (INV-10)
+
+See [supported slicer imports](SLICER_IMPORT.md) for editable plate/model and
+material estimates. Runs now expose nullable `estimated_time_minutes`, separate
+from actual time. Backup schema 19 adds this nullable column without changing
+historical values or IDs; older backups restore it as unknown.

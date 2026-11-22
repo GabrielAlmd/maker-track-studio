@@ -26,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 18
+	desktopDataSchemaVersion   = 19
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -155,6 +155,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 		}
 		if manifest.SchemaVersion >= 6 && (!sourceDB.Migrator().HasTable(&models.PrintRun{}) || !sourceDB.Migrator().HasTable(&models.PrintRunItem{}) || !sourceDB.Migrator().HasTable(&models.ProductionOperation{}) || !sourceDB.Migrator().HasColumn(&models.PrintJob{}, "workflow_version") || !sourceDB.Migrator().HasColumn(&models.PrintJob{}, "revision") || !sourceDB.Migrator().HasColumn(&models.PrintJobFilament{}, "print_run_id")) {
 			c.JSON(400, gin.H{"error": "Backup is missing production data"})
+			return
+		}
+		if manifest.SchemaVersion >= 19 && !sourceDB.Migrator().HasColumn(&models.PrintRun{}, "estimated_time_minutes") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Backup is missing production estimates"})
 			return
 		}
 		if manifest.SchemaVersion >= 7 && !sourceDB.Migrator().HasTable(&inventory.Movement{}) {

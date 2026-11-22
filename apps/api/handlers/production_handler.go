@@ -21,12 +21,13 @@ import (
 var errProductionConflict = errors.New("production revision, identity or lifecycle conflict")
 
 type ProductionRunInput struct {
-	ID               *uuid.UUID              `json:"id"`
-	Status           string                  `json:"status"`
-	PrintTimeMinutes *int                    `json:"print_time_minutes"`
-	LaborHours       float32                 `json:"labor_hours"`
-	Items            []models.PrintRunItem   `json:"items"`
-	Materials        []PrintJobMaterialInput `json:"materials"`
+	ID                   *uuid.UUID              `json:"id"`
+	Status               string                  `json:"status"`
+	EstimatedTimeMinutes *int                    `json:"estimated_time_minutes,omitempty"`
+	PrintTimeMinutes     *int                    `json:"print_time_minutes"`
+	LaborHours           float32                 `json:"labor_hours"`
+	Items                []models.PrintRunItem   `json:"items"`
+	Materials            []PrintJobMaterialInput `json:"materials"`
 }
 
 type ProductionInput struct {
@@ -120,7 +121,7 @@ func WriteProduction(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc {
 			return
 		}
 		for _, run := range input.Runs {
-			candidate := models.PrintRun{Status: run.Status, Provenance: "verified", Items: run.Items}
+			candidate := models.PrintRun{Status: run.Status, Provenance: "verified", Items: run.Items, EstimatedTimeMinutes: run.EstimatedTimeMinutes}
 			if run.Status == "planned" && (run.LaborHours != 0 || run.PrintTimeMinutes != nil) {
 				c.JSON(400, gin.H{"error": "Planned runs cannot contain actual time or labor"})
 				return
@@ -206,7 +207,7 @@ func WriteProduction(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc {
 			job.ModelID = nil
 			job.PrintDate = input.PrintDate
 			for _, command := range input.Runs {
-				run := models.PrintRun{PrintJobID: job.ID, Status: command.Status, Provenance: "verified", PrintTimeMinutes: command.PrintTimeMinutes, LaborHours: command.LaborHours, Items: command.Items, Revision: 1}
+				run := models.PrintRun{PrintJobID: job.ID, Status: command.Status, Provenance: "verified", PrintTimeMinutes: command.PrintTimeMinutes, EstimatedTimeMinutes: command.EstimatedTimeMinutes, LaborHours: command.LaborHours, Items: command.Items, Revision: 1}
 				var prior models.PrintRun
 				if command.ID != nil {
 					var ok bool
@@ -279,7 +280,7 @@ func WriteProduction(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc {
 				}
 				if prior.Status == "completed" || prior.Status == "failed" || prior.Status == "cancelled" {
 					run.Revision = prior.Revision
-					if prior.Status != run.Status || prior.LaborHours != run.LaborHours || !reflect.DeepEqual(prior.PrintTimeMinutes, run.PrintTimeMinutes) || !reflect.DeepEqual(prior.Items, run.Items) {
+					if prior.Status != run.Status || prior.LaborHours != run.LaborHours || !reflect.DeepEqual(prior.PrintTimeMinutes, run.PrintTimeMinutes) || !reflect.DeepEqual(prior.EstimatedTimeMinutes, run.EstimatedTimeMinutes) || !reflect.DeepEqual(prior.Items, run.Items) {
 						return errProductionConflict
 					}
 				}

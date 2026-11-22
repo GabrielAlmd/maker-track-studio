@@ -77,6 +77,8 @@ func RegisterRoutesWithModules(r *gin.Engine, db *gorm.DB, installed *modules.Re
 	r.PUT("/models/:id", withRequestDB(db, handlers.UpdateModel))
 	r.DELETE("/models/:id", withRequestDB(db, handlers.DeleteModel))
 
+	r.POST("/v2/production/slicer/inspect", handlers.InspectSlicerLayout)
+
 	writeProduction := withRequestDB(db, func(requestDB *gorm.DB) gin.HandlerFunc {
 		return handlers.WriteProduction(requestDB, installed)
 	})
