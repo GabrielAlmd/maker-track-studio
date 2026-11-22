@@ -28,7 +28,9 @@ const (
 )
 
 type SalesOrder struct {
-	ProductionRevision  int64                      `gorm:"not null;default:0"`
+	ProductionRevision int64 `gorm:"not null;default:0"`
+	// QuickSaleCents is the immutable payable amount and identifies a direct sale.
+	QuickSaleCents      *int64
 	AcceptedProposalID  *uuid.UUID                 `gorm:"type:uuid;uniqueIndex"`
 	ID                  uuid.UUID                  `gorm:"type:uuid;primaryKey"`
 	Reference           string                     `gorm:"not null"`
@@ -50,6 +52,10 @@ type SalesOrder struct {
 	UpdatedAt           time.Time
 
 	Items []SalesOrderItem `gorm:"foreignKey:SalesOrderID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+func (order SalesOrder) IsV2() bool {
+	return order.AcceptedProposalID != nil || order.QuickSaleCents != nil
 }
 
 func (SalesOrder) TableName() string { return "sales_orders" }

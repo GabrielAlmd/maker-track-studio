@@ -290,6 +290,9 @@ For produced goods, select accepted supply and dispatch/collect in one guarded
 flow; payment is an explicit separate record (optionally in the same transaction).
 For made-to-order goods, save confirmed demand and show outstanding production.
 Skipping proposal paperwork never skips stock, cost or completion checks.
+BUS-11 implements this through
+[Quick Sale](../BUSINESS_QUICK_SALE.md), including the schema 18 backup
+contract and the single-model direct sale workflow.
 
 ## Migration, backups and rollback
 

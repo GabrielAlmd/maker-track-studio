@@ -39,6 +39,9 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 		}
 	}
 
+	if schemaVersion >= 18 && !sourceDB.Migrator().HasColumn(&salesmodels.SalesOrder{}, "quick_sale_cents") {
+		return data, errors.New("Backup is missing Quick Sale data")
+	}
 	if err := sourceDB.Order("created_at asc").Find(&data.channels).Error; err != nil {
 		return data, errors.New("Backup Sales Channels could not be read")
 	}
@@ -79,7 +82,7 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 
 	orderIDs := make(map[uuid.UUID]struct{}, len(data.orders))
 	for _, order := range data.orders {
-		if order.ID == uuid.Nil || strings.TrimSpace(order.Reference) == "" || order.OrderDate.IsZero() ||
+		if (schemaVersion < 18 && order.QuickSaleCents != nil) || order.ID == uuid.Nil || strings.TrimSpace(order.Reference) == "" || order.OrderDate.IsZero() ||
 			!order.FulfilmentStatus.Valid() || !order.PaymentStatus.Valid() ||
 			order.PackagingCostCents < 0 || order.ShippingCostCents < 0 ||
 			order.PlatformFeeCents < 0 || order.OtherCostCents < 0 ||
@@ -96,6 +99,11 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 	}
 
 	itemIDs := make(map[uuid.UUID]struct{}, len(data.items))
+	quickSaleOrders := make(map[uuid.UUID]bool)
+	for _, order := range data.orders {
+		quickSaleOrders[order.ID] = order.QuickSaleCents != nil
+	}
+	quickSaleItems := make(map[uuid.UUID]bool)
 	for _, item := range data.items {
 		if item.ID == uuid.Nil || strings.TrimSpace(item.ModelNameSnapshot) == "" ||
 			item.Quantity <= 0 || item.UnitPriceCents < 0 {
@@ -110,10 +118,11 @@ func (Module) ValidateBackup(sourceDB *gorm.DB, schemaVersion int) (any, error) 
 			}
 		}
 		itemIDs[item.ID] = struct{}{}
+		quickSaleItems[item.ID] = quickSaleOrders[item.SalesOrderID]
 	}
 
 	for _, allocation := range data.allocations {
-		if allocation.ID == uuid.Nil || allocation.UnitsAllocated <= 0 ||
+		if (quickSaleItems[allocation.SalesOrderItemID] && allocation.PrintRunItemID == nil) || allocation.ID == uuid.Nil || allocation.UnitsAllocated <= 0 ||
 			(allocation.ProductionCostCents != nil && *allocation.ProductionCostCents < 0) {
 			return data, fmt.Errorf("Backup Sales Order Allocation %s is invalid", allocation.ID)
 		}

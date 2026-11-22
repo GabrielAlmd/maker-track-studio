@@ -233,8 +233,22 @@ const scenarios = [
   {
     slug: 'business-overview', route: 'business', fullPage: true,
     prepare: async (page) => {
+      await expect(page.getByRole('link', { name: 'Quick Sale', exact: true })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Business Operations' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Review production' })).toBeVisible();
+    },
+  },
+  {
+    slug: 'business-quick-sale', route: 'business/orders/quick-sale', fullPage: true,
+    prepare: async (page) => {
+      await page.getByLabel('Sale reference').fill('Workshop counter sale');
+      await page.getByLabel('Model', { exact: true }).selectOption({ label: 'Workshop Bracket' });
+      await page.getByLabel('Quantity', { exact: true }).fill('2');
+      await page.getByLabel('Unit price (EUR cents)').fill('1299');
+      await page.getByLabel('Fulfilment', { exact: true }).selectOption('stock');
+      await page.getByLabel('Finished stock lot').selectOption('55555555-5555-4555-8555-555555555555');
+      await expect(page.getByText('Sale total €25.98', { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Confirm and dispatch' })).toBeEnabled();
     },
   },
   {

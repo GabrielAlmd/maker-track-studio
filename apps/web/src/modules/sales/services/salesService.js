@@ -15,8 +15,9 @@ export const getSalesOrder = async (id) => {
   return response.data;
 };
 
-export const getOrderAcceptance = async (id) => {
+export const getOrderAcceptance = async (id, source) => {
   const { data: revision } = await api.get(`/v2/business/orders/${id}`);
+  if (source === 'quick_sale') return { revision, document: null };
   const { data: document } = await api.get(`/v2/business/proposals/${revision.proposal_id}/document`, {
     params: { revision: revision.proposal_revision },
   });

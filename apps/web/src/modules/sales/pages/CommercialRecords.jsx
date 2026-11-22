@@ -12,23 +12,10 @@ import ProposalEditor from '../components/ProposalEditor';
 import ProposalConfirmation from '../components/ProposalConfirmation';
 import ProposalDownload from '../components/ProposalDownload';
 import useBusinessCommand from '../components/useBusinessCommand';
-import { getRecord, listRecords } from '../services/businessService';
+import { allCustomers, getRecord, listRecords } from '../services/businessService';
 
 const pathFor = (kind) => `/business/${kind}`;
 const titleFor = (record) => record.terms?.title ?? record.title ?? record.name;
-
-async function allCustomers() {
-  const customers = [];
-  let page = 1;
-  let hasMore = true;
-  while (hasMore) {
-    const result = await listRecords('customers', page);
-    customers.push(...result.items);
-    hasMore = result.has_more;
-    page += 1;
-  }
-  return customers;
-}
 
 function CommercialList({ kind, proposalSource = false, id }) {
   const { t } = useTranslation();

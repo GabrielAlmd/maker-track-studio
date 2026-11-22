@@ -154,7 +154,7 @@ func replaceSalesOrderAllocations(db *gorm.DB, orderID uuid.UUID, input salesdto
 		if err := tx.First(&order, "id = ?", orderID).Error; err != nil {
 			return err
 		}
-		if order.AcceptedProposalID != nil {
+		if order.IsV2() {
 			return errFormalOrder
 		}
 		if order.FulfilmentStatus == salesmodels.SalesOrderFulfilmentCompleted ||

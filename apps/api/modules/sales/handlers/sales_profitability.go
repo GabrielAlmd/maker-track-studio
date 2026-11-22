@@ -45,8 +45,8 @@ func resolveLiveSalesOrderProfitability(
 		AdditionalCostsCents: additional,
 		Margin:               salesdto.SalesMarginDTO{State: "not_calculated", Reason: "Revenue is zero"},
 	}
-	if order.AcceptedProposalID != nil {
-		return unavailableSalesProfitability(result, "Production costs for proposal-backed orders are unavailable"), nil, nil
+	if order.IsV2() {
+		return unavailableSalesProfitability(result, "Production costs for Business orders are unavailable"), nil, nil
 	}
 	allocationCosts := make(map[uuid.UUID]int64)
 

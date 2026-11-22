@@ -176,7 +176,7 @@ function SalesOrder() {
       } else {
         const [[loadedChannels, loadedModels], loadedOrder] = await Promise.all([metadata, getSalesOrder(id)]);
         const formal = loadedOrder.workflow_version === 2;
-        const acceptance = formal ? await getOrderAcceptance(id) : null;
+        const acceptance = formal ? await getOrderAcceptance(id, loadedOrder.source) : null;
         const allocationDocument = formal ? null : await getSalesOrderAllocations(id);
         setChannels(loadedChannels);
         setModels(loadedModels);
@@ -221,8 +221,9 @@ function SalesOrder() {
     }
   }, [jobCache, linkedJobs, t]);
 
-  const formalOrder = order?.workflow_version === 2;
-  const modelKey = formalOrder ? '' : watchedItems.map((item) => item?.model_id).filter(Boolean).join('|');
+  const businessOrder = order?.workflow_version === 2;
+  const quickSale = order?.source === 'quick_sale';
+  const modelKey = businessOrder ? '' : watchedItems.map((item) => item?.model_id).filter(Boolean).join('|');
   useEffect(() => {
     [...new Set(modelKey.split('|').filter(Boolean))].forEach((modelId) => loadJobs(modelId));
   }, [loadJobs, modelKey]);
@@ -364,15 +365,15 @@ function SalesOrder() {
 
       {!isNew && acceptance && visible('summary') && (
         <section className="page-panel mb-6 p-5 sm:p-6">
-          <h2 className="text-lg font-semibold ui-text-primary">{t('sales.acceptedProposal')}</h2>
+          <h2 className="text-lg font-semibold ui-text-primary">{t(quickSale ? 'business.quickSale' : 'sales.acceptedProposal')}</h2>
           <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              ['customer', acceptance.document.customer_name],
-              ['proposalRevision', acceptance.revision.proposal_revision],
+              ['customer', quickSale ? acceptance.revision.customer_name ?? t('business.walkIn') : acceptance.document.customer_name],
+              ...(!quickSale ? [['proposalRevision', acceptance.revision.proposal_revision]] : []),
               ['confirmedAt', formatDate(acceptance.revision.confirmed_at)],
               ['purchaseOrder', acceptance.revision.purchase_order],
               ['deliveryTerms', acceptance.revision.delivery_terms],
-              ['paymentTerms', acceptance.document.terms.payment_terms],
+              ...(!quickSale ? [['paymentTerms', acceptance.document.terms.payment_terms]] : []),
             ].map(([label, value]) => <div key={label}><dt className="text-xs ui-text-muted">{t(`sales.${label}`)}</dt><dd>{value || t('common.notRecorded')}</dd></div>)}
           </dl>
         </section>
@@ -440,9 +441,9 @@ function SalesOrder() {
       ) : (
         <div className="space-y-6">
           <section hidden={!visible('summary')} className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.orderDetails')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div><dt className="text-xs ui-text-muted">{t('sales.orderDate')}</dt><dd>{formatDate(order.order_date)}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.channel')}</dt><dd>{order.sales_channel?.name ?? t('sales.noChannel')}</dd></div><div><dt className="text-xs ui-text-muted">{t('sales.notes')}</dt><dd>{order.notes || t('common.notRecorded')}</dd></div></dl></section>
-          <section hidden={!visible('summary') && (formalOrder || !visible('production'))} className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.items')}</h2><div className="mt-4 divide-y ui-divide-subtle">{watchedItems.map((item, index) => <article key={item.client_id} className="py-5 first:pt-0 last:pb-0"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold ui-text-primary">{item.model_name_snapshot}</h3><p className="text-sm ui-text-muted">{t('sales.itemQuantityAndPrice', { quantity: formatNumber(item.quantity), price: formatCurrencyFromCents(order.items[index].unit_price_cents) })}</p></div><div className="text-right"><span className="block text-xs ui-text-muted">{t('sales.lineTotal')}</span><span className="font-semibold tabular-nums ui-text-primary">{formatCurrencyFromCents(order.items[index].net_cents ?? order.items[index].unit_price_cents * item.quantity)}</span></div></div>{!formalOrder && <div hidden={!visible('production')}><SalesAllocationEditor item={item} entry={jobCache[item.model_id]} allocations={allocations[item.client_id]} editable={editableAllocations} error={allocationErrors[item.client_id]} onChange={(jobId, value) => changeAllocation(item.client_id, jobId, value)} onRetry={() => loadJobs(item.model_id, true)} defaultOpen /></div>}</article>)}</div>{allocationErrors.general && <p className="mt-4 page-form-error" role="alert">{allocationErrors.general}</p>}{editableAllocations && visible('production') && <div className="mt-4 flex justify-end"><button type="button" onClick={saveAllocations} disabled={actionLoading} className="page-action">{t('sales.saveAllocations')}</button></div>}</section>
-          {formalOrder && visible('production') && <OrderFulfilment key={id} id={id} onCancelled={load} />}
-          {formalOrder && <div hidden={!visible('production')}><OrderProduction key={id} orderId={id} /></div>}
+          <section hidden={!visible('summary') && (businessOrder || !visible('production'))} className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.items')}</h2><div className="mt-4 divide-y ui-divide-subtle">{watchedItems.map((item, index) => <article key={item.client_id} className="py-5 first:pt-0 last:pb-0"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold ui-text-primary">{item.model_name_snapshot}</h3><p className="text-sm ui-text-muted">{t('sales.itemQuantityAndPrice', { quantity: formatNumber(item.quantity), price: formatCurrencyFromCents(order.items[index].unit_price_cents) })}</p></div><div className="text-right"><span className="block text-xs ui-text-muted">{t('sales.lineTotal')}</span><span className="font-semibold tabular-nums ui-text-primary">{formatCurrencyFromCents(order.items[index].net_cents ?? order.items[index].unit_price_cents * item.quantity)}</span></div></div>{!businessOrder && <div hidden={!visible('production')}><SalesAllocationEditor item={item} entry={jobCache[item.model_id]} allocations={allocations[item.client_id]} editable={editableAllocations} error={allocationErrors[item.client_id]} onChange={(jobId, value) => changeAllocation(item.client_id, jobId, value)} onRetry={() => loadJobs(item.model_id, true)} defaultOpen /></div>}</article>)}</div>{allocationErrors.general && <p className="mt-4 page-form-error" role="alert">{allocationErrors.general}</p>}{editableAllocations && visible('production') && <div className="mt-4 flex justify-end"><button type="button" onClick={saveAllocations} disabled={actionLoading} className="page-action">{t('sales.saveAllocations')}</button></div>}</section>
+          {businessOrder && visible('production') && <OrderFulfilment key={id} id={id} onCancelled={load} />}
+          {businessOrder && <div hidden={!visible('production')}><OrderProduction key={id} orderId={id} /></div>}
           <section hidden={!visible('financials')} className="page-panel p-5 sm:p-6"><h2 className="text-lg font-semibold ui-text-primary">{t('sales.additionalCosts')}</h2><dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[['packaging_cost_cents', 'packaging'], ['shipping_cost_cents', 'shipping'], ['platform_fee_cents', 'platformFee'], ['other_cost_cents', 'other']].map(([name, key]) => <div key={name}><dt className="text-xs ui-text-muted">{t(`sales.${key}`)}</dt><dd>{formatCurrencyFromCents(order[name])}</dd></div>)}</dl></section>
           {visible('financials') && <SalesFinancialSummary profitability={order.profitability} fulfilmentStatus={order.fulfilment_status} />}
         </div>
@@ -453,9 +454,9 @@ function SalesOrder() {
       </section>}
       {!isNew && editableDetails && activeSection === 'financials' &&
         <SalesFinancialSummary profitability={order.profitability} fulfilmentStatus={order.fulfilment_status} preview={preview} />}
-      {!isNew && activeSection === 'financials' && formalOrder &&
+      {!isNew && activeSection === 'financials' && businessOrder &&
         <OrderFinance orderId={order.id} onSaved={load} />}
-      {!isNew && activeSection === 'documents' && <OrderDocuments key={order.id} orderId={order.id} acceptance={acceptance?.revision} />}
+      {!isNew && activeSection === 'documents' && <OrderDocuments key={order.id} orderId={order.id} acceptance={acceptance?.document ? acceptance.revision : null} />}
       {!isNew && activeSection === 'history' && <OrderHistory key={acceptance?.revision.revision} order={order} latest={acceptance?.revision} />}
       {!isNew && (visible('summary') || visible('financials')) && order.legacy_write_supported !== false && <section className="page-panel mt-6 p-5 sm:p-6" aria-labelledby="sales-lifecycle"><h2 id="sales-lifecycle" className="text-lg font-semibold ui-text-primary">{t('sales.lifecycle')}</h2><p className="mt-1 text-sm ui-text-muted">{t('sales.lifecycleHelp')}</p><div className="mt-5 grid gap-5 xl:grid-cols-2"><div hidden={!visible('financials')}><h3 className="text-sm font-semibold ui-text-primary">{t('sales.paymentStatus')}</h3><div className="mt-2 flex flex-wrap items-end gap-3"><label className="sr-only" htmlFor="sales-payment-status">{t('sales.paymentStatus')}</label><select id="sales-payment-status" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} className="rounded-md border ui-border-default px-3 py-2">{PAYMENT.map((status) => <option key={status} value={status}>{t(`sales.payment.${status}`)}</option>)}</select><button type="button" onClick={savePayment} disabled={actionLoading || paymentStatus === order.payment_status} className="page-action page-action-secondary">{t('sales.updatePayment')}</button></div></div>{visible('summary') && NEXT_STATUS[order.fulfilment_status] && <div><h3 className="text-sm font-semibold ui-text-primary">{t('sales.fulfilmentStatus')}</h3><p className="mt-1 text-xs ui-text-muted">{t('sales.nextStatusHelp', { status: t(`sales.fulfilment.${NEXT_STATUS[order.fulfilment_status]}`) })}</p><button type="button" onClick={() => changeStatus(NEXT_STATUS[order.fulfilment_status])} disabled={actionLoading} className="page-action mt-2">{t('sales.moveToStatus', { status: t(`sales.fulfilment.${NEXT_STATUS[order.fulfilment_status]}`) })}</button></div>}</div>{visible('summary') && !['completed', 'cancelled'].includes(order.fulfilment_status) && <div className="mt-5 border-t ui-border-subtle pt-4"><h3 className="text-sm font-semibold ui-text-danger">{t(order.fulfilment_status === 'draft' ? 'sales.dangerZone' : 'sales.cancelOrder')}</h3><p className="mt-1 text-xs ui-text-muted">{t(order.fulfilment_status === 'draft' ? 'sales.dangerZoneHelp' : 'sales.cancelHelp')}</p><div className="mt-3 flex flex-wrap gap-3"><button type="button" onClick={() => changeStatus('cancelled')} disabled={actionLoading} className="rounded-md border ui-border-danger px-4 py-2 text-sm ui-text-danger">{t('sales.cancelOrder')}</button>{order.fulfilment_status === 'draft' && <button type="button" onClick={removeOrder} disabled={actionLoading} className="button-danger rounded-md px-4 py-2 text-sm">{t('sales.deleteOrder')}</button>}</div></div>}</section>}
       {showChannelModal && <SalesChannelModal onClose={() => setShowChannelModal(false)} onSaved={(channel) => {

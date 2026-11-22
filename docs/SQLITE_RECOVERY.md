@@ -135,8 +135,14 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share backup schema version 17 and ZIP format
-version 1. Schema 17 (Sales module version 7) adds immutable finance entries
+Current desktop and self-hosted builds share backup schema version 18 and ZIP
+format version 1. Schema 18 (Sales module version 8) adds nullable Quick Sale
+payable and customer-name snapshot columns to the existing Sales tables. The
+migration does not convert historical orders to Quick Sales or replay their
+stock. Earlier archives restore with these fields empty. Restore validates the
+frozen payable against the original line, the confirmation and the finance
+history before replacing SQLite data. Roll back with the pre-upgrade ZIP and
+compatible prior binary. Schema 17 (Sales module version 7) adds immutable finance entries
 and uses the existing command history for retry identity. Restore checks order
 ownership, entry sequence, invoice limits, receipt balances and linked
 reversals before replacing the workspace. Earlier backups import with empty

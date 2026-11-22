@@ -8,6 +8,24 @@ export async function listRecords(kind, page = 1, suffix = '') {
   return data;
 }
 
+export async function allCustomers() {
+  const customers = [];
+  let page = 1;
+  let hasMore = true;
+  while (hasMore) {
+    const result = await listRecords('customers', page);
+    customers.push(...result.items);
+    hasMore = result.has_more;
+    page += 1;
+  }
+  return customers;
+}
+
+export async function listQuickSaleStock(modelId, quantity, page) {
+  const { data } = await api.get(`${root}/quick-sales/stock/${modelId}`, { params: { quantity, page } });
+  return data;
+}
+
 export async function getRecord(path, revision) {
   const { data } = await api.get(`${root}/${path}`, { params: { revision } });
   return data;

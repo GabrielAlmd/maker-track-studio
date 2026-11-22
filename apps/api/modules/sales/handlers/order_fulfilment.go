@@ -88,7 +88,7 @@ func orderFulfilment(tx *gorm.DB, id uuid.UUID) (fulfilment, error) {
 	if err != nil {
 		return doc, err
 	}
-	if order.AcceptedProposalID == nil {
+	if !order.IsV2() {
 		return doc, errProductionOrder
 	}
 	if !productionEditable(order) && order.FulfilmentStatus != storage.SalesOrderFulfilmentCancelled {

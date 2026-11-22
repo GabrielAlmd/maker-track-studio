@@ -200,6 +200,13 @@ func FinishedProducts(db *gorm.DB) ([]FinishedProduct, error) {
 	return rows, err
 }
 
+// VerifiedOutputBalances projects physical availability by lot for one model.
+func VerifiedOutputBalances(db *gorm.DB, model uuid.UUID) *gorm.DB {
+	return db.Model(&Movement{}).Select("source_key, "+balanceColumns).
+		Where("item_type = ? AND item_id = ?", "model", model).
+		Group("source_key").Having("MAX(kind = 'output') = 1")
+}
+
 // OutputLot carries the current physical availability and supporting receipts.
 type OutputLot struct {
 	Balance

@@ -50,7 +50,7 @@ export default function OrderFinance({ orderId, onSaved }) {
     <h2 className="text-lg font-semibold">{t('business.financeTitle')}</h2>
     <p className="text-sm ui-text-secondary">{t('business.fiscalScope')}</p>
     <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {['invoiced_cents', 'net_paid_cents', 'balance_cents', 'estimated_profit_cents'].map(key =>
+      {['invoiced_cents', 'net_paid_cents', 'balance_cents', 'estimated_profit_cents'].filter(key => data[key] != null).map(key =>
         <div key={key}><dt className="text-xs ui-text-muted">{t(`business.${key}`)}</dt><dd>{money(data[key])}</dd></div>)}
     </dl>
     <p>{t(`business.invoiceStates.${data.invoice_status}`)} · {t(`business.paymentStates.${data.payment_status}`)}

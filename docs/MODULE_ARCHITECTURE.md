@@ -4,10 +4,10 @@ For the planned v1.1.0 evolution, see
 [BUS-01](architecture/BUSINESS_V1_1.md). Business Operations retains the
 `sales_orders` module ID and feature key. Core Inventory owns physical stock and
 reservations; Business owns commercial links and invokes Inventory using the
-same SQLite transaction. The version/schema changes described there are future
-implementation requirements; the current module contract below is unchanged.
+same SQLite transaction. The [SQLite recovery guide](SQLITE_RECOVERY.md)
+records the implemented schema changes.
 
-Issue #55 makes Sales & Orders the first built-in module of the Wails desktop app. Modules run in the same process, use the same loopback API, and share the existing SQLite database. Module registration is a build-time composition choice; the **Settings > Features** preference controls presentation only.
+Issue #55 makes Sales & Orders the first built-in module of the Wails desktop app. Modules run in the same process, use the same loopback API, and share the existing SQLite database. Module registration is a build-time composition choice; the **Settings > Features** preference controls presentation and gates new Quick Sale and fulfilment writes.
 
 ## Composition and lifecycle
 
@@ -17,7 +17,7 @@ Issue #55 makes Sales & Orders the first built-in module of the Wails desktop ap
 - `apps/web/src/modules/index.jsx` lists installed frontend descriptors. A descriptor supplies routes and navigation and may supply a feature setting, dashboard content and Print Job card content. Navigation, dashboard and Print Job card contributions render only when the persisted feature key is true. Routes remain registered when a feature is hidden, preserving existing deep links and API behavior.
 - `apps/web/src/modules/translations.js` merges module translations into the core locales before i18n initialization.
 
-The `sales_orders` module is version 2, requires core contract version 1, and defaults to disabled. Disabling it hides Sales navigation and Business dashboard content. It leaves Sales routes, data, completed profitability snapshots and backup contents intact. Its [customer and internal budget routes](BUSINESS_BUDGETS.md) also remain available to the local or authenticated LAN operator. Removing the backend module from composition is a different operation: production-only startup has no Sales tables or routes and must use a database without retained Sales tables.
+The `sales_orders` module is version 8, requires core contract version 1, and defaults to disabled. Disabling it hides Sales navigation and Business dashboard content. It leaves Sales routes, data, completed profitability snapshots and backup contents intact. Its [customer and internal budget routes](BUSINESS_BUDGETS.md) also remain available to the local or authenticated LAN operator. Removing the backend module from composition is a different operation: production-only startup has no Sales tables or routes and must use a database without retained Sales tables.
 
 ## Sales boundaries
 
@@ -35,8 +35,8 @@ Sales owns no production-cost formula. A completed order's allocation costs and 
 
 ## Existing databases and backups
 
-- Startup applies additive, idempotent Sales `AutoMigrate` to the same four tables. The migration and module-version record commit together. A failure rolls back both. Existing Sales rows and completed snapshots are covered by migration regression tests.
-- The backup format and schema version remain at 1 and 4. Backups from supported schema versions 1–3 restore with empty Sales collections. Version 4 backups without snapshot columns remain supported. New snapshots include `module_versions`; older snapshots without that table remain supported.
+- Startup applies additive, idempotent Sales `AutoMigrate` to the existing Sales tables and Business-owned tables. The migration and module-version record commit together. A failure rolls back both. Existing Sales rows and completed snapshots are covered by migration regression tests.
+- The ZIP format is version 1 and the SQLite backup schema is version 18. Backups from supported schema versions 1–3 restore with empty Sales collections. Version 4 backups without snapshot columns remain supported. New snapshots include `module_versions`; older snapshots without that table remain supported.
 - Import validates module data before changing the target and restores core and module rows in one transaction. It rejects a source or target with Sales legacy tables when Sales is not installed, and rejects a source ledger requiring a newer or unavailable module. This prevents an import from silently discarding retained module data. An older build should be used only with its compatible database or a backup made before the module upgrade.
 - Feature preferences for modules absent from the current build are retained when installed feature settings are updated.
 - Export/restore should still be preceded by a user backup. Rollback is to restore that backup with a compatible build; no destructive downgrade migration is attempted.

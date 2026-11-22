@@ -26,7 +26,7 @@ func (data *backupData) validateProduction(db *gorm.DB, schemaVersion int) error
 	}
 	orders := make(map[uuid.UUID]storage.SalesOrder, len(data.orders))
 	for _, order := range data.orders {
-		if order.ProductionRevision < 0 || order.ProductionRevision > 0 && (schemaVersion < 15 || order.AcceptedProposalID == nil) {
+		if order.ProductionRevision < 0 || order.ProductionRevision > 0 && (schemaVersion < 15 || !order.IsV2()) {
 			return errInvalidProductionBackup
 		}
 		orders[order.ID] = order
@@ -62,7 +62,7 @@ func (data *backupData) validateProduction(db *gorm.DB, schemaVersion int) error
 		line, lineExists := items[key.line]
 		source, sourceExists := sources[key.source]
 		order := orders[line.SalesOrderID]
-		return lineExists && sourceExists && order.AcceptedProposalID != nil &&
+		return lineExists && sourceExists && order.IsV2() &&
 			order.ProductionRevision > 0 && reflect.DeepEqual(line.ModelID, source.ModelID)
 	}
 

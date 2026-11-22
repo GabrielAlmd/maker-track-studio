@@ -47,7 +47,10 @@ function Sales() {
   return (
     <div>
       <PageHeader title={t('sales.title')} description={t('sales.description')}>
-        <Link to="/business/orders/new" className="page-action">{t('sales.newOrder')}</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/business/orders/new" className="page-action page-action-secondary">{t('sales.newOrder')}</Link>
+          <Link to="/business/orders/quick-sale" className="page-action">{t('business.quickSale')}</Link>
+        </div>
       </PageHeader>
 
       <BusinessNavigation />

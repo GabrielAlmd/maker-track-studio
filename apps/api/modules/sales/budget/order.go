@@ -17,6 +17,7 @@ type OrderRevision struct {
 	Revision         int64     `json:"revision" gorm:"primaryKey;autoIncrement:false"`
 	ProposalID       uuid.UUID `json:"proposal_id" gorm:"type:uuid;not null"`
 	ProposalRevision int64     `json:"proposal_revision"`
+	CustomerName     string    `json:"customer_name,omitempty"`
 	CustomerID       uuid.UUID `json:"customer_id"`
 	ConfirmedAt      time.Time `json:"confirmed_at"`
 	PurchaseOrder    string    `json:"purchase_order"`
@@ -76,14 +77,12 @@ func confirmOrder(db *gorm.DB, id uuid.UUID, input ConfirmationCommand) (OrderRe
 		if err != nil {
 			return revision, id, 0, err
 		}
-		order := storage.SalesOrder{Reference: p.Terms.Title, OrderDate: now, AcceptedProposalID: &p.ID, FulfilmentStatus: storage.SalesOrderFulfilmentConfirmed}
-		if err := tx.Create(&order).Error; err != nil {
-			return revision, id, 0, err
-		}
+		order := storage.SalesOrder{Reference: p.Terms.Title, OrderDate: now, AcceptedProposalID: &p.ID}
 		sources := make(map[uuid.UUID]Item, len(estimate.Items))
 		for _, item := range estimate.Items {
 			sources[item.ID] = item
 		}
+		items := make([]storage.SalesOrderItem, 0, len(p.Lines))
 		for _, line := range p.Lines {
 			source, exists := sources[line.BudgetLineID]
 			if !exists {
@@ -100,21 +99,34 @@ func confirmOrder(db *gorm.DB, id uuid.UUID, input ConfirmationCommand) (OrderRe
 				}
 			}
 			item := storage.SalesOrderItem{
-				SalesOrderID: order.ID, BudgetLineID: &line.BudgetLineID, ModelID: modelID,
+				BudgetLineID: &line.BudgetLineID, ModelID: modelID,
 				ModelNameSnapshot: line.Description, Quantity: int(line.Quantity),
 				UnitPriceCents: line.UnitPriceCents, DiscountCents: line.LineDiscountCents + line.OrderDiscountCents,
 			}
-			if err := tx.Create(&item).Error; err != nil {
-				return revision, id, 0, err
-			}
+			items = append(items, item)
 		}
 		revision = OrderRevision{
-			ID: order.ID, Revision: 1, CustomerID: p.CustomerID, ProposalID: p.ID, ProposalRevision: p.Revision,
+			CustomerID: p.CustomerID, ProposalID: p.ID, ProposalRevision: p.Revision,
 			ConfirmedAt: now, CreatedAt: now, PurchaseOrder: strings.TrimSpace(input.PurchaseOrder), DeliveryTerms: p.Terms.DeliveryTerms,
 		}
-		err = tx.Create(&revision).Error
+		err = saveConfirmedOrder(tx, &order, items, &revision)
 		return revision, revision.ID, 1, err
 	})
+}
+
+func saveConfirmedOrder(tx *gorm.DB, order *storage.SalesOrder, items []storage.SalesOrderItem, terms *OrderRevision) error {
+	order.FulfilmentStatus = storage.SalesOrderFulfilmentConfirmed
+	if err := tx.Create(order).Error; err != nil {
+		return err
+	}
+	for i := range items {
+		items[i].SalesOrderID = order.ID
+		if err := tx.Create(&items[i]).Error; err != nil {
+			return err
+		}
+	}
+	terms.ID, terms.Revision = order.ID, 1
+	return tx.Create(terms).Error
 }
 
 func amendOrder(db *gorm.DB, id uuid.UUID, input AmendmentCommand) (OrderRevision, error) {
