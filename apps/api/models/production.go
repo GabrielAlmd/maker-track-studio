@@ -9,15 +9,16 @@ import (
 // PrintRun is one physical attempt. LegacyReportedUnits never represents
 // verified accepted output and is retained separately during migration.
 type PrintRun struct {
-	ID               uuid.UUID          `gorm:"type:uuid;primaryKey" json:"id"`
-	PrintJobID       uuid.UUID          `gorm:"type:uuid;not null;index" json:"print_job_id"`
-	Status           string             `gorm:"not null" json:"status"`
-	Provenance       string             `gorm:"not null" json:"provenance"`
-	Revision         int64              `gorm:"not null" json:"revision"`
-	PrintTimeMinutes *int               `json:"print_time_minutes"`
-	LaborHours       float32            `json:"labor_hours"`
-	Materials        []PrintJobFilament `gorm:"foreignKey:PrintRunID" json:"-"`
-	Items            []PrintRunItem     `gorm:"foreignKey:PrintRunID" json:"items"`
+	ID                   uuid.UUID          `gorm:"type:uuid;primaryKey" json:"id"`
+	PrintJobID           uuid.UUID          `gorm:"type:uuid;not null;index" json:"print_job_id"`
+	Status               string             `gorm:"not null" json:"status"`
+	Provenance           string             `gorm:"not null" json:"provenance"`
+	Revision             int64              `gorm:"not null" json:"revision"`
+	EstimatedTimeMinutes *int               `json:"estimated_time_minutes"`
+	PrintTimeMinutes     *int               `json:"print_time_minutes"`
+	LaborHours           float32            `json:"labor_hours"`
+	Materials            []PrintJobFilament `gorm:"foreignKey:PrintRunID" json:"-"`
+	Items                []PrintRunItem     `gorm:"foreignKey:PrintRunID" json:"items"`
 }
 
 type ProductionOperation struct {
@@ -44,6 +45,9 @@ func (r *PrintRun) BeforeCreate(_ *gorm.DB) error     { ensureUUID(&r.ID); retur
 func (r *PrintRunItem) BeforeCreate(_ *gorm.DB) error { ensureUUID(&r.ID); return nil }
 
 func ValidatePrintRun(r PrintRun) error {
+	if r.EstimatedTimeMinutes != nil && (*r.EstimatedTimeMinutes < 0 || *r.EstimatedTimeMinutes > 1000000000) {
+		return errors.New("invalid estimated duration")
+	}
 	if r.Provenance == "legacy_unverified" {
 		if r.Status != "completed" || len(r.Items) != 1 {
 			return errors.New("legacy run must remain completed")

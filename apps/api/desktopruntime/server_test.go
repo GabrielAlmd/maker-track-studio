@@ -108,3 +108,55 @@ func TestInventoryUpgradeFromVersionTwoOnRepeatedStartup(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestProductionEstimateUpgradeIsAdditiveAndRepeatable(t *testing.T) {
+	t.Setenv("SQLITE_PATH", filepath.Join(t.TempDir(), "estimates.db"))
+	db, err := initSQLiteDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := models.PrintJob{WorkflowVersion: 2, Revision: 1, UnitsPrinted: 0}
+	if err = db.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	run := models.PrintRun{PrintJobID: job.ID, Status: "planned", Provenance: "verified", Revision: 1}
+	if err = db.Create(&run).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Migrator().DropColumn(&models.PrintRun{}, "estimated_time_minutes"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		conn, e := db.DB()
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = conn.Close(); e != nil {
+			t.Fatal(e)
+		}
+		db, err = initSQLiteDB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stored models.PrintRun
+		if err = db.First(&stored, "id = ?", run.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 && stored.EstimatedTimeMinutes != nil {
+			t.Fatal("upgrade fabricated estimate")
+		}
+		if i == 1 && (stored.EstimatedTimeMinutes == nil || *stored.EstimatedTimeMinutes != 17) {
+			t.Fatal("repeated startup lost estimate")
+		}
+		if err = db.Model(&stored).Update("estimated_time_minutes", 17).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	conn, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+}

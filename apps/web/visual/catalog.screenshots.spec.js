@@ -136,6 +136,16 @@ const scenarios = [
       await expect(page.getByRole('heading', { name: 'Manage filament types' })).toBeVisible();
     },
   },
+  { slug: 'print-jobs-slicer-review', route: 'print-jobs', prepare: async (page) => {
+    await ready.printJobs(page);
+    await page.getByRole('button', { name: 'Plan production' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Date', { exact: true }).fill('2026-09-18');
+    await dialog.getByLabel('Import slicer estimates').setInputFiles(['visual/fixtures/plate-a.gcode', 'visual/fixtures/plate-b.gcode']);
+    await expect(dialog.getByText('Imported estimate: plate-a.gcode')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Remove unsaved run' }).first().click();
+    await expect(dialog.getByText('Imported tool 3 — map to a filament')).toBeVisible();
+  } },
   { slug: 'print-jobs-plan', route: 'print-jobs', prepare: async (page) => {
     await ready.printJobs(page);
     await page.getByRole('button', { name: 'Plan production' }).click();

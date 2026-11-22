@@ -1,4 +1,15 @@
 export default {
+  slicer: {
+    "remove": "Remove unsaved run",
+    "title": "Import slicer estimates",
+    "help": "Up to 16 files, 32 MiB each / 64 MiB total. Text .gcode: PrusaSlicer-style grams and time, one plate per file. Bambu .3mf: plate layouts only; weights/time stay unknown. Binary G-code is unsupported.",
+    "minutes": "Estimated time (minutes)",
+    "imported": "Imported estimate",
+    "tool": "Imported tool {{number}} — map to a filament",
+    "reading": "Reading slicer summaries…",
+    "review": "Runs appended; existing entries preserved. Review model quantities and filament mappings before save. Enter missing quantities and included waste manually. Estimates do not deduct stock.",
+    "invalid": "Unable to import this batch. Use supported text .gcode summaries with valid non-negative weights and time. No runs were added."
+},
   finishedGoods: {
     title: "Finished goods",
     description: "Material and finished stock, counts and audit history",

@@ -1,4 +1,15 @@
 export default {
+  slicer: {
+    "remove": "Remover execução não guardada",
+    "title": "Importar estimativas do slicer",
+    "help": "Até 16 ficheiros, 32 MiB cada / 64 MiB no total. .gcode de texto: gramas e tempo PrusaSlicer, uma placa por ficheiro. Bambu .3mf: apenas placas; pesos/tempos desconhecidos. Sem suporte para G-code binário.",
+    "minutes": "Tempo estimado (minutos)",
+    "imported": "Estimativa importada",
+    "tool": "Ferramenta importada {{number}} — associe um filamento",
+    "reading": "A ler resumos do slicer…",
+    "review": "Execuções adicionadas; entradas existentes mantidas. Reveja quantidades e filamentos antes de guardar. Preencha quantidades e desperdício incluído em falta. Estimativas não deduzem stock.",
+    "invalid": "Não foi possível importar este lote. Use resumos .gcode de texto suportados com pesos e tempos válidos e não negativos. Não foram adicionadas execuções."
+},
   finishedGoods: {
     title: "Produtos acabados",
     description: "Stock de materiais e produtos acabados, contagens e histórico",

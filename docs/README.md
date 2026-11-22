@@ -26,6 +26,7 @@ read for setting up and changing the code.
 | Work on Desktop packaging | [Desktop README](../apps/desktop/README.md) |
 | Work on Self-Hosted or its security boundary | [Self-Hosted guide](SELF_HOSTED.md) and [LAN security](LAN_SECURITY.md) |
 | Understand CI or release checks | [CI policy](CI.md), [dependency security](DEPENDENCY_SECURITY.md), and [release qualification](PUBLIC_RELEASE.md) |
+| Import plate layouts and slicer estimates | [Slicer imports](SLICER_IMPORT.md) |
 | Record Print Job filament weights | [Print Job materials](PRINT_JOB_MATERIALS.md) |
 
 ## Architecture and implementation contracts
