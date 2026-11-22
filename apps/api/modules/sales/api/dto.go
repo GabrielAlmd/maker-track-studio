@@ -116,6 +116,7 @@ type SalesOrderProfitabilityDTO struct {
 	Margin               SalesMarginDTO `json:"margin"`
 }
 type SalesOrderDTO struct {
+	Source                string                                 `json:"source,omitempty"`
 	WorkflowVersion       int                                    `json:"workflow_version"`
 	LegacyWriteSupported  bool                                   `json:"legacy_write_supported"`
 	LegacyProjectionLossy bool                                   `json:"legacy_projection_lossy"`

@@ -66,7 +66,7 @@ func (data *backupData) validateDocuments(db *gorm.DB, schemaVersion int) error 
 	clear(ids)
 	for _, event := range data.events {
 		order := orders[event.SalesOrderID]
-		if order.AcceptedProposalID == nil || event.ID == uuid.Nil || ids[event.ID] || event.CreatedAt.IsZero() {
+		if !order.IsV2() || event.ID == uuid.Nil || ids[event.ID] || event.CreatedAt.IsZero() {
 			return errDocumentsBackup
 		}
 		key := eventKey{order: event.SalesOrderID, kind: event.Kind, revision: event.Revision}

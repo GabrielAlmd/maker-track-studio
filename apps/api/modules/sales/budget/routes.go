@@ -31,6 +31,8 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) *gin.RouterGroup {
 	registerProposalRoutes(internal, db)
 	internal.GET("/orders/:id/finance", bind(orderFinance))
 	internal.POST("/orders/:id/finance", bind(command(true, recordFinance)))
+	internal.GET("/quick-sales/stock/:id", bind(quickSaleStock))
+	internal.POST("/quick-sales", bind(command(false, createQuickSale)))
 	internal.POST("/orders", bind(command(false, confirmOrder)))
 	internal.GET("/orders/:id", bind(detail[OrderRevision]))
 	internal.POST("/orders/:id/amendments", bind(command(true, amendOrder)))
@@ -145,11 +147,11 @@ func command[Input, Result any](update bool, write func(*gorm.DB, uuid.UUID, Inp
 				return
 			}
 			switch any(input).(type) {
-			case AmendmentCommand, ConfirmationCommand, FinanceCommand:
+			case AmendmentCommand, ConfirmationCommand, FinanceCommand, QuickSaleCommand:
 				decoder := json.NewDecoder(bytes.NewReader(encoded))
 				decoder.DisallowUnknownFields()
 				if err := decoder.Decode(&input); err != nil {
-					reply(c, 0, nil, invalid("body", "Only documented order fields can be changed. Prices, quantities, customer and proposal references are frozen after acceptance."))
+					reply(c, 0, nil, invalid("body", "Provide only documented fields for this command"))
 					return
 				}
 			}

@@ -48,10 +48,13 @@ func salesOrderDTO(order salesmodels.SalesOrder, profitability salesdto.SalesOrd
 		UpdatedAt:          order.UpdatedAt,
 	}
 	result.WorkflowVersion = 1
-	result.LegacyWriteSupported = order.AcceptedProposalID == nil
+	result.LegacyWriteSupported = !order.IsV2()
 	if !result.LegacyWriteSupported {
 		result.WorkflowVersion = 2
-		result.LegacyProjectionLossy = true
+		result.LegacyProjectionLossy = order.AcceptedProposalID != nil
+		if order.QuickSaleCents != nil {
+			result.Source = "quick_sale"
+		}
 	}
 	if order.SalesChannel != nil {
 		channel := salesChannelDTO(*order.SalesChannel)

@@ -112,7 +112,9 @@ func TestProductionPlanMigrationRetainsLegacyAllocation(t *testing.T) {
 	}
 	order := salesmodels.SalesOrder{
 		Reference: "Legacy completed order", OrderDate: time.Now(),
-		FulfilmentStatus: salesmodels.SalesOrderFulfilmentCompleted,
+		FulfilmentStatus: salesmodels.SalesOrderFulfilmentCompleted, PaymentStatus: salesmodels.SalesOrderPaymentPaid,
+		ProductionCostCents: new(int64(145)), TotalCostCents: new(int64(145)),
+		NetProfitCents: new(int64(605)), MarginBasisPoints: new(int64(8067)),
 	}
 	if err := db.Create(&order).Error; err != nil {
 		t.Fatal(err)
@@ -141,6 +143,8 @@ func TestProductionPlanMigrationRetainsLegacyAllocation(t *testing.T) {
 		"DROP INDEX idx_sales_order_allocations_print_run_item_id",
 		"ALTER TABLE sales_order_allocations DROP COLUMN print_run_item_id",
 		"ALTER TABLE sales_orders DROP COLUMN production_revision",
+		"ALTER TABLE sales_orders DROP COLUMN quick_sale_cents",
+		"ALTER TABLE business_order_revisions DROP COLUMN customer_name",
 		"UPDATE module_versions SET version = 4 WHERE id = 'sales_orders'",
 	} {
 		if err := db.Exec(statement).Error; err != nil {
@@ -174,8 +178,24 @@ func TestProductionPlanMigrationRetainsLegacyAllocation(t *testing.T) {
 			t.Fatalf("historical allocation changed during migration: %+v", saved)
 		}
 		var savedOrder salesmodels.SalesOrder
-		if err := migrated.Take(&savedOrder, "id = ?", order.ID).Error; err != nil || savedOrder.ProductionRevision != 0 {
-			t.Fatalf("legacy order has an invalid production revision: %d %v", savedOrder.ProductionRevision, err)
+		if err := migrated.Take(&savedOrder, "id = ?", order.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if savedOrder.IsV2() || savedOrder.ProductionRevision != 0 ||
+			savedOrder.FulfilmentStatus != order.FulfilmentStatus || savedOrder.PaymentStatus != order.PaymentStatus ||
+			savedOrder.ProductionCostCents == nil || *savedOrder.ProductionCostCents != 145 ||
+			savedOrder.TotalCostCents == nil || *savedOrder.TotalCostCents != 145 ||
+			savedOrder.NetProfitCents == nil || *savedOrder.NetProfitCents != 605 ||
+			savedOrder.MarginBasisPoints == nil || *savedOrder.MarginBasisPoints != 8067 {
+			t.Fatalf("legacy order changed during migration: %+v", savedOrder)
+		}
+		var savedLine salesmodels.SalesOrderItem
+		if err := migrated.Take(&savedLine, "id = ?", line.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+		if savedLine.SalesOrderID != order.ID || savedLine.UnitPriceCents != line.UnitPriceCents || savedLine.Quantity != line.Quantity ||
+			savedLine.ModelNameSnapshot != line.ModelNameSnapshot {
+			t.Fatalf("legacy price or line changed during migration: %+v", savedLine)
 		}
 		connection, err := migrated.DB()
 		if err != nil {

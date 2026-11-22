@@ -18,7 +18,7 @@ type productionConflict string
 func (err productionConflict) Error() string { return string(err) }
 
 const (
-	errProductionOrder    = productionConflict("Run-item production requires a proposal-backed order")
+	errProductionOrder    = productionConflict("Run-item production requires a Business order")
 	errProductionEdit     = productionConflict("Production links can only be changed on confirmed or preparing orders")
 	errProductionRevision = productionConflict("The production plan has changed. Reload it before saving")
 )
@@ -61,7 +61,7 @@ func loadOrderProduction(tx *gorm.DB, id uuid.UUID) (orderProductionState, error
 		Take(&state.order, "id = ?", id).Error; err != nil {
 		return state, err
 	}
-	if state.order.AcceptedProposalID == nil {
+	if !state.order.IsV2() {
 		return state, errProductionOrder
 	}
 	var plans []storage.SalesProductionPlan
@@ -191,7 +191,7 @@ func (state orderProductionState) document() salesdto.OrderProduction {
 func listOrderProductionSources(db *gorm.DB, orderID, lineID, cursor uuid.UUID) (salesdto.ProductionSources, error) {
 	var line storage.SalesOrderItem
 	if err := db.Joins("JOIN sales_orders AS orders ON orders.id = sales_order_items.sales_order_id").
-		Where("orders.id = ? AND orders.accepted_proposal_id IS NOT NULL", orderID).
+		Where("orders.id = ? AND (orders.accepted_proposal_id IS NOT NULL OR orders.quick_sale_cents IS NOT NULL)", orderID).
 		Take(&line, "sales_order_items.id = ?", lineID).Error; err != nil {
 		return salesdto.ProductionSources{}, err
 	}

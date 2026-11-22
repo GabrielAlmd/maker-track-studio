@@ -42,6 +42,9 @@ func ReadBackup(source *gorm.DB, schemaVersion int) (Backup, error) {
 			return data, errInvalidBackup
 		}
 	}
+	if schemaVersion >= 18 && !source.Migrator().HasColumn(&OrderRevision{}, "customer_name") {
+		return data, errInvalidBackup
+	}
 	if schemaVersion < 14 {
 		if requireEmptyTable(source, &OrderRevision{}) != nil {
 			return data, errInvalidBackup
@@ -62,7 +65,7 @@ func ReadBackup(source *gorm.DB, schemaVersion int) (Backup, error) {
 		source.Find(&data.operations).Error != nil {
 		return data, errInvalidBackup
 	}
-	return data, data.validate()
+	return data, data.validate(schemaVersion)
 }
 
 func requireEmptyTable(source *gorm.DB, table any) error {
@@ -81,7 +84,7 @@ type revisionKey struct {
 	revision int64
 }
 
-func (data Backup) validate() error {
+func (data Backup) validate(schemaVersion int) error {
 	customers := make(map[uuid.UUID]int64)
 	budgets := make(map[uuid.UUID]int64)
 	refs := make(map[revisionKey]bool)
@@ -133,7 +136,7 @@ func (data Backup) validate() error {
 	if err := data.validateProposals(refs); err != nil {
 		return err
 	}
-	if err := data.validateOrderHistory(refs); err != nil {
+	if err := data.validateOrderHistory(refs, schemaVersion); err != nil {
 		return err
 	}
 	for _, entry := range data.finance {

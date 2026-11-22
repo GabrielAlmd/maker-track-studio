@@ -252,6 +252,10 @@ export async function installApiFixtures(pageContext) {
       ['/features', { sales_orders: true }],
       ['/print-jobs/dashboard-summary', dashboardSummary],
       ['/sales/summary', salesSummary],
+      ['/v2/business/customers', { items: [{ id: '88888888-8888-4888-8888-888888888888', name: 'Sample workshop' }], has_more: false }],
+      ['/v2/business/quick-sales/stock/m2', { items: [{
+        print_run_item_id: '55555555-5555-4555-8555-555555555555', print_date: '2026-11-19T10:00:00Z', units_available: 8,
+      }], has_more: false }],
       ['/v2/business/proposals', { items: [{
         id: 'quote', revision: 2, customer_name: 'Sample workshop', terms: { title: 'Prototype batch' },
         net_cents: 7899, issued_at: '2026-09-17T09:30:00Z',

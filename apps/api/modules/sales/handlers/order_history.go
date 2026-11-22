@@ -48,8 +48,9 @@ WITH reservations AS (
 )
 SELECT id, kind, created_at, revision, reference_id, proposal_revision, detail, units FROM (
 	SELECT 'order:' || revision AS id,
-		CASE revision WHEN 1 THEN 'proposal_accepted' ELSE 'order_amended' END AS kind,
-		created_at, revision, proposal_id AS reference_id, proposal_revision, reason AS detail, 0 AS units
+		CASE WHEN revision > 1 THEN 'order_amended'
+			WHEN proposal_revision = 0 THEN 'quick_sale_confirmed' ELSE 'proposal_accepted' END AS kind,
+		created_at, revision, CASE WHEN proposal_revision > 0 THEN proposal_id END AS reference_id, proposal_revision, reason AS detail, 0 AS units
 	FROM business_order_revisions WHERE id = @id
 	UNION ALL
 	SELECT 'event:' || id, kind, created_at, revision, run_id, 0, '', 0

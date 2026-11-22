@@ -39,7 +39,7 @@ type FinanceSummary struct {
 	Paid            int64          `json:"net_paid_cents"`
 	Balance         int64          `json:"balance_cents"`
 	Invoiced        int64          `json:"invoiced_cents"`
-	EstimatedProfit int64          `json:"estimated_profit_cents"`
+	EstimatedProfit *int64         `json:"estimated_profit_cents"`
 	Overdue         bool           `json:"overdue"`
 	PaymentStatus   string         `json:"payment_status"`
 	InvoiceStatus   string         `json:"invoice_status"`
@@ -51,8 +51,8 @@ func validFinanceDate(date string) bool {
 	return err == nil && len(date) == 10
 }
 
-func summarizeFinance(p Proposal, entries []FinanceEntry, today string) (FinanceSummary, error) {
-	s := FinanceSummary{Payable: p.NetCents, EstimatedProfit: proposalView(p).ProfitCents, Entries: entries, InvoiceStatus: "none", PaymentStatus: "unpaid"}
+func summarizeFinance(basis financeBasis, entries []FinanceEntry, today string) (FinanceSummary, error) {
+	s := FinanceSummary{Payable: basis.payable, EstimatedProfit: basis.estimatedProfit, Entries: entries, InvoiceStatus: "none", PaymentStatus: "unpaid"}
 	available := make(map[int64]int64)
 	var due int64
 	var refunded, billed bool
@@ -133,18 +133,41 @@ func summarizeFinance(p Proposal, entries []FinanceEntry, today string) (Finance
 	return s, nil
 }
 
-func financeInputs(tx *gorm.DB, id uuid.UUID) (Proposal, []FinanceEntry, error) {
+type financeBasis struct {
+	payable         int64
+	estimatedProfit *int64
+}
+
+func proposalFinance(p Proposal) financeBasis {
+	profit := proposalView(p).ProfitCents
+	return financeBasis{payable: p.NetCents, estimatedProfit: &profit}
+}
+
+func financeInputs(tx *gorm.DB, id uuid.UUID) (financeBasis, []FinanceEntry, error) {
 	order, err := readRevision[OrderRevision](tx, id, 1)
 	if err != nil {
-		return Proposal{}, nil, err
+		return financeBasis{}, nil, err
 	}
-	p, err := readRevision[Proposal](tx, order.ProposalID, order.ProposalRevision)
-	if err != nil {
-		return p, nil, err
+	var basis financeBasis
+	if order.ProposalID == uuid.Nil {
+		var sale storage.SalesOrder
+		if err := tx.Select("quick_sale_cents").Take(&sale, "id = ?", id).Error; err != nil {
+			return basis, nil, err
+		}
+		if sale.QuickSaleCents == nil {
+			return basis, nil, gorm.ErrRecordNotFound
+		}
+		basis.payable = *sale.QuickSaleCents
+	} else {
+		p, err := readRevision[Proposal](tx, order.ProposalID, order.ProposalRevision)
+		if err != nil {
+			return basis, nil, err
+		}
+		basis = proposalFinance(p)
 	}
 	entries := []FinanceEntry{}
 	err = tx.Where("id = ?", id).Order("revision").Find(&entries).Error
-	return p, entries, err
+	return basis, entries, err
 }
 
 func orderFinance(db *gorm.DB) gin.HandlerFunc {
@@ -153,11 +176,11 @@ func orderFinance(db *gorm.DB) gin.HandlerFunc {
 		var result FinanceSummary
 		if err == nil {
 			err = db.Transaction(func(tx *gorm.DB) error {
-				p, entries, err := financeInputs(tx, id)
+				basis, entries, err := financeInputs(tx, id)
 				if err != nil {
 					return err
 				}
-				result, err = summarizeFinance(p, entries, time.Now().UTC().Format(time.DateOnly))
+				result, err = summarizeFinance(basis, entries, time.Now().UTC().Format(time.DateOnly))
 				return err
 			})
 		}
@@ -178,7 +201,7 @@ func (s FinanceSummary) legacyPayment() storage.SalesOrderPaymentStatus {
 
 func recordFinance(db *gorm.DB, id uuid.UUID, input FinanceCommand) (FinanceEntry, error) {
 	return execute(db, "finance", id, input.Command, input, func(tx *gorm.DB) (FinanceEntry, uuid.UUID, int64, error) {
-		p, entries, err := financeInputs(tx, id)
+		basis, entries, err := financeInputs(tx, id)
 		current := int64(len(entries))
 		entry := FinanceEntry{ID: id, Revision: current + 1, FinanceInput: input.FinanceInput}
 		if err != nil {
@@ -187,7 +210,7 @@ func recordFinance(db *gorm.DB, id uuid.UUID, input FinanceCommand) (FinanceEntr
 		if current != input.ExpectedRevision {
 			return entry, id, 0, stale(current)
 		}
-		s, err := summarizeFinance(p, append(entries, entry), time.Now().UTC().Format(time.DateOnly))
+		s, err := summarizeFinance(basis, append(entries, entry), time.Now().UTC().Format(time.DateOnly))
 		if err != nil {
 			return entry, id, 0, err
 		}

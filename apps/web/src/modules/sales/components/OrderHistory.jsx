@@ -25,7 +25,7 @@ export default function OrderHistory({ order, latest }) {
         </div>
         {loading ? <LoadingState /> : error ? <InlineError title={t('business.loadError')} onRetry={refetch} /> : data && <dl className="grid gap-4 sm:grid-cols-2">
           <div><dt>{t('sales.createdAt')}</dt><dd>{formatDate(data.created_at ?? data.confirmed_at)}</dd></div>
-          <div><dt>{t('business.reason')}</dt><dd>{data.reason || t('sales.acceptedProposal')}</dd></div>
+          <div><dt>{t('business.reason')}</dt><dd>{data.reason || t(order.source === 'quick_sale' ? 'business.quickSale' : 'sales.acceptedProposal')}</dd></div>
           <div><dt>{t('sales.purchaseOrder')}</dt><dd>{data.purchase_order || t('common.notRecorded')}</dd></div>
           <div><dt>{t('sales.deliveryTerms')}</dt><dd>{data.delivery_terms || t('common.notRecorded')}</dd></div>
         </dl>}

@@ -7,6 +7,7 @@ import BusinessDashboard from './BusinessDashboard';
 import SalesFeatureSetting from './SalesFeatureSetting';
 import AllocationCapacity from './components/AllocationCapacity';
 
+const QuickSale = lazy(() => import('./pages/QuickSale'));
 const CommercialRecords = lazy(() => import('./pages/CommercialRecords'));
 
 const salesModule = {
@@ -16,6 +17,7 @@ const salesModule = {
     ['business', Overview],
     ['business/orders', Sales],
     ['business/orders/new', OrderRoute],
+    ['business/orders/quick-sale', QuickSale],
     ['business/orders/:id', OrderRoute],
     ['business/customers/:id?', () => <CommercialRecords kind="customers" />],
     ['business/budgets/:id?', () => <CommercialRecords kind="budgets" />],

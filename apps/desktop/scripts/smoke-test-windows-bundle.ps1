@@ -97,6 +97,10 @@ try {
 
   $payload = Get-Content -Path $responseFile -Raw | ConvertFrom-Json
   Assert-DesktopDiagnosticLog -LocalDataDirectory $localDataDir -StderrPath $stderrLogFile
+  & node (Join-Path $PSScriptRoot 'smoke-test-business.mjs')
+  if ($LASTEXITCODE -ne 0) {
+    throw 'packaged Business Operations smoke test failed'
+  }
   Write-Output ($payload | ConvertTo-Json -Compress)
 }
 finally {

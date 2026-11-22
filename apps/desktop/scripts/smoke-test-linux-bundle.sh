@@ -111,3 +111,5 @@ node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$resp
 
 echo "Packaged application responded with valid app configuration"
 cat "$response_file"
+
+node "$(dirname "${BASH_SOURCE[0]}")/smoke-test-business.mjs"

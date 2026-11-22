@@ -19,6 +19,35 @@ async function downloadFile(page, button) {
   return { name: download.suggestedFilename(), content: Buffer.concat(chunks) };
 }
 
+async function exerciseQuickSale(page) {
+  const created = await page.evaluate(async () => {
+    const response = await fetch('/api/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Synthetic clamp', material_weight: 20, print_time: 30 }),
+    });
+    return response.status;
+  });
+  expect(created).toBe(201);
+  await page.getByRole('link', { name: 'Quick Sale', exact: true }).click();
+  await page.getByLabel('Sale reference').fill('Synthetic counter sale');
+  await page.getByLabel('Model', { exact: true }).selectOption({ label: 'Synthetic clamp' });
+  await page.getByLabel('Unit price (EUR cents)').fill('1299');
+  await page.getByLabel('Quantity', { exact: true }).fill('0');
+  await page.getByRole('button', { name: 'Confirm sale' }).click();
+  await expect(page.getByLabel('Quantity', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+  await page.getByLabel('Quantity', { exact: true }).fill('2');
+  await page.getByRole('button', { name: 'Confirm sale' }).click();
+  await expect(page.getByRole('heading', { name: 'Synthetic counter sale' })).toBeVisible();
+  await expect(page.getByText('Walk-in customer')).toBeVisible();
+  const saleId = new URL(page.url()).hash.split('/').at(-1);
+  await page.getByRole('link', { name: 'Financials', exact: true }).click();
+  await expect(page.getByText('€25.98', { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  await page.getByRole('link', { name: 'History', exact: true }).click();
+  await expect(page.getByText('Quick Sale confirmed', { exact: true })).toBeVisible();
+  return saleId;
+}
+
 async function exerciseBusinessOperations(page) {
   await page.goto(`${origin}/#/settings?section=features`);
   const feature = page.getByRole('checkbox', { name: 'Business Operations' });
@@ -94,6 +123,7 @@ async function exerciseBusinessOperations(page) {
   await expect(page.getByRole('alert')).toContainText('this action is no longer available');
   await page.goto(`${origin}/#/business/orders`);
   await expect(page.getByRole('link', { name: 'Synthetic housing' })).toHaveCount(1);
+  const saleId = await exerciseQuickSale(page);
 
   await page.goto(`${origin}/#/settings?section=features`);
   await feature.click();
@@ -103,6 +133,12 @@ async function exerciseBusinessOperations(page) {
   await expect(page).toHaveURL(/#\/dashboard$/);
   await page.getByRole('link', { name: 'Inventory', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible();
+
+  await page.goto(`${origin}/#/settings?section=features`);
+  await feature.click();
+  await expect(feature).toBeChecked();
+  await page.goto(`${origin}/#/business/orders/${saleId}`);
+  await expect(page.getByRole('heading', { name: 'Synthetic counter sale' })).toBeVisible();
 }
 
 try {

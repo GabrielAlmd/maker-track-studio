@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	errFormalOrder              = errors.New("Use the Business Operations amendment endpoint for a proposal-backed order")
+	errFormalOrder              = errors.New("Use the Business Operations amendment endpoint for a Business order")
 	errProtectedLine            = errors.New("Use a distinct line ID belonging to this order and release affected allocations before replacing a model, removing its line, or reducing allocated demand")
 	errSalesChannelNotFound     = errors.New("Sales Channel not found")
 	errSalesChannelArchived     = errors.New("Sales Channel is archived")
@@ -137,7 +137,7 @@ func updateSalesOrder(db *gorm.DB, id uuid.UUID, input salesdto.SalesOrderReques
 		if err := tx.First(&order, "id = ?", id).Error; err != nil {
 			return err
 		}
-		if order.AcceptedProposalID != nil {
+		if order.IsV2() {
 			return errFormalOrder
 		}
 		if order.FulfilmentStatus != salesmodels.SalesOrderFulfilmentDraft {
@@ -219,7 +219,7 @@ func updateSalesOrderStatus(db *gorm.DB, id uuid.UUID, input salesdto.SalesOrder
 		if err := tx.First(&order, "id = ?", id).Error; err != nil {
 			return err
 		}
-		if order.AcceptedProposalID != nil {
+		if order.IsV2() {
 			return errFormalOrder
 		}
 		targetFulfilment := order.FulfilmentStatus
@@ -257,7 +257,7 @@ func deleteSalesOrder(db *gorm.DB, id uuid.UUID) error {
 		if err := tx.First(&order, "id = ?", id).Error; err != nil {
 			return err
 		}
-		if order.AcceptedProposalID != nil {
+		if order.IsV2() {
 			return errFormalOrder
 		}
 		if order.FulfilmentStatus != salesmodels.SalesOrderFulfilmentDraft {

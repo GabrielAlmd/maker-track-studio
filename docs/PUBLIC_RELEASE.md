@@ -32,6 +32,32 @@ it is fixed and the affected checks pass again. See [dependency security](DEPEND
 [LAN security](LAN_SECURITY.md), and [Self-Hosted validation](SELF_HOSTED.md)
 for the relevant procedures and current limitations.
 
+## v1.1.0 integration gate
+
+Promote the candidate from `develop` only after Inventory and Business
+Operations pass together on the exact candidate commit. Record the CI run,
+artifact identity, supported platform and result in the release evidence.
+
+- Run Go and frontend checks, the visual catalogue, and authenticated HTTPS
+  Chromium testing against a disposable SQLite workspace.
+- Verify a made-to-order Quick Sale, immediate dispatch from verified stock,
+  concurrent claims against one lot, and rollback after an interrupted
+  dispatch. Verify proposal confirmation, production, allocation, fulfilment,
+  invoices, receipts and refunds through the combined regression suite.
+- On a copy of a supported v1.0 workspace and its backup, record order and line
+  IDs, allocations, prices, status labels and frozen profitability before
+  upgrading. Compare after two candidate startups and after backup restore.
+  Exercise Business disabled and re-enabled with Inventory still available.
+  Verify rollback using the previous binary and the pre-upgrade backup.
+- Run the Windows installer and archive and Linux archive smoke tests against
+  the candidate packages. Complete native AMD64 and ARM64 Self-Hosted checks,
+  including upgrade and rollback with a distinct baseline, and verify a
+  second trusted LAN device through the authenticated proxy.
+
+The `develop` issue PR checks support review. Release promotion requires the
+full integration and distribution evidence above. Follow the
+[branching and release procedure](development/branching-and-releases.md).
+
 ## Source distribution
 
 The source archive contains the application, tests, build and deployment
