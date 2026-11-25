@@ -19,6 +19,22 @@ async function downloadFile(page, button) {
   return { name: download.suggestedFilename(), content: Buffer.concat(chunks) };
 }
 
+async function exerciseMaterialLifecycle(page) {
+  const status = await page.evaluate(async () => (await fetch('/api/filaments', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brand: 'Synthetic', type: 'PLA', color: 'Copper', avg_price: 20 }),
+  })).status);
+  expect(status).toBe(201);
+  await page.goto(`${origin}/#/inventory`);
+  await page.getByRole('button', { name: 'Count and audit Synthetic Copper' }).click();
+  await page.getByRole('button', { name: 'Pause tracking' }).click();
+  await page.getByRole('button', { name: 'Confirm tracking change' }).click();
+  await expect(page.getByText('Stock not tracked', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings and history for Synthetic Copper' }).click();
+  await expect(page.getByRole('button', { name: 'Resume tracking' })).toBeVisible();
+}
+
 async function exerciseModelMaterials(page) {
   await page.getByRole('link', { name: 'Models', exact: true }).click();
   await page.getByRole('button', { name: 'Add New Model' }).click();
@@ -199,6 +215,7 @@ try {
   expect(created).toBe(201);
   await page.reload();
   await expect(page.getByText('Browser fixture', { exact: true })).toBeVisible();
+  await exerciseMaterialLifecycle(page);
   await exerciseModelMaterials(page);
   await exerciseBusinessOperations(page);
   expect(errors).toEqual([]);

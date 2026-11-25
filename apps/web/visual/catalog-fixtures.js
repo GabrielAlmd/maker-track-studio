@@ -212,7 +212,7 @@ export async function installApiFixtures(pageContext) {
     const corsHeaders = {
       'Access-Control-Allow-Origin': 'http://127.0.0.1:4173',
       'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     };
 
     if (apiPath === '/v2/inventory/finished-goods') { await route.fulfill({ json: [{ id: 'product-1', name: 'Cable bracket', balance: { on_hand: 10, reserved: 3, available: 7, verified: true } }] }); return; }

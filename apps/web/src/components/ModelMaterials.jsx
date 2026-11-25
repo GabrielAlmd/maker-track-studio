@@ -102,7 +102,7 @@ function MaterialRequirementField({ row, index, register, control, errors, remov
       })}
     </div>
     <FormSelect name={`${prefix}.preferred_filament_id`} control={control} label={t('modelMaterials.preference')}
-      options={data ?? []} getLabel={filamentLabel} loading={loading} error={error ? t('modelMaterials.catalogError') : undefined}
+      options={(data ?? []).filter(f => !f.archived || f.id === row.preferred_filament_id)} getLabel={filamentLabel} loading={loading} error={error ? t('modelMaterials.catalogError') : undefined}
       clearLabel={t('modelMaterials.noPreference')} />
     <button type="button" className={secondaryAction} onClick={() => remove(index)}>{t('modelMaterials.remove', { number: index + 1 })}</button>
   </fieldset>;

@@ -96,7 +96,7 @@ func GetFilamentPurchases(db *gorm.DB) gin.HandlerFunc {
 				PurchaseDate: p.PurchaseDate,
 				CreatedAt:    p.CreatedAt,
 				UpdatedAt:    p.UpdatedAt,
-				Filament:     &dto.FilamentDTO{ID: p.Filament.ID, Brand: p.Filament.Brand, Type: p.Filament.Type, Color: p.Filament.Color},
+				Filament:     &dto.FilamentDTO{Archived: p.Filament.Archived, ID: p.Filament.ID, Brand: p.Filament.Brand, Type: p.Filament.Type, Color: p.Filament.Color},
 			})
 		}
 		if params.Enabled {
@@ -171,7 +171,7 @@ func CreateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			if err := tx.Create(&purchase).Error; err != nil {
 				return err
 			}
-			return syncPurchaseStock(tx, purchase, true)
+			return syncPurchaseStock(tx, purchase, nil)
 		}); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				c.JSON(404, gin.H{"error": "Filament not found"})
@@ -227,6 +227,7 @@ func UpdateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			if err := tx.First(&filament, "id = ?", input.FilamentID).Error; err != nil {
 				return err
 			}
+			previous := purchase
 			purchase.FilamentID = input.FilamentID
 			purchase.Price = input.Price
 			purchase.Amount = input.Amount
@@ -235,7 +236,7 @@ func UpdateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			if err := tx.Omit("Filament").Save(&purchase).Error; err != nil {
 				return err
 			}
-			return syncPurchaseStock(tx, purchase, false)
+			return syncPurchaseStock(tx, purchase, &previous)
 		})
 		if err != nil {
 			inventoryError(c, err)
@@ -278,8 +279,9 @@ func DeleteFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 				}
 				return err
 			}
+			previous := purchase
 			purchase.Amount = 0
-			if err := syncPurchaseStock(tx, purchase, false); err != nil {
+			if err := syncPurchaseStock(tx, purchase, &previous); err != nil {
 				return err
 			}
 			return tx.Delete(&purchase).Error

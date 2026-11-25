@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/dto"
+	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 )
 
@@ -60,7 +61,7 @@ func GetFilaments(db *gorm.DB) gin.HandlerFunc {
 					return
 				}
 				if low == "true" {
-					query = query.Where("id IN (SELECT item_id FROM inventory_movements WHERE item_type = ? GROUP BY item_id HAVING MAX(kind IN ('opening','count')) = 1 AND SUM(quantity) <= filaments.stock_threshold_mg)", "filament")
+					query = query.Where("NOT archived AND NOT warnings_disabled AND id IN (SELECT item_id FROM inventory_movements WHERE item_type = ? GROUP BY item_id HAVING "+inventory.VerifiedStockSQL+" AND SUM(quantity) <= filaments.stock_threshold_mg)", "filament")
 				}
 			}
 		}
@@ -104,6 +105,7 @@ func GetFilaments(db *gorm.DB) gin.HandlerFunc {
 				})
 			}
 			dtoList = append(dtoList, dto.FilamentDTO{
+				Archived:       f.Archived,
 				ID:             f.ID,
 				Brand:          f.Brand,
 				Type:           f.Type,
@@ -183,6 +185,7 @@ func GetFilament(db *gorm.DB) gin.HandlerFunc {
 			})
 		}
 		dtoObj := dto.FilamentDTO{
+			Archived:       f.Archived,
 			ID:             f.ID,
 			Brand:          f.Brand,
 			Type:           f.Type,
@@ -238,6 +241,7 @@ func CreateFilament(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		dtoObj := dto.FilamentDTO{
+			Archived:       filament.Archived,
 			ID:             filament.ID,
 			Brand:          filament.Brand,
 			Type:           filament.Type,
@@ -300,11 +304,12 @@ func UpdateFilament(db *gorm.DB) gin.HandlerFunc {
 		filament.TimesUsed = input.TimesUsed
 		filament.TimesPurchased = input.TimesPurchased
 
-		if err := db.Save(&filament).Error; err != nil {
+		if err := db.Model(&filament).Select("Brand", "Type", "Color", "AvgPrice", "PersonalScore", "TimesUsed", "TimesPurchased").Updates(&filament).Error; err != nil {
 			c.JSON(500, gin.H{"error": "Failed to update filament"})
 			return
 		}
 		dtoObj := dto.FilamentDTO{
+			Archived:       filament.Archived,
 			ID:             filament.ID,
 			Brand:          filament.Brand,
 			Type:           filament.Type,

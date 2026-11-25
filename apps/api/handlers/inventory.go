@@ -165,7 +165,7 @@ func InventoryMaterials(db *gorm.DB) gin.HandlerFunc {
 				inventoryError(c, err)
 				return
 			}
-			rows = append(rows, gin.H{"id": item.ID, "brand": item.Brand, "type": item.Type, "color": item.Color, "threshold_mg": item.StockThresholdMG, "balance": balance})
+			rows = append(rows, gin.H{"id": item.ID, "brand": item.Brand, "type": item.Type, "color": item.Color, "archived": item.Archived, "warnings_enabled": !item.WarningsDisabled, "tracking_enabled": !balance.TrackingPaused, "threshold_mg": item.StockThresholdMG, "balance": balance})
 		}
 		c.JSON(200, rows)
 	}
@@ -202,5 +202,64 @@ func InventoryFinishedGoods(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		c.JSON(200, rows)
+	}
+}
+
+// UpdateInventoryLifecycle applies independent controls under SQLite's writer lock.
+func UpdateInventoryLifecycle(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := uuid.Parse(c.Param("id"))
+		var input struct {
+			ExpectedRevision *int64 `json:"expected_revision"`
+			Tracking         *bool  `json:"tracking_enabled"`
+			Warnings         *bool  `json:"warnings_enabled"`
+			Archived         *bool  `json:"archived"`
+		}
+		if err != nil || c.ShouldBindJSON(&input) != nil || (input.Tracking == nil && input.Warnings == nil && input.Archived == nil) {
+			inventoryError(c, inventory.ErrInvalid)
+			return
+		}
+		if input.Tracking != nil && (input.ExpectedRevision == nil || *input.ExpectedRevision < 0 || *input.ExpectedRevision > inventory.MaxQuantity) {
+			inventoryError(c, inventory.ErrInvalid)
+			return
+		}
+		err = db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("UPDATE inventory_movements SET sequence = sequence WHERE 0").Error; err != nil {
+				return err
+			}
+			b, err := inventory.Availability(tx, "filament", id)
+			if err != nil {
+				return err
+			}
+			if input.Tracking != nil && *input.Tracking == b.TrackingPaused {
+				if *input.ExpectedRevision != b.Revision {
+					return inventory.ErrConflict
+				}
+				kind := "tracking_paused"
+				if *input.Tracking {
+					kind = "tracking_resumed"
+				}
+				_, err := inventory.Post(tx, inventory.Posting{OperationID: uuid.New(), SourceID: uuid.New(), ItemType: "filament", ItemID: id, Kind: kind, Reason: kind, Actor: "local operator"})
+				if err != nil {
+					return err
+				}
+			}
+			updates := map[string]any{}
+			if input.Warnings != nil {
+				updates["warnings_disabled"] = !*input.Warnings
+			}
+			if input.Archived != nil {
+				updates["archived"] = *input.Archived
+			}
+			if len(updates) == 0 {
+				return nil
+			}
+			return tx.Model(&models.Filament{}).Where("id = ?", id).Updates(updates).Error
+		})
+		if err != nil {
+			inventoryError(c, err)
+			return
+		}
+		c.Status(204)
 	}
 }

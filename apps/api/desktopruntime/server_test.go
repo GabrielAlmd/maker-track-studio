@@ -7,6 +7,7 @@ import (
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/inventory"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func TestInitDBSQLiteSeedsDefaultsAndSupportsUUIDInserts(t *testing.T) {
@@ -76,6 +77,11 @@ func TestInventoryUpgradeFromVersionTwoOnRepeatedStartup(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for _, column := range []string{"warnings_disabled", "archived"} {
+		if err := db.Migrator().DropColumn(&models.Filament{}, column); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := db.Exec("UPDATE module_versions SET version = 2 WHERE id = 'core_inventory'").Error; err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +97,12 @@ func TestInventoryUpgradeFromVersionTwoOnRepeatedStartup(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		var restored models.Filament
+		if err := db.First(&restored, "id = ?", f.ID).Error; err != nil || restored.Archived || restored.WarningsDisabled || restored.TimesPurchased != 10 {
+			t.Fatal(restored, err)
+		}
 		var version int
-		if err := db.Raw("SELECT version FROM module_versions WHERE id = 'core_inventory'").Scan(&version).Error; err != nil || version != 4 {
+		if err := db.Raw("SELECT version FROM module_versions WHERE id = 'core_inventory'").Scan(&version).Error; err != nil || version != 5 {
 			t.Fatal(version, err)
 		}
 		b, err := inventory.Availability(db, "filament", f.ID)
@@ -158,5 +168,48 @@ func TestProductionEstimateUpgradeIsAdditiveAndRepeatable(t *testing.T) {
 	}
 	if err = conn.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPausedFilamentSurvivesRestart(t *testing.T) {
+	t.Setenv("SQLITE_PATH", filepath.Join(t.TempDir(), "lifecycle.db"))
+	db, err := initSQLiteDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := models.Filament{Archived: true, WarningsDisabled: true}
+	if err := db.Create(&f).Error; err != nil {
+		t.Fatal(err)
+	}
+	err = db.Transaction(func(tx *gorm.DB) error {
+		_, err := inventory.Post(tx, inventory.Posting{OperationID: uuid.New(), SourceID: uuid.New(), ItemType: "filament", ItemID: f.ID, Kind: "tracking_paused", Reason: "shelf unused", Actor: "operator"})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = initSQLiteDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err = db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	var stored models.Filament
+	if err := db.First(&stored, "id = ?", f.ID).Error; err != nil || !stored.Archived || !stored.WarningsDisabled {
+		t.Fatal(stored, err)
+	}
+	b, err := inventory.Availability(db, "filament", f.ID)
+	if err != nil || !b.TrackingPaused || b.Verified {
+		t.Fatal(b, err)
 	}
 }
