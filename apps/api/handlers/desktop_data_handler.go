@@ -26,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 19
+	desktopDataSchemaVersion   = 20
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -161,6 +161,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Backup is missing production estimates"})
 			return
 		}
+		if manifest.SchemaVersion >= 20 && !sourceDB.Migrator().HasTable(&models.ModelMaterialRequirement{}) {
+			c.JSON(400, gin.H{"error": "Backup is missing model material requirements"})
+			return
+		}
 		if manifest.SchemaVersion >= 7 && !sourceDB.Migrator().HasTable(&inventory.Movement{}) {
 			c.JSON(400, gin.H{"error": "Backup is missing inventory history"})
 			return
@@ -195,6 +199,10 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 			return recoveryErr
 		}
 		if err := importDesktopDataSnapshot(db, sourceDB, installed, backupData, beforeReplace); err != nil {
+			if errors.Is(err, models.ErrInvalidModelMaterials) {
+				c.JSON(400, gin.H{"error": "Backup contains invalid model material requirements"})
+				return
+			}
 			if errors.Is(err, inventory.ErrInvalid) {
 				c.JSON(400, gin.H{"error": "Backup contains invalid inventory history"})
 				return
@@ -429,6 +437,7 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		appConfigs        []models.AppConfig
 		filaments         []models.Filament
 		modelsList        []models.Model
+		modelMaterials    []models.ModelMaterialRequirement
 		filamentPurchases []models.FilamentPurchase
 		printJobs         []models.PrintJob
 		printJobFilaments []models.PrintJobFilament
@@ -484,6 +493,11 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 	}
 	if err := sourceDB.Order("created_at asc").Find(&modelsList).Error; err != nil {
 		return err
+	}
+	if sourceDB.Migrator().HasTable(&models.ModelMaterialRequirement{}) {
+		if err := readModelMaterialBackup(sourceDB, modelsList, filaments, &modelMaterials); err != nil {
+			return err
+		}
 	}
 	if err := sourceDB.Order("created_at asc").Find(&filamentPurchases).Error; err != nil {
 		return err
@@ -587,7 +601,7 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		return err
 	}
 	for _, model := range []any{
-		&models.PrintJobFilament{},
+		&models.PrintJobFilament{}, &models.ModelMaterialRequirement{},
 		&inventory.Movement{}, &models.PrintRunItem{}, &models.PrintRun{}, &models.ProductionOperation{},
 		&models.FilamentPurchase{},
 		&models.PrintJob{},
@@ -611,6 +625,10 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 		return err
 	}
 	if err := createBatch(tx, &modelsList); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := createBatch(tx, &modelMaterials); err != nil {
 		tx.Rollback()
 		return err
 	}

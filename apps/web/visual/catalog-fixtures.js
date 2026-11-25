@@ -1,7 +1,14 @@
 export const models = [
-  { id: 'm1', name: 'Modular Enclosure', material_weight: 86.4, print_time: 245, waste_material: 4.2, is_multicolor: true, print_job_count: 18 },
+  {
+    id: 'm1', name: 'Modular Enclosure', material_weight: 86.4, print_time: 245, waste_material: 4.2, is_multicolor: true, print_job_count: 18,
+    material_summary: { part_weight_g: 86.4, known_waste_g: 4.2, waste_complete: false, color_status: 'multiple', material_status: 'multiple' },
+    material_requirements: [
+      { id: 'req1', material_type: 'PLA', color: 'Matte Black', part_weight_g: 70.4, waste_weight_g: 4.2, preferred_filament_id: 'f1', source_tool: 1 },
+      { id: 'req2', material_type: 'PETG', color: 'Ocean Blue', part_weight_g: 16, waste_weight_g: null, preferred_filament_id: null, source_tool: 3 },
+    ],
+  },
   { id: 'm2', name: 'Workshop Bracket', material_weight: 42.8, print_time: 110, waste_material: 1.5, is_multicolor: false, print_job_count: 31 },
-  { id: 'm3', name: 'Cable Clip Set', material_weight: 18.2, print_time: 55, waste_material: 0.8, is_multicolor: false, print_job_count: 22 },
+  { id: 'm3', name: 'Cable Clip Set', material_weight: 18.2, print_time: 55, waste_material: 0.8, is_multicolor: false, print_job_count: 22, material_requirements: [], material_summary: { color_status: 'unknown', material_status: 'unknown' } },
 ];
 
 export const filaments = [

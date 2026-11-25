@@ -8,6 +8,11 @@ Open **Settings > Data Migration** to move existing tabular records into Maker
 Track Studio. An empty workspace also links to the wizard from the Dashboard.
 Migration is optional during first use and remains available later.
 
+For the Models section, spreadsheet rows supply aggregate estimates. When a
+duplicate update matches a model with [material requirements](MODEL_MATERIALS.md),
+its existing material rows and derived totals are retained. Use a SQLite backup
+to transfer requirement rows and their stable IDs.
+
 ## Supported sources and sections
 
 - CSV imports one selected section at a time.

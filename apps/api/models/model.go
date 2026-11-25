@@ -18,7 +18,8 @@ type Model struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 
-	PrintJobs []PrintJob `gorm:"foreignKey:ModelID"`
+	MaterialRequirements []ModelMaterialRequirement `gorm:"foreignKey:ModelID;constraint:OnDelete:CASCADE"`
+	PrintJobs            []PrintJob                 `gorm:"foreignKey:ModelID"`
 }
 
 func (Model) TableName() string {

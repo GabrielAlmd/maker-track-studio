@@ -102,6 +102,26 @@ const scenarios = [
       await ready.models(page);
       await page.getByRole('button', { name: 'Add New Model' }).click();
       await expect(page.getByRole('heading', { name: 'Add New Model' })).toBeVisible();
+      await expect(page.getByText(/The material split is unknown/)).toBeVisible();
+    },
+  },
+  {
+    slug: 'models-material-details', route: 'models', prepare: async (page) => {
+      await ready.models(page);
+      await page.getByRole('button', { name: 'Modular Enclosure' }).click();
+      await expect(page.getByText('Known waste (total incomplete)')).toBeVisible();
+      await expect(page.getByText(/Bambu Lab · PLA · Matte Black/)).toBeVisible();
+    },
+  },
+  {
+    slug: 'models-material-review', route: 'models', prepare: async (page) => {
+      await ready.models(page);
+      await page.getByRole('button', { name: 'Add New Model' }).click();
+      await page.getByLabel('Inspect slicer files (optional)').setInputFiles({
+        name: 'synthetic-plate.gcode', mimeType: 'text/plain', buffer: Buffer.from('; filament used [g] = 20.5, 0, 6.25'),
+      });
+      await expect(page.getByText('Slicer review')).toBeVisible();
+      await expect(page.getByText(/Tool 3.*6.25 g/)).toBeVisible();
     },
   },
   {

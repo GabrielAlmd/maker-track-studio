@@ -116,22 +116,36 @@ func deleteInventoryItem(c *gin.Context, db *gorm.DB, typ string, item any) {
 		c.JSON(400, gin.H{"error": "Invalid UUID"})
 		return
 	}
-	history := db.Model(&inventory.Movement{}).Select("1").Where("item_type = ? AND item_id = ?", typ, id)
-	result := db.Where("id = ? AND NOT EXISTS (?)", id, history).Delete(item)
-	if result.Error != nil {
-		inventoryError(c, result.Error)
+	err = db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		history := tx.Model(&inventory.Movement{}).Select("1").Where("item_type = ? AND item_id = ?", typ, id)
+		result := tx.Where("id = ? AND NOT EXISTS (?)", id, history).Delete(item)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var used bool
+			if err := tx.Raw("SELECT EXISTS (?)", history).Scan(&used).Error; err != nil {
+				return err
+			}
+			if used {
+				return inventory.ErrConflict
+			}
+			return nil
+		}
+		// Keep these references consistent even on legacy connections with foreign keys disabled.
+		if typ == "model" {
+			return tx.Where("model_id = ?", id).Delete(&models.ModelMaterialRequirement{}).Error
+		}
+		return tx.Model(&models.ModelMaterialRequirement{}).Where("preferred_filament_id = ?", id).
+			Update("preferred_filament_id", nil).Error
+	})
+	if errors.Is(err, inventory.ErrConflict) {
+		c.JSON(409, gin.H{"error": "Inventory history references this item"})
 		return
 	}
-	if result.RowsAffected == 0 {
-		var used bool
-		if err := db.Raw("SELECT EXISTS (?)", history).Scan(&used).Error; err != nil {
-			inventoryError(c, err)
-			return
-		}
-		if used {
-			c.JSON(409, gin.H{"error": "Inventory history references this item"})
-			return
-		}
+	if err != nil {
+		inventoryError(c, err)
+		return
 	}
 	c.Status(204)
 }
