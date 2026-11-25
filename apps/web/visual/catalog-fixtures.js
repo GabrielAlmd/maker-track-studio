@@ -253,6 +253,7 @@ export async function installApiFixtures(pageContext) {
       ['/print-jobs/dashboard-summary', dashboardSummary],
       ['/sales/summary', salesSummary],
       ['/v2/business/customers', { items: [{ id: '88888888-8888-4888-8888-888888888888', name: 'Sample workshop' }], has_more: false }],
+      ['/v2/business/quick-sales/stock/m1', { items: [], has_more: false }],
       ['/v2/business/quick-sales/stock/m2', { items: [{
         print_run_item_id: '55555555-5555-4555-8555-555555555555', print_date: '2026-11-19T10:00:00Z', units_available: 8,
       }], has_more: false }],
@@ -270,7 +271,10 @@ export async function installApiFixtures(pageContext) {
     ]);
 
     let body = responses.get(apiPath);
-    if (apiPath === '/models') body = url.search ? page(models) : models;
+    if (apiPath === '/models') {
+      const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
+      body = url.search ? page(models.filter(model => model.name.toLowerCase().includes(search))) : models;
+    }
     if (apiPath === '/filaments') {
       // Physical opening counts: unknown stock is excluded even with high use counters.
       const stock = { f1: { verified: false, onHand: 0 }, f2: { verified: true, onHand: 0 }, f3: { verified: true, onHand: 250000 } };

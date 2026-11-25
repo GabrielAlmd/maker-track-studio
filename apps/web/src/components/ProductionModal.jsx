@@ -1,3 +1,4 @@
+import FormSelect from './ui/FormSelect';
 import { useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -40,7 +41,8 @@ function RunFields({ index, control, register, watch, models, filaments, initial
     {terminal && <p className="text-sm ui-text-muted">{t('production.terminal')}</p>}
     {items.fields.map((item, n) => <div key={item.formKey} className="grid grid-cols-2 gap-3">
       {item.source_model && <p className="col-span-2 text-sm ui-text-muted">{t('slicer.imported')}: {item.source_model}</p>}
-      <label className="col-span-2">{t('production.model')}<select className={fieldClass} {...register(`${base}.items.${n}.model_id`, { setValueAs: value => value || null })}><option value="">{t('production.uncatalogued')}</option>{models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label>
+      <div className="col-span-2"><FormSelect label={t('production.model')} control={control} name={`${base}.items.${n}.model_id`}
+        options={models} clearLabel={t('production.uncatalogued')} /></div>
       {['planned', 'attempted', 'accepted', 'rejected'].map(name => <label key={name} className="capitalize">{t(`production.${name}`)}<input className={fieldClass} type="number" min={name === 'planned' ? 1 : 0} max={1000000000} step="1" {...register(`${base}.items.${n}.${name}`)} /></label>)}
     </div>)}
     {(!initial || initial.status === 'planned') && <button type="button" className="page-action page-action-secondary" onClick={() => items.append(newItem())}>{t('production.addModel')}</button>}
@@ -51,7 +53,8 @@ function RunFields({ index, control, register, watch, models, filaments, initial
     </div>}
     {materials.fields.map((material, n) => <div key={material.formKey} className="grid grid-cols-2 gap-3">
       {material.source_tool && <p className="col-span-2 text-sm ui-text-muted">{t('slicer.tool', { number: material.source_tool })}</p>}
-      <label className="col-span-2">{t('production.filament')}<select className={fieldClass} {...register(`${base}.materials.${n}.filament_id`)}><option value="">{t('production.selectFilament')}</option>{filaments.map(f => <option key={f.id} value={f.id}>{f.brand} {f.type} — {f.color}</option>)}</select></label>
+      <div className="col-span-2"><FormSelect label={t('production.filament')} control={control} name={`${base}.materials.${n}.filament_id`}
+        options={filaments} clearLabel={t('production.selectFilament')} required getLabel={f => [f.brand, f.type].join(' ') + ' — ' + f.color} /></div>
       <label>{t('production.grams')}<input className={fieldClass} type="number" min="0.001" max="1000000000" step="0.001" {...register(`${base}.materials.${n}.weight_used`)} /></label>
       <label>{t('production.waste')}<input className={fieldClass} type="number" min="0" max="1000000000" step="0.001" {...register(`${base}.materials.${n}.waste_weight_g`)} /></label>
       <label>{t('production.measurement')}<select className={fieldClass} {...register(`${base}.materials.${n}.measurement_state`)}><option value="estimated">{t('production.estimate')}</option>{status !== 'planned' && <option value="verified">{t('production.actual')}</option>}</select></label>
@@ -121,7 +124,8 @@ export default function ProductionModal({ job, models = [], filaments = [], prin
         {importError && <p role="alert" className="text-red-600">{importError}</p>}
         {imported && <p role="status" className="text-sm ui-text-muted">{t('slicer.review')}</p>}
       </section>
-      <label className="block">{t('production.printer')}<select className={fieldClass} {...register('printer_id')}><option value="">{t('production.selectPrinter')}</option>{printers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+      <div className="block"><FormSelect label={t('production.printer')} control={control} name={'printer_id'}
+        options={printers} clearLabel={t('production.selectPrinter')} required /></div>
       <label className="block">{t('production.date')}<input className={fieldClass} type="date" {...register('print_date')} /></label>
       {runs.fields.map((run, index) => <RunFields key={run.formKey} index={index} control={control} register={register} watch={watch} models={models} filaments={filaments} initial={initial[index]} onRemove={index >= initial.length && runs.fields.length > 1 ? () => runs.remove(index) : undefined} />)}
       <button type="button" className="page-action page-action-secondary" onClick={() => runs.append(newRun())}>{t('production.addRun')}</button>

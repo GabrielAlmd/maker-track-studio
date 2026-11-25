@@ -1,4 +1,12 @@
 export default {
+  selector: {
+    search: "Pesquisar opções",
+    show: "Mostrar opções",
+    clear: "Limpar seleção",
+    empty: "Sem opções correspondentes",
+    error: "Não foi possível carregar as opções",
+    more: "Carregar mais",
+  },
   slicer: {
     "remove": "Remover execução não guardada",
     "title": "Importar estimativas do slicer",

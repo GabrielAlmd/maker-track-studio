@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '../../../hooks/useApi';
 import { InlineError, LoadingState } from '../../../components/ui/PageState';
 import { formatCurrencyFromCents as money } from '../../../utils/formatters';
-import { Field } from './BusinessFields';
+import { EntityField, Field } from './BusinessFields';
 import useBusinessCommand from './useBusinessCommand';
 import { getRecord } from '../services/businessService';
 import { textField } from '../utils/businessValidation';
@@ -27,7 +27,7 @@ export default function OrderFinance({ orderId, onSaved }) {
   const fetchFinance = useCallback(() => getRecord(path), [path]);
   const { data, loading, error, refetch } = useApi(fetchFinance);
   const command = useBusinessCommand();
-  const { register, watch, handleSubmit, formState: { errors } } = useForm({
+  const { control, register, watch, handleSubmit, formState: { errors } } = useForm({
     resolver: yupResolver(schema), defaultValues: { kind: 'invoice', date: new Date().toISOString().slice(0, 10) },
   });
   const kind = watch('kind');
@@ -65,7 +65,7 @@ export default function OrderFinance({ orderId, onSaved }) {
         <Field label="financeReference" maxLength={160} required {...register('reference')} error={errors.reference} />
         <Field label="financeDate" type="date" required {...register('date')} error={errors.date} />
         {kind === 'invoice' && <Field label="financeDue" type="date" {...register('due_date')} />}
-        {reversing && <Field label="financeOriginal" required options={[['', '—'], ...entries.filter(e => e.kind === (kind === 'void' ? 'invoice' : 'payment')).map(e => [e.revision, `#${e.revision} · ${e.reference} · ${money(e.amount_cents)}`])]} {...register('original_revision')} error={errors.original_revision} />}
+        {reversing && <EntityField control={control} label="financeOriginal" required options={[['', '—'], ...entries.filter(e => e.kind === (kind === 'void' ? 'invoice' : 'payment')).map(e => [e.revision, `#${e.revision} · ${e.reference} · ${money(e.amount_cents)}`])]} name="original_revision" error={errors.original_revision} />}
         <Field label="financeAmount" type="number" min="0.01" max="999999999999.99" step="0.01" required {...register('amount')} error={errors.amount} />
         <button className="page-action self-end justify-self-start" type="submit">{t('business.recordFinance')}</button>
       </fieldset>

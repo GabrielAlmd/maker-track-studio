@@ -3,7 +3,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { useTranslation } from 'react-i18next';
 import { numberField, textField } from '../utils/businessValidation';
-import { Field } from './BusinessFields';
+import { EntityField, Field } from './BusinessFields';
 
 const priceModes = ['manual', 'markup', 'margin'];
 const discountModes = ['', 'fixed', 'percent'];
@@ -60,7 +60,7 @@ export default function ProposalEditor({ record, budget, customers, onSave, comm
   }))}>
     <fieldset disabled={command.busy} className="space-y-4">
       <legend className="mb-3 text-lg font-semibold">{t('business.draftEditor')}</legend>
-      <Field label="customer" {...register('customer_id')} options={[['', t('business.chooseCustomer')], ...customerOptions.map(({ id, name }) => [id, name])]} error={errors.customer_id} />
+      <EntityField required control={control} label="customer" name="customer_id" options={[['', t('business.chooseCustomer')], ...customerOptions.map(({ id, name }) => [id, name])]} error={errors.customer_id} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="title" required maxLength={160} {...register('terms.title')} error={errors.terms?.title} />
         <Field label="validUntil" type="date" {...register('terms.valid_until')} error={errors.terms?.valid_until} />

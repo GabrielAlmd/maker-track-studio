@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { getFilamentTypes } from '../services/filamentTypeService';
 import FilamentTypesManager from './FilamentTypesManager';
-import FilamentTypeOptions from './FilamentTypeOptions';
+import FilamentTypeSelect from './FilamentTypeSelect';
 import FilamentTypeCatalog from './FilamentTypeCatalog';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -109,7 +109,7 @@ export default function PurchaseBatchModal({ filaments, filamentsLoading, filame
                   render={({ field: filamentField }) => (
                     <FilamentSelect
                       id={`purchase-filament-${field.id}`}
-                      value={filamentField.value}
+                      {...filamentField} required={!items[index]?.is_new}
                       onChange={(filamentId) => {
                         filamentField.onChange(filamentId);
                         setValue(`items.${index}.is_new`, false, { shouldDirty: true, shouldValidate: true });
@@ -125,19 +125,17 @@ export default function PurchaseBatchModal({ filaments, filamentsLoading, filame
                   <div>
                     <label htmlFor={`purchase-brand-${field.id}`} className="block text-sm font-medium ui-text-secondary">{t('filaments.brand')}</label>
                     <Controller name={`items.${index}.brand`} control={control} render={({ field: brandField }) => (
-                      <BrandSelect id={`purchase-brand-${field.id}`} {...brandField} brands={brands || []} invalid={!!errors.items?.[index]?.brand} />
+                      <BrandSelect required id={`purchase-brand-${field.id}`} {...brandField} brands={brands || []} invalid={!!errors.items?.[index]?.brand} />
                     )} />
                   </div>
                   <label className="block text-sm font-medium ui-text-secondary">
                     {t('filaments.color')}
                     <input {...register(`items.${index}.color`)} maxLength={200} className={inputClass} />
                   </label>
-                  <label className="block text-sm font-medium ui-text-secondary">
-                    {t('filaments.type')}
-                    <select {...register(`items.${index}.type`)} disabled={typesLoading || !!typesError} className={inputClass}>
-                      <FilamentTypeOptions types={types || []} current={items[index]?.type} />
-                    </select>
-                  </label>
+                  <div className="block text-sm font-medium ui-text-secondary">
+                    <FilamentTypeSelect label={t('filaments.type')} control={control} name={`items.${index}.type`} types={types}
+                      disabled={typesLoading || !!typesError} />
+                  </div>
                   <FilamentTypeCatalog loading={typesLoading} error={typesError} onRetry={refetchTypes} onManage={() => setManagingTypes(true)} />
                   <p className="text-xs ui-text-muted">{t('purchaseBatch.averageHelp')}</p>
                 </>

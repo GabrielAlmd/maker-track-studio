@@ -1,3 +1,4 @@
+import FormSelect from '../../../components/ui/FormSelect';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -391,10 +392,9 @@ function SalesOrder() {
               <div className="text-sm ui-text-secondary">
                 <label htmlFor="sales-channel">{t('sales.channelOptional')}</label>
                 <div className="mt-1 flex flex-col gap-2 lg:flex-row">
-                  <select id="sales-channel" aria-label={t('sales.channel')} {...register('sales_channel_id')} className="min-w-0 flex-1 rounded-md border ui-border-default px-3 py-2">
-                    <option value="">{t('sales.noChannel')}</option>
-                    {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}{channel.is_archived ? ` (${t('sales.archived').toLowerCase()})` : ''}</option>)}
-                  </select>
+                  <FormSelect id="sales-channel" aria-label={t('sales.channel')} className="min-w-0 flex-1"
+                    name="sales_channel_id" control={control} options={channels} clearLabel={t('sales.noChannel')}
+                    getLabel={channel => channel.name + (channel.is_archived ? ` (${t('sales.archived').toLowerCase()})` : '')} />
                   <button type="button" onClick={() => setShowChannelModal(true)} className="page-action page-action-secondary whitespace-nowrap">
                     <Plus className="h-4 w-4" aria-hidden="true" />{t('sales.addChannel')}
                   </button>
@@ -414,7 +414,10 @@ function SalesOrder() {
               const unitCost = unitCostFromPrintJobs(jobCache[item.model_id]?.jobs);
               const suggestion = suggestedUnitPrice(unitCost, item.target_profit_percent);
               return <article key={field.fieldKey} className="py-5 first:pt-0 last:pb-0"><div className="mb-3 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold ui-text-primary">{t('sales.itemNumber', { number: index + 1 })}</h3>{fields.length > 1 && <button type="button" onClick={() => { setAllocations((current) => { const next = { ...current }; delete next[item.client_id]; return next; }); remove(index); }} className="inline-flex min-h-10 items-center gap-2 rounded-md border ui-border-danger px-3 py-2 text-sm ui-text-danger" aria-label={t('sales.removeItem', { number: index + 1 })}><Trash2 className="h-4 w-4" aria-hidden="true" />{t('common.remove')}</button>}</div><div className="grid gap-4 xl:grid-cols-[minmax(14rem,1fr)_7rem_9rem_11rem_9rem]">
-                <label className="text-sm ui-text-secondary">{t('sales.model')}<select {...register(`items.${index}.model_id`)} onChange={(event) => { register(`items.${index}.model_id`).onChange(event); setAllocations((current) => ({ ...current, [item.client_id]: [] })); setValue(`items.${index}.unit_price`, ''); }} aria-invalid={Boolean(errors.items?.[index]?.model_id)} aria-describedby={errors.items?.[index]?.model_id ? `sales-item-${index}-model-error` : undefined} className="mt-1 w-full rounded-md border ui-border-default px-3 py-2"><option value="">{t('sales.selectModel')}</option>{models.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select>{fieldError(errors.items?.[index]?.model_id, `sales-item-${index}-model-error`)}</label>
+                <div className="text-sm ui-text-secondary"><FormSelect label={t('sales.model')} name={`items.${index}.model_id`} control={control} required
+                  options={models} clearLabel={t('sales.selectModel')}
+                  aria-describedby={errors.items?.[index]?.model_id ? `sales-item-${index}-model-error` : undefined}
+                  onSelect={() => { setAllocations(current => ({ ...current, [item.client_id]: [] })); setValue(`items.${index}.unit_price`, ''); }} />{fieldError(errors.items?.[index]?.model_id, `sales-item-${index}-model-error`)}</div>
                 <label className="text-sm ui-text-secondary">{t('sales.quantity')}<input type="number" min="1" step="1" {...register(`items.${index}.quantity`)} aria-invalid={Boolean(errors.items?.[index]?.quantity)} aria-describedby={errors.items?.[index]?.quantity ? `sales-item-${index}-quantity-error` : undefined} className="mt-1 w-full rounded-md border ui-border-default px-3 py-2" />{fieldError(errors.items?.[index]?.quantity, `sales-item-${index}-quantity-error`)}</label>
                 <div className="text-sm ui-text-secondary">
                   <div className="flex items-center"><label htmlFor={`sales-item-${field.fieldKey}-target`}>{t('sales.targetProfit')}</label><HelpTooltip label={t('sales.targetProfit')}>{t('sales.targetProfitHelp')}</HelpTooltip></div>

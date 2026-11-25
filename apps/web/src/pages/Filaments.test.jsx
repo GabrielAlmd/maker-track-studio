@@ -102,7 +102,7 @@ describe('Filaments page', () => {
     await user.click(await screen.findByRole('button', { name: /add your first filament/i }));
 
     await user.type(screen.getByLabelText('Brand'), 'New Brand');
-    await user.selectOptions(screen.getByLabelText('Type'), 'PLA');
+    await user.type(screen.getByLabelText('Type'), 'PLA{Enter}');
     await user.type(screen.getByPlaceholderText(/e.g. Black/i), 'Green');
     await user.type(screen.getByPlaceholderText(/e.g. 22.99/i), '24.5');
 

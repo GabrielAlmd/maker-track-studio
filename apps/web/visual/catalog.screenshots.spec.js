@@ -151,7 +151,8 @@ const scenarios = [
     await page.getByRole('button', { name: 'Plan production' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Date', { exact: true }).fill('2026-09-18');
-    await dialog.getByRole('combobox', { name: 'Model', exact: true }).selectOption({ label: 'Workshop Bracket' });
+    await dialog.getByRole('combobox', { name: 'Model', exact: true }).fill('Workshop Bracket');
+    await dialog.getByRole('combobox', { name: 'Model', exact: true }).press('Enter');
     await dialog.getByRole('button', { name: 'Add material' }).click();
     await expect(dialog.getByText('Estimates do not represent recorded consumption.', { exact: false })).toBeVisible();
   } },
@@ -200,7 +201,8 @@ const scenarios = [
     slug: 'printers-add-preset', route: 'printers', prepare: async (page) => {
       await ready.printers(page);
       await page.getByRole('button', { name: 'Add Printer' }).click();
-      await page.getByLabel('Choose a printer preset').selectOption('bambu-lab-a1-v1');
+      await page.getByLabel('Choose a printer preset').fill('Bambu Lab A1');
+      await page.getByLabel('Choose a printer preset').press('Enter');
       await page.getByRole('button', { name: 'Apply preset values' }).click();
       await expect(page.getByLabel('Review and edit preset values')).toBeVisible();
     },
@@ -252,13 +254,44 @@ const scenarios = [
     slug: 'business-quick-sale', route: 'business/orders/quick-sale', fullPage: true,
     prepare: async (page) => {
       await page.getByLabel('Sale reference').fill('Workshop counter sale');
-      await page.getByLabel('Model', { exact: true }).selectOption({ label: 'Workshop Bracket' });
+      await page.getByLabel('Model', { exact: true }).fill('Workshop Bracket');
+      await expect(page.getByRole('option', { name: 'Workshop Bracket' })).toBeVisible();
+      await page.getByLabel('Model', { exact: true }).press('Enter');
       await page.getByLabel('Quantity', { exact: true }).fill('2');
       await page.getByLabel('Unit price (EUR cents)').fill('1299');
       await page.getByLabel('Fulfilment', { exact: true }).selectOption('stock');
-      await page.getByLabel('Finished stock lot').selectOption('55555555-5555-4555-8555-555555555555');
+      await page.getByLabel('Finished stock lot').fill('55555555');
+      await page.getByLabel('Finished stock lot').press('Enter');
+      const confirm = page.getByRole('button', { name: 'Confirm and dispatch' });
+      await expect(confirm).toBeEnabled();
+      await page.getByLabel('Quantity', { exact: true }).fill('3');
+      await expect(confirm).toBeDisabled();
+      const lot = page.getByRole('combobox', { name: 'Finished stock lot' });
+      await lot.fill('55555555');
+      await lot.press('Enter');
+      await expect(confirm).toBeEnabled();
+      const model = page.getByRole('combobox', { name: 'Model', exact: true });
+      await model.fill('Modular Enclosure');
+      await expect(page.getByRole('option', { name: 'Modular Enclosure' })).toBeVisible();
+      await model.press('Enter');
+      await expect(confirm).toBeDisabled();
+      await model.fill('bracket');
+      await expect(page.getByRole('option', { name: 'Workshop Bracket' })).toBeVisible();
+      await model.press('Enter');
+      await page.getByLabel('Quantity', { exact: true }).fill('2');
+      await expect(confirm).toBeDisabled();
+      await lot.fill('55555555');
+      await lot.press('Enter');
       await expect(page.getByText('Sale total €25.98', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Confirm and dispatch' })).toBeEnabled();
+    },
+  },
+  {
+    slug: 'business-quick-sale-search-pt', route: 'business/orders/quick-sale', locale: 'pt-PT',
+    viewport: { width: 390, height: 844 }, fullPage: true,
+    prepare: async page => {
+      await page.getByRole('combobox', { name: 'Modelo', exact: true }).fill('bracket');
+      await expect(page.getByRole('option', { name: 'Workshop Bracket' })).toBeVisible();
     },
   },
   {
@@ -317,7 +350,8 @@ const scenarios = [
     slug: 'sales-new', route: 'sales/new', fullPage: true, prepare: async (page) => {
       await expect(page.getByRole('heading', { name: 'New order' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Order details' })).toBeVisible();
-      await page.getByLabel('Model').selectOption('m1');
+      await page.getByLabel('Model').fill('Modular Enclosure');
+      await page.getByLabel('Model').press('Enter');
       await page.getByRole('spinbutton', { name: 'Target profit (%)' }).fill('150');
       await expect(page.getByText('Suggested unit price: €11.50')).toBeVisible();
       await page.getByRole('button', { name: 'Help for Target profit (%)' }).hover();
@@ -385,7 +419,7 @@ const scenarios = [
       await expect(page.getByRole('heading', { name: 'Nova encomenda' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Detalhes da encomenda' })).toBeVisible();
       await expect(page.getByLabel('Canal de venda')).toHaveValue('');
-      await expect(page.getByLabel('Canal de venda')).toContainText('Sem canal de venda');
+      await expect(page.getByLabel('Canal de venda')).toHaveAttribute('placeholder', 'Sem canal de venda');
     },
   },
   {
@@ -397,7 +431,8 @@ const scenarios = [
       const brand = page.getByRole('combobox', { name: 'Brand', exact: true });
       await brand.fill('bambu');
       await page.getByRole('option', { name: 'Bambu Lab' }).click();
-      await page.getByLabel('Type').selectOption('PLA');
+      await page.getByLabel('Type').fill('PLA');
+      await page.getByLabel('Type').press('Enter');
       await page.getByLabel('Color').fill('Jade White');
       await page.getByLabel('Price (€)').fill('24.99');
       await page.getByLabel('Amount (kg)').fill('1');

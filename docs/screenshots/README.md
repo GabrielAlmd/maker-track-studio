@@ -16,7 +16,7 @@ The catalogue covers:
 - the low-stock filter using verified physical balances, excluding unknown stock;
 - physical printer profiles, default/archive states and printer-specific costs;
 - the Dashboard's recorded-expense breakdown, first-run migration entry point and the feature-gated Business Dashboard with completed-order financial metrics and recent Orders;
-- the Business Operations overview and pending actions, the Quick Sale form with a verified finished-stock lot, the mobile Proposals list and the issued proposal PDF action, attachments on a proposal-backed order and its activity timeline;
+- the Business Operations overview and pending actions, the Quick Sale form with a verified finished-stock lot, the Portuguese model search on a narrow Quick Sale form, the mobile Proposals list and the issued proposal PDF action, attachments on a proposal-backed order and its activity timeline;
 - the Orders list at wide and compact desktop widths, its active-filter menu, the new Order form at wide, compact and narrow widths, active production allocations, completed locked history and inline Sales Channel creation;
 - the Dashboard and Print Jobs list at 390px width, plus the narrow Add Print Job dialog;
 - the Portuguese (Portugal) new Order workflow, including the optional Sales Channel state;

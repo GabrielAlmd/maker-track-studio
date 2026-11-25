@@ -59,7 +59,7 @@ describe('Printers page', () => {
     const user = userEvent.setup();
     render(<Printers />);
     await user.click(await screen.findByRole('button', { name: 'Add Printer' }));
-    await user.selectOptions(screen.getByLabelText('Choose a printer preset'), 'bambu-lab-a1-v1');
+    await user.type(screen.getByLabelText('Choose a printer preset'), 'Bambu Lab A1{Enter}');
     expect(screen.getByText(/Example purchase price: 299 EUR/)).toBeInTheDocument();
     expect(printerService.createPrinter).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Apply preset values' }));
@@ -81,7 +81,7 @@ describe('Printers page', () => {
     render(<Printers />);
     await screen.findByText('A1 – Workshop');
     await user.click(screen.getAllByRole('button', { name: 'Edit costs' })[0]);
-    await user.selectOptions(screen.getByLabelText('Choose a printer preset'), 'bambu-lab-p1s-v1');
+    await user.type(screen.getByLabelText('Choose a printer preset'), 'Bambu Lab P1S{Enter}');
     await user.click(screen.getByRole('button', { name: 'Apply preset values' }));
     expect(screen.getByRole('dialog', { name: 'Review preset changes' })).toBeInTheDocument();
     expect(printerService.updatePrinterCostConfig).not.toHaveBeenCalled();
@@ -97,7 +97,7 @@ describe('Printers page', () => {
     const user = userEvent.setup();
     render(<Printers />);
     await user.click(await screen.findByRole('button', { name: 'Add Printer' }));
-    await user.selectOptions(screen.getByLabelText('Choose a printer preset'), 'bambu-lab-a1-v1');
+    await user.type(screen.getByLabelText('Choose a printer preset'), 'Bambu Lab A1{Enter}');
     await user.click(screen.getByRole('checkbox', { name: /Use complete A1 reference profile/ }));
     await user.click(screen.getByRole('button', { name: 'Apply preset values' }));
     expect(screen.getByLabelText('Labor Cost (per hour)')).toHaveValue(25);

@@ -1,8 +1,8 @@
 import api from './api';
 
 // Get all models
-export const getModels = async (params) => {
-  const response = await api.get('/models', params ? { params } : undefined);
+export const getModels = async (params, signal) => {
+  const response = await api.get('/models', params ? { params, signal } : undefined);
   return response.data;
 };
 

@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/ui/SearchableSelect';
 import { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -34,19 +35,13 @@ const costSchema = (t) => yup.object(Object.fromEntries(costKeys.map((key) => [k
 
 function PresetPicker({ preset, onSelect, onApply, allowComplete = false }) {
   const { t, i18n } = useTranslation();
-  const [query, setQuery] = useState('');
-  const matchingPresets = PRINTER_PRESETS.filter(item => `${item.manufacturer} ${item.model}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const visiblePresets = preset && !matchingPresets.some(item => item.id === preset.id) ? [...matchingPresets, preset] : matchingPresets;
   return <section className="rounded-xl border ui-border-subtle p-4 space-y-3">
     <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{t('printers.presetTitle')}</h3><span className="rounded-full ui-tone-primary px-2 py-0.5 text-xs font-medium">{t('printers.previewCatalog')}</span></div><p className="text-sm ui-text-secondary">{t('printers.presetHelp')}</p></div>
     <label className="block text-sm font-medium" htmlFor="printer-preset">{t('printers.choosePreset')}</label>
-    <input type="search" aria-label={t('printers.searchPresets')} placeholder={t('printers.searchPresets')} value={query} onChange={event => setQuery(event.target.value)} className="w-full rounded-md border ui-border-default px-3 py-2" />
-    <select id="printer-preset" value={preset?.id ?? ''} onChange={(event) => onSelect(PRINTER_PRESETS.find(item => item.id === event.target.value) ?? null)} className="w-full rounded-md border ui-border-default px-3 py-2">
-      <option value="">{t('printers.customPreset')}</option>
-      {['Bambu Lab', 'Prusa', 'Creality', 'Anycubic', 'ELEGOO'].map(manufacturer => <optgroup key={manufacturer} label={manufacturer}>
-        {visiblePresets.filter(item => item.manufacturer === manufacturer).map(item => <option key={item.id} value={item.id}>{item.displayName}</option>)}
-      </optgroup>)}
-    </select>
+    <SearchableSelect id="printer-preset" options={PRINTER_PRESETS} getLabel={item => item.displayName}
+      getSearchText={item => [item.manufacturer, item.model, item.displayName].join(' ')}
+      placeholder={t('printers.searchPresets')} clearLabel={t('printers.customPreset')} value={preset?.id ?? ''}
+      onChange={id => onSelect(PRINTER_PRESETS.find(item => item.id === id) ?? null)} />
     {preset && <div className="rounded-md ui-surface-input p-3 text-sm space-y-2">
       <p>{t('printers.examplePrice', { price: preset.profileDefaults.printer_purchase_cost, currency: preset.currency, region: preset.region, date: preset.reviewedAt })}</p>
       <p>{t('printers.powerEvidence', { average: preset.profileDefaults.printer_power_watts, rated: preset.evidence.ratedPowerWatts })}</p>

@@ -359,7 +359,7 @@ describe('PrintJobs page', () => {
     render(<PrintJobs />);
 
     await user.click(await screen.findByText('Filters'));
-    await user.selectOptions(screen.getByRole('listbox', { name: 'Printer' }), 'p2');
+    await user.type(screen.getByRole('combobox', { name: 'Printer' }), 'Selected{Enter}');
     await waitFor(() => expect(printJobService.getPrintJobs).toHaveBeenCalledWith(expect.objectContaining({ printer_id: 'p2' })));
     await user.click(screen.getByText('Filters (1)'));
     expect(await screen.findByText('No results match your search')).toBeVisible();
@@ -367,9 +367,10 @@ describe('PrintJobs page', () => {
     await user.click(screen.getByRole('button', { name: 'Add Print Job', exact: true }));
 
     const printer = screen.getByRole('combobox', { name: 'Printer' });
-    expect(printer).toHaveValue('p1');
-    await user.selectOptions(printer, 'p2');
-    expect(Array.from(printer.options).map((option) => option.value)).not.toContain('p3');
+    expect(printer).toHaveValue('Default (default)');
+    await user.click(printer);
+    expect(screen.queryByRole('option', { name: /Archived/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: 'Selected' }));
     fireEvent.change(document.querySelector('input[name="print_date"]'), { target: { value: '2026-04-03' } });
     await user.click(screen.getByRole('button', { name: /create print job/i }));
 
@@ -405,7 +406,8 @@ describe('PrintJobs page', () => {
     await user.click(await screen.findByRole('button', { name: /edit/i }));
 
     const printer = screen.getByRole('combobox', { name: 'Printer' });
-    expect(printer).toHaveValue('p-old');
+    expect(printer).toHaveValue('Retired MK3 (archived)');
+    await user.click(printer);
     expect(screen.getByRole('option', { name: 'Retired MK3 (archived)' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /old machine/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /save changes/i }));

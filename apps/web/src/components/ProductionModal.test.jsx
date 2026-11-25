@@ -42,7 +42,8 @@ it('appends imported estimates, preserves manual runs and requires review before
   await screen.findByRole('alert');
   expect(api.request).not.toHaveBeenCalled();
   fireEvent.change(screen.getAllByLabelText('planned')[1], { target: { value: '3' } });
-  fireEvent.change(screen.getByLabelText('Filament'), { target: { value: 'f1' } });
+  fireEvent.change(screen.getByLabelText('Filament'), { target: { value: 'Blue' } });
+  fireEvent.click(screen.getByRole('option', { name: 'Test PLA — Blue' }));
   fireEvent.change(screen.getByLabelText(/Total grams/), { target: { value: '15' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save production' }));
   await waitFor(() => expect(api.request).toHaveBeenCalledOnce());
