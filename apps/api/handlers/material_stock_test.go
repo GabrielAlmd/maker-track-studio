@@ -97,6 +97,13 @@ func TestProductionMaterialStock(t *testing.T) {
 			db.Create(&a)
 			db.Create(&b)
 			db.Create(&c)
+			paused := models.Filament{}
+			if err := db.Create(&paused).Error; err != nil {
+				t.Fatal(err)
+			}
+			if res := performRequest(t, r, "PATCH", "/v2/inventory/materials/"+paused.ID.String(), map[string]any{"tracking_enabled": false, "expected_revision": 0}); res.Code != 204 {
+				t.Fatal(res.Body.String())
+			}
 			input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-19T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "items": []any{map[string]any{"planned": 1, "model_id": product.ID}}, "materials": []any{}}}}
 			res := performRequest(t, r, "POST", "/v2/production/jobs", input)
 			if res.Code != 201 {
@@ -119,7 +126,7 @@ func TestProductionMaterialStock(t *testing.T) {
 					} else {
 						item["rejected"] = 1
 					}
-					run["materials"] = []any{map[string]any{"filament_id": a.ID, "weight_used": 12.345, "waste_weight_g": 2, "measurement_state": "verified"}, map[string]any{"filament_id": b.ID, "weight_used": 3.001, "measurement_state": "verified"}, map[string]any{"filament_id": c.ID, "weight_used": 99, "estimated_weight_g": 99, "measurement_state": "estimated"}}
+					run["materials"] = []any{map[string]any{"filament_id": a.ID, "weight_used": 12.345, "waste_weight_g": 2, "measurement_state": "verified"}, map[string]any{"filament_id": b.ID, "weight_used": 3.001, "measurement_state": "verified"}, map[string]any{"filament_id": paused.ID, "weight_used": 11, "measurement_state": "verified"}, map[string]any{"filament_id": c.ID, "weight_used": 99, "estimated_weight_g": 99, "measurement_state": "estimated"}}
 					db.Exec("CREATE TRIGGER fail_stock_receipt BEFORE INSERT ON production_operations BEGIN SELECT RAISE(ABORT, 'injected'); END")
 					if failed := performRequest(t, r, "PUT", path, input); failed.Code != 500 {
 						t.Fatal(failed.Body.String())
@@ -158,7 +165,8 @@ func TestProductionMaterialStock(t *testing.T) {
 			if err != nil || stock.OnHand != wantOutput {
 				t.Fatal(stock, err)
 			}
-			if count != 2+wantOutput {
+			assertStock(t, db, paused.ID, 0)
+			if count != 3+wantOutput { // Two deductions and the tracking transition.
 				t.Fatalf("duplicate deductions %d", count)
 			}
 

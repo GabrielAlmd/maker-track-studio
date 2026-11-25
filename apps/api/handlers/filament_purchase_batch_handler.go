@@ -77,7 +77,7 @@ func CreateFilamentPurchaseBatch(db *gorm.DB) gin.HandlerFunc {
 				if err := tx.Create(&p).Error; err != nil {
 					return err
 				}
-				if err := syncPurchaseStock(tx, p, true); err != nil {
+				if err := syncPurchaseStock(tx, p, nil); err != nil {
 					return err
 				}
 				result = append(result, dto.FilamentPurchaseDTO{ID: p.ID, FilamentID: p.FilamentID, Price: p.Price, Amount: p.Amount, PurchaseDate: p.PurchaseDate, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt})

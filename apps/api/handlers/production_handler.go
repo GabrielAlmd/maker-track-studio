@@ -398,7 +398,7 @@ func saveRunMaterials(tx *gorm.DB, jobID uuid.UUID, run, prior models.PrintRun, 
 			if err != nil {
 				return err
 			}
-			if err := inventory.SetSource(tx, "material:"+m.ID.String(), map[uuid.UUID]int64{m.FilamentID: -quantity}, "consumption"); err != nil {
+			if err := inventory.SetSource(tx, "material:"+m.ID.String(), inventory.SourceAmount{ItemID: m.FilamentID, Quantity: -quantity}, "consumption", nil); err != nil {
 				return err
 			}
 		}

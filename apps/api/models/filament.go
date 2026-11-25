@@ -8,6 +8,8 @@ import (
 )
 
 type Filament struct {
+	WarningsDisabled bool      `gorm:"not null;default:false"`
+	Archived         bool      `gorm:"not null;default:false"`
 	StockThresholdMG int64     `gorm:"not null;default:0"`
 	ID               uuid.UUID `gorm:"type:uuid;primaryKey"`
 	Brand            string    `gorm:"not null"`

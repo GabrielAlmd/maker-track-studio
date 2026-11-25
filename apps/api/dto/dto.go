@@ -19,6 +19,7 @@ type FilamentPurchaseDTO struct {
 }
 
 type FilamentDTO struct {
+	Archived       bool                  `json:"archived"`
 	ID             uuid.UUID             `json:"id"`
 	Brand          string                `json:"brand"`
 	Type           string                `json:"type"`

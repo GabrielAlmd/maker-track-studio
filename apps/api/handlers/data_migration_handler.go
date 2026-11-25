@@ -917,11 +917,15 @@ func commitMigration(db *gorm.DB, preview migrationPreviewResponse) (map[string]
 				case preparedPurchase:
 					purchase := models.FilamentPurchase{ID: value.ID, FilamentID: value.FilamentID, Price: value.Price, Amount: value.Amount, PurchaseDate: value.Date}
 					if row.Action == "update" {
+						var previous models.FilamentPurchase
+						if err := tx.First(&previous, "id = ?", row.existing).Error; err != nil {
+							return err
+						}
 						if err := tx.Model(&models.FilamentPurchase{}).Where("id = ?", row.existing).Updates(map[string]any{"filament_id": value.FilamentID, "price": value.Price, "amount": value.Amount, "purchase_date": value.Date}).Error; err != nil {
 							return err
 						}
 						purchase.ID = row.existing
-						if err := syncPurchaseStock(tx, purchase, false); err != nil {
+						if err := syncPurchaseStock(tx, purchase, &previous); err != nil {
 							return err
 						}
 					} else if err := tx.Create(&purchase).Error; err != nil {

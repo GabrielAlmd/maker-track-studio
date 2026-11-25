@@ -64,6 +64,10 @@ func (p Posting) Validate() error {
 		if p.SourceKey != "" || p.CountedQuantity < 0 || p.CountedQuantity > MaxQuantity || p.ExpectedRevision < 0 || p.ExpectedRevision > MaxQuantity {
 			return ErrInvalid
 		}
+	case "tracking_paused", "tracking_resumed":
+		if p.ItemType != "filament" || p.SourceKey != "" || p.Quantity != 0 {
+			return ErrInvalid
+		}
 	case "opening":
 		if p.SourceKey != "" || p.Quantity < 0 {
 			return ErrInvalid
@@ -91,12 +95,14 @@ func (p Posting) Validate() error {
 }
 
 type Balance struct {
-	OnHand    int64 `json:"on_hand"`
-	Reserved  int64 `json:"reserved"`
-	Available int64 `json:"available"`
-	Verified  bool  `json:"verified"`
-	Negative  bool  `json:"negative"`
-	Revision  int64 `json:"revision"`
+	TrackingPaused bool  `json:"tracking_paused,omitempty"`
+	TrackingGap    bool  `json:"tracking_gap,omitempty"`
+	OnHand         int64 `json:"on_hand"`
+	Reserved       int64 `json:"reserved"`
+	Available      int64 `json:"available"`
+	Verified       bool  `json:"verified"`
+	Negative       bool  `json:"negative"`
+	Revision       int64 `json:"revision"`
 }
 
 func itemExists(db *gorm.DB, typ string, id uuid.UUID) error {
@@ -112,13 +118,19 @@ func itemExists(db *gorm.DB, typ string, id uuid.UUID) error {
 	return db.Select("id").Take(record, "id = ?", id).Error
 }
 
+// VerifiedStockSQL is shared by the projection and the paginated low-stock filter.
+const VerifiedStockSQL = "MAX(CASE WHEN kind IN ('opening','count') THEN sequence ELSE 0 END) > MAX(CASE WHEN kind = 'tracking_paused' THEN sequence ELSE 0 END)"
+
 const balanceColumns = `
 	COALESCE(SUM(quantity), 0) AS on_hand,
 	COALESCE(SUM(CASE
 		WHEN kind = 'reserve' THEN units
 		WHEN kind IN ('release', 'dispatch') THEN -units
 		ELSE 0 END), 0) AS reserved,
-	COALESCE(MAX(kind IN ('opening', 'count')), 0) AS verified,
+	COALESCE(` + VerifiedStockSQL + `, 0) AS verified,
+    COALESCE(MAX(CASE WHEN kind = 'tracking_paused' THEN sequence ELSE 0 END) >
+             MAX(CASE WHEN kind = 'tracking_resumed' THEN sequence ELSE 0 END), 0) AS tracking_paused,
+    COALESCE(MAX(kind = 'tracking_paused'), 0) AS tracking_gap,
 	COALESCE(MAX(sequence), 0) AS revision`
 
 func projection(db *gorm.DB, typ string, id uuid.UUID, through int64) (Balance, error) {
@@ -215,6 +227,26 @@ func Post(tx *gorm.DB, p Posting) (Receipt, error) {
 }
 
 func (b *Balance) apply(p Posting) error {
+	switch p.Kind {
+	case "tracking_paused":
+		if b.TrackingPaused {
+			return ErrConflict
+		}
+		b.TrackingPaused, b.TrackingGap, b.Verified = true, true, false
+	case "tracking_resumed":
+		if !b.TrackingPaused {
+			return ErrConflict
+		}
+		b.TrackingPaused = false
+	case "opening":
+		if b.TrackingGap {
+			return ErrConflict
+		}
+	default:
+		if b.TrackingPaused && !(p.Kind == "compensation" && p.Quantity < 0 && strings.HasPrefix(p.SourceKey, "purchase:")) {
+			return ErrConflict
+		}
+	}
 	next := b.OnHand + p.Quantity
 	if p.Kind == "count" && (p.ExpectedRevision != b.Revision || next != p.CountedQuantity) {
 		return ErrConflict

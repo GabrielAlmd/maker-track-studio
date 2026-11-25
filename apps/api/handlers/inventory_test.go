@@ -347,3 +347,168 @@ func TestInventoryThresholdBackupRoundTrip(t *testing.T) {
 		t.Fatal(err, got)
 	}
 }
+
+func TestFilamentLifecycleAndReconciliation(t *testing.T) {
+	for _, business := range []bool{true, false} {
+		t.Run("business="+strconv.FormatBool(business), func(t *testing.T) {
+			router, db := setupTestRouter(t)
+			item := models.Filament{Brand: "Workshop", StockThresholdMG: 1000000}
+			if err := db.Create(&item).Error; err != nil {
+				t.Fatal(err)
+			}
+			id := item.ID.String()
+			resource := "/v2/inventory/materials/" + id
+			request := func(method, path string, body any, status int) string {
+				t.Helper()
+				res := performRequest(t, router, method, path, body)
+				if res.Code != status {
+					t.Fatalf("%s %s: %d %s", method, path, res.Code, res.Body.String())
+				}
+				return res.Body.String()
+			}
+			balance := func() inventory.Balance {
+				t.Helper()
+				b, err := inventory.Availability(db, "filament", item.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return b
+			}
+			request("PUT", "/features", map[string]bool{"sales_orders": business}, 200)
+			opening := posting("filament", item.ID, 0)
+			opening.Kind = "opening"
+			request("POST", adjustments, opening, 201)
+			purchase := map[string]any{"filament_id": id, "amount": 1, "price": 21, "purchase_date": "2026-11-19T00:00:00Z"}
+			create := func() string {
+				t.Helper()
+				p := legacyOrderRequest[struct {
+					ID string `json:"id"`
+				}](t, router, "POST", "/filament-purchases", purchase, 201)
+				return "/filament-purchases/" + p.ID
+			}
+			posted := create()
+			filter := "/filaments?page=1&low_stock=true"
+			if !strings.Contains(request("GET", filter, nil, 200), id) {
+				t.Fatal("missing low-stock warning")
+			}
+			request("PATCH", resource, map[string]bool{"warnings_enabled": false}, 204)
+			if strings.Contains(request("GET", filter, nil, 200), id) || !balance().Verified {
+				t.Fatal("warning control changed stock or failed to mute filter")
+			}
+			pause := map[string]any{"tracking_enabled": false, "expected_revision": balance().Revision, "archived": true}
+			// Inject failure after the ledger transition. Neither setting may commit.
+			if err := db.Exec("CREATE TRIGGER fail_archive BEFORE UPDATE OF archived ON filaments BEGIN SELECT RAISE(ABORT,'injected'); END").Error; err != nil {
+				t.Fatal(err)
+			}
+			request("PATCH", resource, pause, 500)
+			if balance().TrackingPaused || !balance().Verified {
+				t.Fatal(balance())
+			}
+			if err := db.Exec("DROP TRIGGER fail_archive").Error; err != nil {
+				t.Fatal(err)
+			}
+			request("PATCH", resource, pause, 204)
+			paused := balance()
+			request("PATCH", resource, pause, 204)
+			if balance() != paused || paused.Verified || !paused.TrackingPaused {
+				t.Fatal(paused)
+			}
+			request("POST", adjustments, posting("filament", item.ID, 10), 409)
+			skipped := create()
+			purchase["amount"] = 2
+			request("PUT", posted, purchase, 200)
+			purchase["amount"] = 1.75
+			request("PUT", posted, purchase, 200)
+			request("PUT", posted, purchase, 200)
+			if balance().OnHand != 750000 {
+				t.Fatal(balance())
+			}
+			archive := performRequest(t, router, "GET", "/desktop-data/export", nil)
+			if archive.Code != 200 {
+				t.Fatal(archive.Body.String())
+			}
+			router, db = setupTestRouter(t)
+			res := performMultipartFileRequest(t, router, "POST", "/desktop-data/import", "file", "stock.zip", archive.Body.Bytes())
+			if res.Code != 200 {
+				t.Fatal(res.Body.String())
+			}
+			var restored models.Filament
+			if err := db.First(&restored, "id = ?", id).Error; err != nil || !restored.WarningsDisabled || !restored.Archived || !balance().TrackingPaused {
+				t.Fatal(restored, err)
+			}
+			request("PATCH", resource, map[string]any{"tracking_enabled": true, "expected_revision": balance().Revision}, 204)
+			request("PATCH", resource, pause, 409)
+			if balance().Verified {
+				t.Fatal("resumed without a count")
+			}
+			request("PUT", skipped, purchase, 200)
+			request("PUT", posted, purchase, 200)
+			if balance().OnHand != 750000 {
+				t.Fatal(balance())
+			}
+			count := map[string]any{"item_type": "filament", "item_id": id, "kind": "count", "counted_quantity": 250000, "expected_revision": paused.Revision, "reason": "shelf count", "actor": "operator", "operation_id": uuid.New(), "source_id": uuid.New()}
+			request("POST", adjustments, count, 409)
+			count["expected_revision"] = balance().Revision
+			request("POST", adjustments, count, 201)
+			second := models.Filament{}
+			if err := db.Create(&second).Error; err != nil {
+				t.Fatal(err)
+			}
+			purchase["filament_id"] = second.ID
+			request("PUT", posted, purchase, 200)
+			assertStock(t, db, second.ID, 0)
+			request("DELETE", posted, nil, 204)
+			request("DELETE", skipped, nil, 204)
+			if b := balance(); !b.Verified || b.OnHand != 250000 {
+				t.Fatal(b)
+			}
+			request("PATCH", resource, map[string]bool{"warnings_enabled": true, "archived": false}, 204)
+			if !strings.Contains(request("GET", filter, nil, 200), id) {
+				t.Fatal("missing resumed warning")
+			}
+		})
+	}
+}
+
+func TestSchema20FilamentLifecycleDefaults(t *testing.T) {
+	source, db := setupTestRouter(t)
+	item := models.Filament{Brand: "Existing", AvgPrice: 21.25, StockThresholdMG: 5000}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	p := posting("filament", item.ID, 4500)
+	p.Kind = "opening"
+	original := performRequest(t, source, "POST", adjustments, p)
+	if original.Code != 201 {
+		t.Fatal(original.Body.String())
+	}
+	for _, ddl := range []string{"ALTER TABLE filaments DROP COLUMN archived", "ALTER TABLE filaments DROP COLUMN warnings_disabled"} {
+		if err := db.Exec(ddl).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	archive := performRequest(t, source, "GET", "/desktop-data/export", nil)
+	if archive.Code != 200 {
+		t.Fatal(archive.Body.String())
+	}
+	target, restored := setupTestRouter(t)
+	importFile := func(zip []byte, status int) {
+		t.Helper()
+		res := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "legacy.zip", zip)
+		if res.Code != status {
+			t.Fatal(res.Code, res.Body.String())
+		}
+	}
+	importFile(archive.Body.Bytes(), 400)
+	legacy := rewriteBackupSchemaVersion(t, archive.Body.Bytes(), 20)
+	for i := 0; i < 2; i++ {
+		importFile(legacy, 200)
+		var got models.Filament
+		if err := restored.First(&got, "id = ?", item.ID).Error; err != nil || got.Archived || got.WarningsDisabled || got.AvgPrice != item.AvgPrice || got.StockThresholdMG != item.StockThresholdMG {
+			t.Fatal(got, err)
+		}
+		if res := performRequest(t, target, "POST", adjustments, p); res.Code != 201 || res.Body.String() != original.Body.String() {
+			t.Fatal(res.Body.String())
+		}
+	}
+}
