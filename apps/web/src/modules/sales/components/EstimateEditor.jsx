@@ -81,7 +81,7 @@ export default function EstimateEditor({ kind, record, customers, onSave, comman
   const { fields, append, remove } = useFieldArray({ control, name: 'items', keyName: 'fieldKey' });
   const modelOptions = [['', t('business.adHoc')], ...(models ?? []).map(({ id, name }) => [id, name])];
   const printerOptions = [['', t('business.defaultPrinter')], ...printers.map(({ id, name }) => [id, name])];
-  const filamentOptions = [['', t('business.chooseFilament')], ...filaments.map(({ id, brand, type, color }) => [id, [brand, type, color].filter(Boolean).join(' ')])];
+  const filamentOptions = [['', t('business.chooseFilament')], ...filaments.filter(f => !f.archived).map(({ id, brand, type, color }) => [id, [brand, type, color].filter(Boolean).join(' ')])];
   if (budget && loading) return <LoadingState />;
   if (budget && error) return <InlineError title={t('business.loadError')} onRetry={refetch} />;
   return <form className="page-panel p-5 sm:p-6" noValidate onSubmit={handleSubmit((values) => {

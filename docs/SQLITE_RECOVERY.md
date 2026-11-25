@@ -135,8 +135,12 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share backup schema version 20 and ZIP
-format version 1. Schema 20 includes [model material requirements](MODEL_MATERIALS.md).
+Current desktop and self-hosted builds share backup schema version 21 and ZIP
+format version 1. Schema 21 adds filament archive and warning settings. The
+core inventory marker advances to 5. Restore validates tracking transitions
+while replaying ledger history in sequence. Earlier backups restore with
+tracking and warnings enabled and active catalogue entries. To downgrade,
+restore a pre-upgrade backup with its matching binary. Schema 20 includes [model material requirements](MODEL_MATERIALS.md).
 Restore validates requirement IDs, model and filament references, row order and
 derived totals before replacing data. Earlier archives retain their model IDs
 and aggregate estimates with an unknown split. Schema 19 adds estimated time

@@ -39,7 +39,30 @@ const ready = {
 };
 
 const scenarios = [
-  ...[false, true].map((mobile) => ({ slug: mobile ? 'inventory-mobile' : 'inventory', route: 'inventory', setup: async (page) => { await page.route('**/api/features', (route) => route.fulfill({ json: { sales_orders: false } })); }, ...(mobile ? { viewport: { width: 390, height: 844 } } : {}), fullPage: true, prepare: async (page) => { await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible(); await expect(page.getByText('Low stock').first()).toBeVisible(); await expect(page.getByText('Cable bracket', { exact: true })).toBeVisible(); } })),
+  ...[false, true].map(mobile => ({
+    slug: mobile ? 'inventory-mobile' : 'inventory',
+    route: 'inventory',
+    ...(mobile ? { viewport: { width: 390, height: 844 } } : {}),
+    fullPage: true,
+    setup: async page => {
+      await page.route('**/api/v2/inventory/movements/filament/f2*', route => route.fulfill({ json: [
+        { sequence: 2, created_at: '2026-09-18T09:00:00Z', kind: 'tracking_paused', quantity: 0, actor: 'Workshop operator' },
+      ] }));
+      await page.route('**/api/v2/inventory/materials', route => route.fulfill({ json: [
+        { id: 'f1', brand: 'Bambu Lab', type: 'PLA', color: 'Matte Black', threshold_mg: 100000, balance: { verified: true, on_hand: 45000, available: 45000, revision: 1 } },
+        { id: 'f2', brand: 'Prusament', type: 'PLA', color: 'Galaxy Silver', tracking_enabled: false, archived: true, threshold_mg: 0, balance: { verified: false, revision: 2 } },
+      ] }));
+      await page.route('**/api/features', (route) => route.fulfill({ json: { sales_orders: false } }));
+    },
+    prepare: async page => {
+      await expect(page.getByText('Low stock').first()).toBeVisible();
+      await expect(page.getByText('Stock not tracked')).toBeVisible();
+      await page.getByRole('button', { name: /Settings and history for Prusament/ }).click();
+      await expect(page.getByRole('button', { name: 'Resume tracking' })).toBeVisible();
+      await expect(page.getByText(/Tracking paused · Workshop operator/)).toBeVisible();
+      await expect(page.getByText('Cable bracket', { exact: true })).toBeVisible();
+    },
+  })),
   ...['empty', 'pending', 'error'].map((state) => ({
     slug: `purchases-first-run-${state}`, route: 'purchases',
     setup: async (page) => {

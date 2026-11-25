@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { EmptyState, InlineError, LoadingState } from '../components/ui/PageState';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
-import { getFinishedGoods, getMaterials, getMovements, postCount, setThreshold, stockWarning } from '../services/inventoryService';
+import { getFinishedGoods, getMaterials, getMovements, postCount, setThreshold, updateLifecycle, stockWarning } from '../services/inventoryService';
 
 const quantity = yup.number().required().min(0);
 const schema = (pieces) => yup.object({ quantity: pieces ? quantity.integer().max(Number.MAX_SAFE_INTEGER) : quantity.max(Number.MAX_SAFE_INTEGER / 1000), reason: yup.string().trim().required().max(512), actor: yup.string().trim().required().max(128) });
@@ -37,6 +37,37 @@ function Reconcile({ item, onSaved, pieces = false }) {
     {Object.values(errors).map((error, i) => <p role="alert" key={i}>{error.message}</p>)}
     <button className="page-action" disabled={isSubmitting}>{t('finishedGoods.record')}</button>
   </form>;
+}
+
+function LifecycleControls({ item, onSaved }) {
+  const { t } = useTranslation();
+  const [confirm, setConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const tracked = item.tracking_enabled !== false;
+  const update = async changes => {
+    setSaving(true);
+    try {
+      await updateLifecycle(item.id, changes);
+      await onSaved();
+    } catch (err) {
+      if (err.response?.status === 409) {
+        toast.error(t('lifecycle.stale'));
+        await onSaved();
+      } else {
+        toast.error(t('lifecycle.failed'));
+      }
+    }
+    finally { setSaving(false); }
+  };
+  return <fieldset disabled={saving} className="flex flex-wrap items-center gap-3">
+    <legend className="mb-2 font-semibold">{t('lifecycle.controls')}</legend>
+    <button className="page-action page-action-secondary" onClick={() => setConfirm(true)}>{t(tracked ? 'lifecycle.pause' : 'lifecycle.resume')}</button>
+    <button className="page-action page-action-secondary" onClick={() => update({ warnings_enabled: item.warnings_enabled === false })}>{t(item.warnings_enabled === false ? 'lifecycle.enableWarnings' : 'lifecycle.mute')}</button>
+    <button className="page-action page-action-secondary" onClick={() => update({ archived: !item.archived })}>{t(item.archived ? 'lifecycle.unarchive' : 'lifecycle.archive')}</button>
+    {confirm && <div className="w-full space-y-2"><p>{t('lifecycle.confirmHelp')}</p>
+      <button className="page-action" onClick={() => update({ tracking_enabled: !tracked, expected_revision: item.balance.revision })}>{t('lifecycle.confirm')}</button>
+      <button className="page-action page-action-secondary" onClick={() => setConfirm(false)}>{t('common.cancel')}</button></div>}
+  </fieldset>;
 }
 
 function FinishedGoods() {
@@ -101,16 +132,20 @@ export default function Inventory() {
       {items.length > 0 && !items.some((item) => `${item.brand} ${item.type} ${item.color}`.toLowerCase().includes(search.toLowerCase())) && <p>No matching materials.</p>}
       <div className="grid gap-4 md:grid-cols-2">{items.filter((item) => `${item.brand} ${item.type} ${item.color}`.toLowerCase().includes(search.toLowerCase())).map((item) => <article className="page-panel p-5 space-y-2 text-sm ui-text-secondary" key={item.id}>
         <h2 className="text-lg font-semibold ui-text-primary">{item.brand} {item.type} — {item.color}</h2>
-        <p>On hand: {item.balance.verified ? grams(item.balance.on_hand) : 'Unknown'} · Available: {item.balance.verified ? grams(item.balance.available) : 'Unknown'}</p>
-        {!item.balance.verified && <p>Recorded changes: {grams(item.balance.on_hand)} (unverified)</p>}
+        {item.warnings_enabled === false && <p>{t('lifecycle.muted')}</p>}
+        {item.archived && <p>{t('lifecycle.archived')}</p>}
+        {item.tracking_enabled === false ? <p>{t('lifecycle.untracked')}</p> : <p>On hand: {item.balance.verified ? grams(item.balance.on_hand) : 'Unknown'} · Available: {item.balance.verified ? grams(item.balance.available) : 'Unknown'}</p>}
+        {item.tracking_enabled !== false && !item.balance.verified && <p>Recorded changes: {grams(item.balance.on_hand)} (unverified)</p>}
         <p>Warning threshold: {grams(item.threshold_mg)}</p><p>{stockWarning(item)}</p>
-        <button className="page-action page-action-secondary" onClick={() => inspect(item)}>Count and audit {item.brand} {item.color}</button>
+        <button className="page-action page-action-secondary" onClick={() => inspect(item)}>{t(item.tracking_enabled === false ? 'lifecycle.review' : 'lifecycle.countAudit', { name: [item.brand, item.color].join(' ') })}</button>
       </article>)}</div>
       {selected && <section className="rounded border p-4 space-y-5" aria-label="Material details">
         <h2>{selected.brand} {selected.type} — {selected.color}</h2><button onClick={() => setSelected(null)}>Close details</button>
+        <LifecycleControls key={selected.id} item={selected} onSaved={async () => { setSelected(null); await load(); }} />
         <form onSubmit={saveThreshold}><label>Warning threshold (g)<input className="m-2 rounded border p-2" type="number" min="0" step="0.001" required value={threshold} onChange={(e) => setThresholdValue(e.target.value)} /></label><button className="page-action page-action-secondary">Save threshold</button></form>
-        <Reconcile key={`${selected.id}:${selected.balance.revision}`} item={selected} onSaved={async () => { setSelected(null); await load(); }} />
-        <h2>Movement history (g)</h2>{historyError ? <p role="alert">Could not load history. <button onClick={() => inspect(selected)}>Retry history</button></p> : history.length === 0 ? <p>No recorded movements.</p> : <ol>{history.map((row) => <li key={row.sequence}>#{row.sequence} · {row.created_at} · {row.kind} · {grams(row.quantity)} · {row.reason} · {row.actor}</li>)}</ol>}
+        {selected.tracking_enabled !== false && <Reconcile key={`${selected.id}:${selected.balance.revision}`} item={selected} onSaved={async () => { setSelected(null); await load(); }} />}
+        <h2>Movement history (g)</h2>{historyError ? <p role="alert">Could not load history. <button onClick={() => inspect(selected)}>Retry history</button></p> : history.length === 0 ? <p>No recorded movements.</p> : <ol>{history.map((row) => <li key={row.sequence}>#{row.sequence} · {row.created_at} · {['tracking_paused', 'tracking_resumed'].includes(row.kind)
+          ? t(`lifecycle.${row.kind}`) : `${row.kind} · ${grams(row.quantity)} · ${row.reason}`} · {row.actor}</li>)}</ol>}
         {after > 0 && <button onClick={() => inspect(selected, after)}>Load more movements</button>}
       </section>}
     </>}

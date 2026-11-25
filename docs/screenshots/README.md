@@ -16,6 +16,7 @@ The catalogue covers:
 - the Portuguese (Portugal) Settings screen and calculation-defaults guidance in both themes;
 - create forms, filters (including Print Jobs model search), filament type management and inline cost details;
 - the low-stock filter using verified physical balances, excluding unknown stock;
+- Inventory lifecycle controls for an archived filament with tracking paused on desktop and narrow screens;
 - physical printer profiles, default/archive states and printer-specific costs;
 - the Dashboard's recorded-expense breakdown, first-run migration entry point and the feature-gated Business Dashboard with completed-order financial metrics and recent Orders;
 - the Business Operations overview and pending actions, the Quick Sale form with a verified finished-stock lot, the Portuguese model search on a narrow Quick Sale form, the mobile Proposals list and the issued proposal PDF action, attachments on a proposal-backed order and its activity timeline;

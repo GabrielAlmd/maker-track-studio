@@ -503,7 +503,7 @@ function PrintJobs() {
             value={list.filters.printer_id || ''} clearLabel={t('printJobs.allPrinters')}
             onChange={id => list.changeFilters({ ...list.filters, printer_id: id })} /></div>
           <div><span className="block mb-1">{t('dashboard.model')}</span><ModelSelect aria-label={t('dashboard.model')} value={list.filters.model_id || ''} onChange={(modelId) => list.changeFilters({ ...list.filters, model_id: modelId })} models={models ?? []} emptyLabel={t('printJobs.allModels')} /></div>
-          <div className="block"><FilamentSelect label={t('dashboard.filament')} filaments={filaments}
+          <div className="block"><FilamentSelect includeArchived label={t('dashboard.filament')} filaments={filaments}
             value={list.filters.filament_id || ''} clearLabel={t('printJobs.allFilaments')}
             onChange={id => list.changeFilters({ ...list.filters, filament_id: id })} /></div>
         </div>

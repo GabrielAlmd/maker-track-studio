@@ -56,3 +56,16 @@ describe('FilamentSelect', () => {
     expect(selector).toHaveValue('Zeta PLA — Red');
   });
 });
+
+it('retains archived selections on historical rows and excludes them from new choices', async () => {
+  const user = userEvent.setup();
+  const options = [{ ...filaments[0], archived: true }, { ...filaments[1], tracking_enabled: false }];
+  const field = value => <FilamentSelect aria-label="Material" filaments={options} value={value} onChange={() => {}} />;
+  const { rerender } = render(field('f3'));
+  const selector = screen.getByRole('combobox', { name: 'Material' });
+  expect(selector).toHaveValue('Zeta PLA — Red');
+  rerender(field(''));
+  await user.click(selector);
+  expect(screen.queryByRole('option', { name: /Zeta/ })).toBeNull();
+  expect(screen.getByRole('option', { name: /Ocean Blue/ })).toBeVisible();
+});

@@ -40,7 +40,7 @@ A completed or failed v2 run posts `-round(weight_used × 1,000)` for each **ver
 
 Movement `source_key` is `purchase:<purchase UUID>` or `material:<PrintJobFilament UUID>`. Automatic kinds are `purchase`, `consumption` and `compensation`; the adjustment endpoint cannot forge these. Source/event identities and source keys survive backup/restore, including after a purchase is deleted. Existing manual movements retain empty source keys.
 
-`GET /filaments?page=1&low_stock=true` selects only filaments with an opening balance or physical count and an on-hand balance at or below zero. Unknown stock is excluded rather than inferred from purchase/use counters. Configurable thresholds and unknown-stock UI follow in #15.
+`GET /filaments?page=1&low_stock=true` selects active, tracked filaments with warnings enabled and a verified balance at or below their configured threshold.
 
 ## Physical stock reconciliation
 
@@ -136,3 +136,15 @@ empty reference. Upgrades and imports preserve recorded stock, IDs and
 financial snapshots. Runs completed before the upgrade may already be included
 in shelf counts, so historical completions are never automatically replayed.
 Use the pre-upgrade backup with its original application version for rollback.
+
+## Filament lifecycle
+
+Open a material in Inventory to pause or resume physical tracking, mute or enable warnings, or archive or restore its catalogue entry. Each control preserves the other two settings. Archiving hides a filament from new material choices and alerts. Existing purchases, production rows, budget snapshots and their IDs remain available. Untracked active filaments remain available for costing. A zero threshold warns at zero verified stock. Use **Mute warnings** to silence threshold, negative, unknown and planning alerts.
+
+Pausing records a zero-quantity transition in the ledger and invalidates the last verified count. Purchases and verified production usage during a pause keep their original financial and production records. New sources created during a pause contribute no stock, including on subsequent edits or retries. Existing posted purchases can still reverse outstanding credits. A quantity increase during the pause adds no credit. Resuming records another transition. Confirm a fresh shelf count before relying on the balance.
+
+After a tracking gap, each physical count settles the earlier source contributions for that filament. Later edits apply only the change in quantity and reversals can remove only credit posted since that count. For example, if a 1 kg purchase was posted before a pause and the operator counts 400 g after resuming, deleting that purchase leaves the shelf count at 400 g. An additional tracked 100 g on that purchase can be reversed. Before the count, deletion still reverses its outstanding credit. Moving a purchase transfers only its outstanding physical credit, adjusted for any simultaneous quantity change.
+
+Send one or more booleans to `PATCH /v2/inventory/materials/:id` using `tracking_enabled`, `warnings_enabled`, and `archived`. Include the displayed balance's `expected_revision` when changing tracking. Success returns 204. A stale transition returns 409. Reload the inventory and review the count or setting before retrying. The material list includes all three settings. During a pause, balance quantities represent historical ledger totals and `verified` is false.
+
+Backup schema 21 retains settings and ledger transitions. Earlier databases default to active filaments with tracking and warnings enabled. Keep a pre-upgrade backup with its compatible binary for rollback.

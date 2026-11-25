@@ -54,7 +54,7 @@ function RunFields({ index, control, register, watch, models, filaments, initial
     {materials.fields.map((material, n) => <div key={material.formKey} className="grid grid-cols-2 gap-3">
       {material.source_tool && <p className="col-span-2 text-sm ui-text-muted">{t('slicer.tool', { number: material.source_tool })}</p>}
       <div className="col-span-2"><FormSelect label={t('production.filament')} control={control} name={`${base}.materials.${n}.filament_id`}
-        options={filaments} clearLabel={t('production.selectFilament')} required getLabel={f => [f.brand, f.type].join(' ') + ' — ' + f.color} /></div>
+        options={filaments.filter(f => !f.archived || f.id === material.filament_id)} clearLabel={t('production.selectFilament')} required getLabel={f => [f.brand, f.type].join(' ') + ' — ' + f.color} /></div>
       <label>{t('production.grams')}<input className={fieldClass} type="number" min="0.001" max="1000000000" step="0.001" {...register(`${base}.materials.${n}.weight_used`)} /></label>
       <label>{t('production.waste')}<input className={fieldClass} type="number" min="0" max="1000000000" step="0.001" {...register(`${base}.materials.${n}.waste_weight_g`)} /></label>
       <label>{t('production.measurement')}<select className={fieldClass} {...register(`${base}.materials.${n}.measurement_state`)}><option value="estimated">{t('production.estimate')}</option>{status !== 'planned' && <option value="verified">{t('production.actual')}</option>}</select></label>
