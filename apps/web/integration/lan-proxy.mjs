@@ -19,6 +19,30 @@ async function downloadFile(page, button) {
   return { name: download.suggestedFilename(), content: Buffer.concat(chunks) };
 }
 
+async function exerciseModelMaterials(page) {
+  await page.getByRole('link', { name: 'Models', exact: true }).click();
+  await page.getByRole('button', { name: 'Add New Model' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add New Model' });
+  await dialog.getByLabel('Name', { exact: true }).fill('Synthetic housing shell');
+  await dialog.getByLabel('Print Time (min)').fill('25');
+  await dialog.getByRole('button', { name: 'Add material requirement' }).click();
+  const part = dialog.getByLabel('Part weight (g)');
+  await dialog.getByLabel('Material type').fill('PETG');
+  await dialog.getByLabel('Color (optional)').fill('Blue');
+  await part.fill('-2');
+  await dialog.getByRole('button', { name: 'Create Model' }).click();
+  await expect(part).toHaveAttribute('aria-invalid', 'true');
+  await part.fill('21.5');
+  await dialog.getByRole('button', { name: 'Create Model' }).click();
+
+  const name = page.getByRole('button', { name: 'Synthetic housing shell', exact: true });
+  await name.click();
+  const details = page.getByRole('dialog', { name: 'Synthetic housing shell' });
+  await expect(details.getByText('PETG · Blue')).toBeVisible();
+  await expect(details.getByText('Known waste (total incomplete)')).toBeVisible();
+  await details.getByRole('button', { name: 'Close' }).click();
+}
+
 async function exerciseQuickSale(page) {
   const created = await page.evaluate(async () => {
     const response = await fetch('/api/models', {
@@ -175,10 +199,11 @@ try {
   expect(created).toBe(201);
   await page.reload();
   await expect(page.getByText('Browser fixture', { exact: true })).toBeVisible();
+  await exerciseModelMaterials(page);
   await exerciseBusinessOperations(page);
   expect(errors).toEqual([]);
   await context.close();
-  console.log('PASS: Chromium authenticated UI, readiness, API writes and Business Operations');
+  console.log('PASS: Chromium authenticated UI, readiness, API writes, Model materials and Business Operations');
 } finally {
   await browser.close();
 }

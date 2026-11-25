@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Boxes } from 'lucide-react';
 import ModelModal from '../components/ModelModal';
+import { ModelDetails } from '../components/ModelMaterials';
 import { EmptyState, InlineError, TableSkeleton } from '../components/ui/PageState';
 import { usePaginatedList } from '../hooks/usePaginatedList';
 import ListToolbar from '../components/ui/ListToolbar';
@@ -17,6 +18,7 @@ function Models() {
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingModel, setEditingModel] = useState(null);
+  const [details, setDetails] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const fetchModels = useCallback((params) => getModels(params), []);
@@ -67,6 +69,7 @@ function Models() {
 
   return (
     <div>
+      {details && <ModelDetails model={details} onClose={() => setDetails(null)} />}
       {modalOpen && (
         <ModelModal model={editingModel} onClose={handleModalClose} onSaved={handleSaved} />
       )}
@@ -124,7 +127,7 @@ function Models() {
                   <tr key={model.id} className="hover:ui-surface-hover">
                     <td className="w-12 px-6 py-4"><RowSelectionCheckbox bulk={bulk} id={model.id} label={model.name} /></td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium ui-text-primary">{model.name}</div>
+                      <button type="button" onClick={() => setDetails(model)} className="text-sm font-medium ui-text-primary-action">{model.name}</button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm ui-text-secondary">
                       {formatWeight(model.material_weight, { fallback: VALUE_FALLBACKS.dataUnavailable })}
@@ -133,7 +136,9 @@ function Models() {
                       {formatDuration(model.print_time, { fallback: VALUE_FALLBACKS.notRecorded })}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm ui-text-secondary">
-                      {formatWeight(model.waste_material, { fallback: VALUE_FALLBACKS.dataUnavailable })}
+                      {model.material_requirements?.length > 0 && !model.material_summary.waste_complete
+                        ? t('modelMaterials.partialWeight', { weight: formatWeight(model.waste_material) })
+                        : formatWeight(model.waste_material, { fallback: VALUE_FALLBACKS.dataUnavailable })}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
@@ -143,7 +148,9 @@ function Models() {
                             : 'ui-surface-input ui-text-secondary'
                         }`}
                       >
-                        {model.is_multicolor ? t('common.yes') : t('common.no')}
+                        {model.material_summary?.color_status === 'unknown'
+                          ? t('common.unknown')
+                          : t(model.is_multicolor ? 'common.yes' : 'common.no')}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm ui-text-secondary">

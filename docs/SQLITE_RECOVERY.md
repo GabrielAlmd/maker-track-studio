@@ -135,8 +135,12 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share backup schema version 18 and ZIP
-format version 1. Schema 18 (Sales module version 8) adds nullable Quick Sale
+Current desktop and self-hosted builds share backup schema version 20 and ZIP
+format version 1. Schema 20 includes [model material requirements](MODEL_MATERIALS.md).
+Restore validates requirement IDs, model and filament references, row order and
+derived totals before replacing data. Earlier archives retain their model IDs
+and aggregate estimates with an unknown split. Schema 19 adds estimated time
+to production run records. Schema 18 (Sales module version 8) adds nullable Quick Sale
 payable and customer-name snapshot columns to the existing Sales tables. The
 migration does not convert historical orders to Quick Sales or replay their
 stock. Earlier archives restore with these fields empty. Restore validates the

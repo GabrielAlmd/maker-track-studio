@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"errors"
+	"math"
+	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -14,12 +17,23 @@ import (
 )
 
 type ModelInput struct {
-	Name           string  `json:"name" binding:"required"`
-	ImageURL       string  `json:"image_url"`
-	MaterialWeight float64 `json:"material_weight" binding:"required"`
-	PrintTime      int     `json:"print_time" binding:"required"`
-	WasteMaterial  float64 `json:"waste_material" binding:"gte=0"`
-	IsMulticolor   bool    `json:"is_multicolor"`
+	Name                 string                `json:"name" binding:"required"`
+	ImageURL             string                `json:"image_url"`
+	MaterialWeight       *float64              `json:"material_weight"`
+	PrintTime            int                   `json:"print_time" binding:"gt=0"`
+	WasteMaterial        float64               `json:"waste_material"`
+	IsMulticolor         bool                  `json:"is_multicolor"`
+	MaterialRequirements *[]modelMaterialInput `json:"material_requirements"`
+}
+
+type modelMaterialInput struct {
+	ID                  *uuid.UUID `json:"id"`
+	MaterialType        string     `json:"material_type"`
+	Color               string     `json:"color"`
+	PartWeightG         *float64   `json:"part_weight_g"`
+	WasteWeightG        *float64   `json:"waste_weight_g"`
+	PreferredFilamentID *uuid.UUID `json:"preferred_filament_id"`
+	SourceTool          *int       `json:"source_tool"`
 }
 
 // GetModels godoc
@@ -36,7 +50,7 @@ func GetModels(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "Invalid list parameters"})
 			return
 		}
-		query := db.Model(&models.Model{})
+		query := db.WithContext(c.Request.Context()).Model(&models.Model{})
 		if params.Enabled {
 			if search := strings.TrimSpace(c.Query("search")); search != "" {
 				query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(search)+"%")
@@ -66,7 +80,7 @@ func GetModels(db *gorm.DB) gin.HandlerFunc {
 			} {
 				if raw := c.Query(key); raw != "" {
 					value, err := strconv.ParseFloat(raw, 64)
-					if err != nil || value < 0 || (filter.column == "print_time" && value != float64(int(value))) {
+					if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || (filter.column == "print_time" && value != float64(int(value))) {
 						c.JSON(400, gin.H{"error": "Invalid numeric filter"})
 						return
 					}
@@ -83,38 +97,14 @@ func GetModels(db *gorm.DB) gin.HandlerFunc {
 			}
 			query = query.Order(params.Sort + " " + params.Direction).Offset((params.Page - 1) * params.PageSize).Limit(params.PageSize)
 		}
-		if err := query.Preload("PrintJobs").Find(&modelsList).Error; err != nil {
+		if err := withModelMaterials(query).Preload("PrintJobs").Find(&modelsList).Error; err != nil {
 			c.JSON(500, gin.H{"error": "Failed to retrieve models"})
 			return
 		}
 
 		dtoList := make([]dto.ModelDTO, 0, len(modelsList))
 		for _, m := range modelsList {
-			var jobs []dto.PrintJobDTO
-			for _, pj := range m.PrintJobs {
-				jobs = append(jobs, dto.PrintJobDTO{
-					ID:           pj.ID,
-					ModelID:      &m.ID,
-					PrintDate:    pj.PrintDate,
-					UnitsPrinted: pj.UnitsPrinted,
-					LaborHours:   pj.LaborHours,
-					CreatedAt:    pj.CreatedAt,
-					UpdatedAt:    pj.UpdatedAt,
-				})
-			}
-			dtoList = append(dtoList, dto.ModelDTO{
-				ID:             m.ID,
-				Name:           m.Name,
-				ImageURL:       m.ImageURL,
-				MaterialWeight: m.MaterialWeight,
-				PrintTime:      m.PrintTime,
-				WasteMaterial:  m.WasteMaterial,
-				IsMulticolor:   m.IsMulticolor,
-				CreatedAt:      m.CreatedAt,
-				UpdatedAt:      m.UpdatedAt,
-				PrintJobs:      jobs,
-				PrintJobCount:  len(m.PrintJobs),
-			})
+			dtoList = append(dtoList, toModelDTO(m))
 		}
 
 		if params.Enabled {
@@ -125,165 +115,218 @@ func GetModels(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GetModel godoc
-// @Summary      Get model by ID
-// @Description  Retrieve a specific model by ID with its print jobs
-// @Tags         models
-// @Param        id  path      string  true  "Model ID"
-// @Produce      json
-// @Success      200  {object}  dto.ModelDTO
-// @Router       /models/{id} [get]
 func GetModel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
-		if _, err := uuid.Parse(id); err != nil {
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
 			c.JSON(400, gin.H{"error": "Invalid UUID"})
 			return
 		}
 		var model models.Model
-		if err := db.Preload("PrintJobs").Where("id = ?", id).First(&model).Error; err != nil {
+		err = withModelMaterials(db.WithContext(c.Request.Context())).Preload("PrintJobs").First(&model, "id = ?", id).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(404, gin.H{"error": "Model not found"})
 			return
 		}
-
-		var jobs []dto.PrintJobDTO
-		for _, pj := range model.PrintJobs {
-			jobs = append(jobs, dto.PrintJobDTO{
-				ID:           pj.ID,
-				ModelID:      &model.ID,
-				PrintDate:    pj.PrintDate,
-				UnitsPrinted: pj.UnitsPrinted,
-				LaborHours:   pj.LaborHours,
-				CreatedAt:    pj.CreatedAt,
-				UpdatedAt:    pj.UpdatedAt,
-			})
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to retrieve model"})
+			return
 		}
-
-		dto := dto.ModelDTO{
-			ID:             model.ID,
-			Name:           model.Name,
-			ImageURL:       model.ImageURL,
-			MaterialWeight: model.MaterialWeight,
-			PrintTime:      model.PrintTime,
-			WasteMaterial:  model.WasteMaterial,
-			IsMulticolor:   model.IsMulticolor,
-			CreatedAt:      model.CreatedAt,
-			UpdatedAt:      model.UpdatedAt,
-			PrintJobs:      jobs,
-			PrintJobCount:  len(model.PrintJobs),
-		}
-
-		c.JSON(200, dto)
+		c.JSON(200, toModelDTO(model))
 	}
 }
 
-// CreateModel godoc
-// @Summary      Create a new model
-// @Description  Create a new model entry
-// @Tags         models
-// @Param        input  body      ModelInput  true  "Model Input"
-// @Produce      json
-// @Success      201  {object}  dto.ModelDTO
-// @Router       /models [post]
 func CreateModel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var input ModelInput
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(400, gin.H{"error": "Invalid input"})
-			return
-		}
-		model := models.Model{
-			Name:           input.Name,
-			ImageURL:       input.ImageURL,
-			MaterialWeight: input.MaterialWeight,
-			PrintTime:      input.PrintTime,
-			WasteMaterial:  input.WasteMaterial,
-			IsMulticolor:   input.IsMulticolor,
-		}
-		if err := db.Create(&model).Error; err != nil {
-			c.JSON(500, gin.H{"error": "Failed to create model"})
-			return
-		}
-		dtoObj := dto.ModelDTO{
-			ID:             model.ID,
-			Name:           model.Name,
-			ImageURL:       model.ImageURL,
-			MaterialWeight: model.MaterialWeight,
-			PrintTime:      model.PrintTime,
-			WasteMaterial:  model.WasteMaterial,
-			IsMulticolor:   model.IsMulticolor,
-			CreatedAt:      model.CreatedAt,
-			UpdatedAt:      model.UpdatedAt,
-			PrintJobs:      nil, // or preload if you want
-			PrintJobCount:  0,
-		}
-		c.JSON(201, dtoObj)
+		saveModel(c, db, nil)
 	}
 }
 
-// UpdateModel godoc
-// @Summary      Update an existing model
-// @Description  Update an existing model entry
-// @Tags         models
-// @Param        id    path      string      true  "Model ID"
-// @Param        input body      ModelInput  true  "Model Input"
-// @Produce      json
-// @Success      200  {object}  dto.ModelDTO
-// @Router       /models/{id} [put]
 func UpdateModel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
-		if _, err := uuid.Parse(id); err != nil {
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
 			c.JSON(400, gin.H{"error": "Invalid UUID"})
 			return
 		}
-		var model models.Model
-		if err := db.Where("id = ?", id).First(&model).Error; err != nil {
-			c.JSON(404, gin.H{"error": "Model not found"})
-			return
-		}
-		var input ModelInput
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(400, gin.H{"error": "Invalid input"})
-			return
-		}
-		model.Name = input.Name
-		model.ImageURL = input.ImageURL
-		model.MaterialWeight = input.MaterialWeight
-		model.PrintTime = input.PrintTime
-		model.WasteMaterial = input.WasteMaterial
-		model.IsMulticolor = input.IsMulticolor
-		model.UpdatedAt = time.Now()
-
-		if err := db.Save(&model).Error; err != nil {
-			c.JSON(500, gin.H{"error": "Failed to update model"})
-			return
-		}
-		dtoObj := dto.ModelDTO{
-			ID:             model.ID,
-			Name:           model.Name,
-			ImageURL:       model.ImageURL,
-			MaterialWeight: model.MaterialWeight,
-			PrintTime:      model.PrintTime,
-			WasteMaterial:  model.WasteMaterial,
-			IsMulticolor:   model.IsMulticolor,
-			CreatedAt:      model.CreatedAt,
-			UpdatedAt:      model.UpdatedAt,
-			PrintJobs:      nil, // or preload if you want
-			PrintJobCount:  0,
-		}
-		c.JSON(200, dtoObj)
+		saveModel(c, db, &id)
 	}
 }
 
-// DeleteModel godoc
-// @Summary      Delete model
-// @Description  Delete a model entry by ID
-// @Tags         models
-// @Param        id  path      string  true  "Model ID"
-// @Produce      json
-// @Success      204
-// @Router       /models/{id} [delete]
+func saveModel(c *gin.Context, db *gorm.DB, id *uuid.UUID) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+	var input ModelInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid model input"})
+		return
+	}
+	var model models.Model
+	err := db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if id != nil {
+			if err := withModelMaterials(tx).First(&model, "id = ?", *id).Error; err != nil {
+				return err
+			}
+		}
+		previous := model.MaterialRequirements
+		if input.MaterialRequirements != nil {
+			rows, err := prepareModelMaterials(tx, model, *input.MaterialRequirements)
+			if err != nil {
+				return err
+			}
+			model.MaterialRequirements = rows
+		}
+		summary, err := models.SummarizeModelMaterials(model.MaterialRequirements)
+		if err != nil {
+			return err
+		}
+		model.Name, model.ImageURL, model.PrintTime = input.Name, input.ImageURL, input.PrintTime
+		if len(model.MaterialRequirements) == 0 {
+			if input.MaterialWeight == nil || !models.ValidModelMaterialGrams(*input.MaterialWeight) ||
+				!models.ValidModelMaterialGrams(input.WasteMaterial) {
+				return models.ErrInvalidModelMaterials
+			}
+			model.MaterialWeight, model.WasteMaterial, model.IsMulticolor = *input.MaterialWeight, input.WasteMaterial, input.IsMulticolor
+		} else {
+			model.MaterialWeight, model.WasteMaterial = summary.PartWeightG, summary.KnownWasteG
+			model.IsMulticolor = summary.ColorStatus == "multiple"
+		}
+
+		record := tx.Omit("MaterialRequirements")
+		if id == nil {
+			if err := record.Create(&model).Error; err != nil {
+				return err
+			}
+		} else if err := record.Select("Name", "ImageURL", "PrintTime", "MaterialWeight", "WasteMaterial", "IsMulticolor", "UpdatedAt").Updates(&model).Error; err != nil {
+			return err
+		}
+		if input.MaterialRequirements != nil {
+			return syncModelMaterials(tx, &model, previous)
+		}
+		return nil
+	})
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		c.JSON(404, gin.H{"error": "Model not found"})
+	case errors.Is(err, models.ErrInvalidModelMaterials):
+		c.JSON(400, gin.H{"error": models.ErrInvalidModelMaterials.Error()})
+	case err != nil:
+		c.JSON(500, gin.H{"error": "Failed to save model"})
+	case id == nil:
+		c.JSON(201, toModelDTO(model))
+	default:
+		c.JSON(200, toModelDTO(model))
+	}
+}
+
+func prepareModelMaterials(tx *gorm.DB, model models.Model, inputs []modelMaterialInput) ([]models.ModelMaterialRequirement, error) {
+	if len(inputs) > models.MaxModelMaterialRequirements {
+		return nil, models.ErrInvalidModelMaterials
+	}
+	existing := make(map[uuid.UUID]bool, len(model.MaterialRequirements))
+	for _, row := range model.MaterialRequirements {
+		existing[row.ID] = true
+	}
+	preferences := make(map[uuid.UUID]bool)
+	rows := make([]models.ModelMaterialRequirement, len(inputs))
+	for i, input := range inputs {
+		if input.PartWeightG == nil {
+			return nil, models.ErrInvalidModelMaterials
+		}
+		row := models.ModelMaterialRequirement{
+			Position: i, MaterialType: strings.TrimSpace(input.MaterialType), Color: strings.TrimSpace(input.Color),
+			PartWeightG: *input.PartWeightG, WasteWeightG: input.WasteWeightG,
+			PreferredFilamentID: input.PreferredFilamentID, SourceTool: input.SourceTool,
+		}
+		if input.ID != nil {
+			if !existing[*input.ID] {
+				return nil, models.ErrInvalidModelMaterials
+			}
+			row.ID = *input.ID
+			delete(existing, row.ID)
+		}
+		if input.PreferredFilamentID != nil {
+			preferences[*input.PreferredFilamentID] = true
+		}
+		rows[i] = row
+	}
+	// A retry of the same PUT may still omit a newly issued row ID.
+	for i, previous := range model.MaterialRequirements {
+		if i >= len(rows) || rows[i].ID != uuid.Nil || !existing[previous.ID] {
+			continue
+		}
+		candidate := rows[i]
+		candidate.ID, candidate.ModelID = previous.ID, model.ID
+		if reflect.DeepEqual(candidate, previous) {
+			rows[i] = candidate
+		}
+	}
+	if len(preferences) > 0 {
+		ids := make([]uuid.UUID, 0, len(preferences))
+		for id := range preferences {
+			ids = append(ids, id)
+		}
+		var count int64
+		if err := tx.Model(&models.Filament{}).Where("id IN ?", ids).Count(&count).Error; err != nil {
+			return nil, err
+		}
+		if count != int64(len(ids)) {
+			return nil, models.ErrInvalidModelMaterials
+		}
+	}
+	return rows, nil
+}
+
+func syncModelMaterials(tx *gorm.DB, model *models.Model, previous []models.ModelMaterialRequirement) error {
+	kept := make(map[uuid.UUID]bool, len(previous))
+	for i := range model.MaterialRequirements {
+		row := &model.MaterialRequirements[i]
+		row.ModelID = model.ID
+		if row.ID == uuid.Nil {
+			if err := tx.Create(row).Error; err != nil {
+				return err
+			}
+		} else if err := tx.Where("model_id = ?", model.ID).
+			Select("Position", "MaterialType", "Color", "PartWeightG", "WasteWeightG", "PreferredFilamentID", "SourceTool").
+			Updates(row).Error; err != nil {
+			return err
+		}
+		kept[row.ID] = true
+	}
+	for _, row := range previous {
+		if !kept[row.ID] {
+			if err := tx.Where("model_id = ? AND id = ?", model.ID, row.ID).Delete(&models.ModelMaterialRequirement{}).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func withModelMaterials(db *gorm.DB) *gorm.DB {
+	return db.Preload("MaterialRequirements", func(q *gorm.DB) *gorm.DB { return q.Order("position") })
+}
+
+func toModelDTO(model models.Model) dto.ModelDTO {
+	var jobs []dto.PrintJobDTO
+	for _, job := range model.PrintJobs {
+		jobs = append(jobs, dto.PrintJobDTO{
+			ID: job.ID, ModelID: &model.ID, PrintDate: job.PrintDate, UnitsPrinted: job.UnitsPrinted,
+			LaborHours: job.LaborHours, CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt,
+		})
+	}
+	rows := model.MaterialRequirements
+	if rows == nil {
+		rows = []models.ModelMaterialRequirement{}
+	}
+	summary, _ := models.SummarizeModelMaterials(rows)
+	return dto.ModelDTO{
+		ID: model.ID, Name: model.Name, ImageURL: model.ImageURL, PrintTime: model.PrintTime,
+		MaterialWeight: model.MaterialWeight, WasteMaterial: model.WasteMaterial, IsMulticolor: model.IsMulticolor,
+		CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt, PrintJobs: jobs, PrintJobCount: len(jobs),
+		MaterialRequirements: rows, MaterialSummary: summary,
+	}
+}
+
 func DeleteModel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		deleteInventoryItem(c, db, "model", &models.Model{})

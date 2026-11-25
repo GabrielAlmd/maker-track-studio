@@ -7,6 +7,10 @@ filament mappings and included waste before saving. Import inspection never
 creates production, inventory movements or commercial records. The existing
 aggregate save remains transactional and retry-safe.
 
+To inspect metadata against a reusable model, see
+[Model material requirements](MODEL_MATERIALS.md). The model review preserves
+tool slot numbers and leaves per-unit estimates for the operator to enter.
+
 ## Supported formats and fields
 
 | Input | Imported | Unknown / intentionally unsupported |

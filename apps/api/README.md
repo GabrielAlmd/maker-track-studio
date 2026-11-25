@@ -7,7 +7,8 @@ migrations.
 
 The backend provides filaments, purchases, models, print jobs, cost breakdowns,
 dashboard summaries, settings and SQLite ZIP backups. All routes are available
-to the local desktop application.
+to the local desktop application. The [model material requirements](../../docs/MODEL_MATERIALS.md)
+guide documents Model CRUD, legacy aggregate fields and backup compatibility.
 
 The local data-migration routes inspect bounded CSV/XLSX uploads, expose template
 schemas, preview mapping/validation/duplicate decisions and commit supported

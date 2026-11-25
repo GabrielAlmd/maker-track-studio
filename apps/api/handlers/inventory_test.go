@@ -126,7 +126,7 @@ func TestInventoryConcurrentPostAndOuterRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	if err = db.AutoMigrate(&models.Model{}, &inventory.Movement{}); err != nil {
+	if err = db.AutoMigrate(&models.Model{}, &models.ModelMaterialRequirement{}, &inventory.Movement{}); err != nil {
 		t.Fatal(err)
 	}
 	model := models.Model{Name: "part"}

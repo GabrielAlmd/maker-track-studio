@@ -15,8 +15,14 @@ async function request(path, method, status, body) {
 
 await request('/features', 'PUT', 200, { sales_orders: true });
 const model = await (await request('/models', 'POST', 201, {
-  name: 'Packaged smoke model', material_weight: 20, print_time: 30,
+  name: 'Packaged smoke model', print_time: 30,
+  material_requirements: [
+    { material_type: 'PLA', color: 'Blue', part_weight_g: 16, waste_weight_g: 0 },
+    { material_type: 'PLA', color: 'Orange', part_weight_g: 4, source_tool: 3 },
+  ],
 })).json();
+assert.equal(model.material_weight, 20);
+assert.equal(model.material_summary.color_status, 'multiple');
 const path = '/v2/business/quick-sales';
 const command = { operation_id: randomUUID(), reference: 'Packaged smoke sale', model_id: model.id, quantity: 2, unit_price_cents: 1250 };
 const sale = await (await request(path, 'POST', 201, command)).json();
@@ -31,9 +37,10 @@ const archive = await (await request('/desktop-data/export', 'GET', 200)).blob()
 const restore = new FormData();
 restore.set('file', archive, 'packaged-smoke.zip');
 await request('/desktop-data/import', 'POST', 200, restore);
+assert.deepEqual(await (await request(`/models/${model.id}`, 'GET', 200)).json(), model);
 const features = await (await request('/features', 'GET', 200)).json();
 assert.equal(features.sales_orders, false);
 await request('/features', 'PUT', 200, { sales_orders: true });
 assert.deepEqual(await (await request(path, 'POST', 201, command)).json(), sale);
 assert.deepEqual(await (await request(order, 'GET', 200)).json(), original);
-console.log('Packaged Quick Sale, feature toggle and SQLite backup/restore passed');
+console.log('Packaged Model materials, Quick Sale, feature toggle and SQLite backup/restore passed');

@@ -88,17 +88,19 @@ type PrintJobDTO struct {
 }
 
 type ModelDTO struct {
-	ID             uuid.UUID     `json:"id"`
-	Name           string        `json:"name"`
-	ImageURL       string        `json:"image_url"`
-	MaterialWeight float64       `json:"material_weight"`
-	PrintTime      int           `json:"print_time"`
-	WasteMaterial  float64       `json:"waste_material"`
-	IsMulticolor   bool          `json:"is_multicolor"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
-	PrintJobs      []PrintJobDTO `json:"print_jobs,omitempty"`
-	PrintJobCount  int           `json:"print_job_count"`
+	MaterialRequirements []models.ModelMaterialRequirement `json:"material_requirements"`
+	MaterialSummary      models.ModelMaterialSummary       `json:"material_summary"`
+	ID                   uuid.UUID                         `json:"id"`
+	Name                 string                            `json:"name"`
+	ImageURL             string                            `json:"image_url"`
+	MaterialWeight       float64                           `json:"material_weight"`
+	PrintTime            int                               `json:"print_time"`
+	WasteMaterial        float64                           `json:"waste_material"`
+	IsMulticolor         bool                              `json:"is_multicolor"`
+	CreatedAt            time.Time                         `json:"created_at"`
+	UpdatedAt            time.Time                         `json:"updated_at"`
+	PrintJobs            []PrintJobDTO                     `json:"print_jobs,omitempty"`
+	PrintJobCount        int                               `json:"print_job_count"`
 }
 
 type AppConfigDTO struct {

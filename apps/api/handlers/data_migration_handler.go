@@ -163,13 +163,14 @@ type preparedPrintJob struct {
 }
 
 type migrationLookups struct {
-	structuredJobs map[uuid.UUID]bool
-	printers       map[string][]uuid.UUID
-	activePrinters map[string][]uuid.UUID
-	filaments      map[string][]uuid.UUID
-	models         map[string][]uuid.UUID
-	purchases      map[string][]uuid.UUID
-	jobs           map[string][]uuid.UUID
+	structuredJobs   map[uuid.UUID]bool
+	structuredModels map[uuid.UUID]bool
+	printers         map[string][]uuid.UUID
+	activePrinters   map[string][]uuid.UUID
+	filaments        map[string][]uuid.UUID
+	models           map[string][]uuid.UUID
+	purchases        map[string][]uuid.UUID
+	jobs             map[string][]uuid.UUID
 }
 
 func GetDataMigrationSchema(_ *gorm.DB) gin.HandlerFunc {
@@ -754,6 +755,9 @@ func validateMigrationRow(section string, rowNumber int, values map[string]strin
 		case "update":
 			row.Status, row.Action = "warning", "update"
 			issue("", "duplicate_update", "An existing record will be updated")
+			if section == "models" && lookups.structuredModels[row.existing] {
+				issue("material_weight", "model_requirements_preserved", "Existing material requirements and their totals will be kept")
+			}
 		case "create":
 			row.Status, row.Action = "warning", "create"
 			issue("", "duplicate_create", "A new record will be created alongside an existing match")
@@ -794,6 +798,14 @@ func loadMigrationLookups(db *gorm.DB) (*migrationLookups, error) {
 	}
 	for _, item := range modelRows {
 		addLookup(lookups.models, lookupKey(item.Name), item.ID)
+	}
+	var structuredModelIDs []uuid.UUID
+	if err := db.Model(&models.ModelMaterialRequirement{}).Distinct("model_id").Pluck("model_id", &structuredModelIDs).Error; err != nil {
+		return nil, err
+	}
+	lookups.structuredModels = make(map[uuid.UUID]bool, len(structuredModelIDs))
+	for _, id := range structuredModelIDs {
+		lookups.structuredModels[id] = true
 	}
 	var purchases []models.FilamentPurchase
 	if err := db.Find(&purchases).Error; err != nil {
@@ -878,10 +890,22 @@ func commitMigration(db *gorm.DB, preview migrationPreviewResponse) (map[string]
 					}
 				case models.Model:
 					if row.Action == "update" {
-						updates := map[string]any{"name": value.Name, "material_weight": value.MaterialWeight, "print_time": value.PrintTime}
-						for key, fieldValue := range map[string]any{"image_url": value.ImageURL, "waste_material": value.WasteMaterial, "is_multicolor": value.IsMulticolor} {
-							if row.provided[key] {
-								updates[key] = fieldValue
+						updates := map[string]any{"name": value.Name, "print_time": value.PrintTime}
+						if row.provided["image_url"] {
+							updates["image_url"] = value.ImageURL
+						}
+						var hasRequirements bool
+						requirements := tx.Model(&models.ModelMaterialRequirement{}).Select("1").Where("model_id = ?", row.existing)
+						if err := tx.Raw("SELECT EXISTS (?)", requirements).Scan(&hasRequirements).Error; err != nil {
+							return err
+						}
+						if !hasRequirements {
+							updates["material_weight"] = value.MaterialWeight
+							if row.provided["waste_material"] {
+								updates["waste_material"] = value.WasteMaterial
+							}
+							if row.provided["is_multicolor"] {
+								updates["is_multicolor"] = value.IsMulticolor
 							}
 						}
 						if err := tx.Model(&models.Model{}).Where("id = ?", row.existing).Updates(updates).Error; err != nil {
