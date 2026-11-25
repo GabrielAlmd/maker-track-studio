@@ -17,7 +17,7 @@ it('links a partial refund to its receipt and submits the exact cent amount', as
   render(<OrderFinance orderId="sample" onSaved={saved} />);
   const user = userEvent.setup();
   await user.selectOptions(await screen.findByLabelText('Entry type'), 'refund');
-  await user.selectOptions(screen.getByLabelText('Original entry'), '1');
+  await user.type(screen.getByLabelText('Original entry'), 'Deposit{Enter}');
   await user.type(screen.getByLabelText('Amount (EUR)'), '1.01');
   await user.type(screen.getByLabelText('Reference or reason'), 'Correction');
   await user.click(screen.getByRole('button', { name: 'Record entry' }));

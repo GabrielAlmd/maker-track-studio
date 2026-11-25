@@ -5,6 +5,11 @@ Sale** from the Business Overview or Orders. Enter a reference, select a model
 and enter the quantity and agreed unit price in EUR cents. You can select an
 existing customer or leave the sale assigned to a walk-in customer.
 
+Type part of the model or customer name, then tap a result or use the arrow
+keys and Enter. Escape dismisses the search and keeps the previous selection.
+For **Dispatch from stock**, search the current page by lot reference, date or
+available quantity. Select the lot again after changing the model or quantity.
+
 - **Make to order** confirms demand immediately. Use the order's **Production**
   tab to link runs and allocate accepted units when they're ready.
 - **Dispatch from stock** uses a selected verified lot with enough units for

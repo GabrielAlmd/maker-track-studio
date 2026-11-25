@@ -1,3 +1,4 @@
+import SearchableSelect from '../../../components/ui/SearchableSelect';
 import { useEffect, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -45,20 +46,14 @@ function RunPicker({ orderId, lineId, linked, onAdd }) {
   return (
     <div className="mt-3 flex flex-wrap items-end gap-2">
       {loaded && available.length > 0 && <>
-        <label className="min-w-0 flex-1 text-sm">
-          {t('sales.production.select')}
-          <select className={fieldClass} value={choice?.print_run_item_id ?? ''} onChange={(event) => setSelected(event.target.value)}>
-            <option value="">{t('sales.production.choose')}</option>
-            {available.map((source) => <option key={source.print_run_item_id} value={source.print_run_item_id}>
-              {t('sales.production.source', {
-                date: formatDate(source.print_date),
-                run: source.print_run_id.slice(0, 8),
-                item: source.print_run_item_id.slice(0, 8),
-                status: t(`production.${source.status}`),
-              })}
-            </option>)}
-          </select>
-        </label>
+        <div className="min-w-0 flex-1 text-sm">
+          <SearchableSelect label={t('sales.production.select')} value={choice?.print_run_item_id ?? ''}
+            options={available} getKey={source => source.print_run_item_id} onChange={setSelected}
+            clearLabel={t('sales.production.choose')} getLabel={source => t('sales.production.source', {
+              date: formatDate(source.print_date), run: source.print_run_id.slice(0, 8),
+              item: source.print_run_item_id.slice(0, 8), status: t(`production.${source.status}`),
+            })} />
+        </div>
         <button type="button" className="page-action page-action-secondary" disabled={!choice} onClick={() => {
           onAdd(choice);
           setSelected('');

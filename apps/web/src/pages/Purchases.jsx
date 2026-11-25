@@ -88,15 +88,14 @@ function PurchaseModal({ purchase, filaments, onClose, onSaved }) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {submitError && <p className="page-form-error" role="alert">{submitError}</p>}
           <div>
-            <label className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.filament')}</label>
+            <label htmlFor="purchase-filament" className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.filament')}</label>
             <Controller
               name="filament_id"
               control={control}
               render={({ field }) => (
                 <FilamentSelect
                   id="purchase-filament"
-                  value={field.value}
-                  onChange={field.onChange}
+                  {...field} required
                   filaments={filaments}
                   aria-label={t('purchases.filament')}
                   invalid={!!errors.filament_id}

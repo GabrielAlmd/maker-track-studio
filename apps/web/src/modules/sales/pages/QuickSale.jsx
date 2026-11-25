@@ -9,7 +9,7 @@ import { InlineError, LoadingState } from '../../../components/ui/PageState';
 import { useApi } from '../../../hooks/useApi';
 import { getModels } from '../../../services/modelService';
 import { formatCurrencyFromCents, formatDate } from '../../../utils/formatters';
-import { Field } from '../components/BusinessFields';
+import { EntityField, Field } from '../components/BusinessFields';
 import useBusinessCommand from '../components/useBusinessCommand';
 import { allCustomers, listQuickSaleStock } from '../services/businessService';
 import { numberField, textField } from '../utils/businessValidation';
@@ -29,7 +29,7 @@ const schema = yup.object({
   }),
 });
 
-function StockChoice({ model, quantity, register, error, clear }) {
+function StockChoice({ model, quantity, control, error, clear }) {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const load = useCallback(() => listQuickSaleStock(model, quantity, page), [model, quantity, page]);
@@ -37,12 +37,12 @@ function StockChoice({ model, quantity, register, error, clear }) {
   const changePage = (next) => { clear(); setPage(next); };
   return <div className="space-y-2">
     {loading ? <LoadingState /> : stockError ? <InlineError title={t('business.loadError')} onRetry={refetch} /> :
-      data?.items.length > 0 ? <Field label="quickLot" error={error} options={[
+      data?.items.length > 0 ? <EntityField required control={control} label="quickLot" error={error} options={[
         ['', t('business.quickSelectLot')],
         ...data.items.map((lot) => [lot.print_run_item_id, t('business.quickLotLabel', {
           date: formatDate(lot.print_date), count: lot.units_available, lot: lot.print_run_item_id.slice(0, 8),
         })]),
-      ]} {...register('stock_run_item_id')} /> : <p className="text-sm ui-text-secondary">{t('business.quickNoStock')}</p>}
+      ]} name="stock_run_item_id" /> : <p className="text-sm ui-text-secondary">{t('business.quickNoStock')}</p>}
     <div className="flex flex-wrap gap-2">
       <button type="button" className="page-action page-action-secondary" disabled={loading}
         onClick={() => { clear(); refetch(); }}>{t('business.quickRefreshStock')}</button>
@@ -56,17 +56,26 @@ function StockChoice({ model, quantity, register, error, clear }) {
   </div>;
 }
 
-async function loadOptions() {
-  const [models, customers] = await Promise.all([getModels(), allCustomers()]);
-  return { models, customers: customers.filter((customer) => !customer.is_archived) };
+async function loadCustomers() {
+  const customers = await allCustomers();
+  return customers.filter(customer => !customer.is_archived);
+}
+
+async function searchModels({ query, cursor, signal }) {
+  const page = cursor ?? 1;
+  const result = await getModels({ search: query, page, page_size: 25 }, signal);
+  return {
+    items: result.items.map(model => [model.id, model.name]),
+    nextCursor: page * result.page_size < result.total ? page + 1 : null,
+  };
 }
 
 export default function QuickSale() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data, loading, error, refetch } = useApi(loadOptions);
+  const { data: customers, loading, error, refetch } = useApi(loadCustomers);
   const command = useBusinessCommand();
-  const { register, watch, setValue, handleSubmit, formState: { errors } } = useForm({
+  const { control, register, watch, setValue, handleSubmit, formState: { errors } } = useForm({
     resolver: yupResolver(schema),
     defaultValues: { reference: '', model_id: '', customer_id: '', quantity: 1, unit_price_cents: '', mode: 'made_to_order', stock_run_item_id: '' },
   });
@@ -92,12 +101,11 @@ export default function QuickSale() {
         <fieldset disabled={command.busy} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="quickReference" error={errors.reference} maxLength={160} {...register('reference')} />
-            <Field label="quickCustomer" error={errors.customer_id} options={[
-              ['', t('business.walkIn')], ...data.customers.map((customer) => [customer.id, customer.name]),
-            ]} {...register('customer_id')} />
-            <Field label="quickModel" error={errors.model_id} options={[
-              ['', t('business.quickSelectModel')], ...data.models.map((entry) => [entry.id, entry.name]),
-            ]} {...register('model_id', { onChange: clearLot })} />
+            <EntityField control={control} label="quickCustomer" error={errors.customer_id} options={[
+              ['', t('business.walkIn')], ...customers.map((customer) => [customer.id, customer.name]),
+            ]} name="customer_id" />
+            <EntityField required control={control} label="quickModel" error={errors.model_id} loadOptions={searchModels}
+              options={[['', t('business.quickSelectModel')]]} name="model_id" onSelect={clearLot} />
             <Field label="quantity" error={errors.quantity} type="number" min={1} max={maxQuantity} step={1}
               {...register('quantity', { onChange: clearLot })} />
             <Field label="quickPrice" error={errors.unit_price_cents} type="number" min={1} max={maxCents} step={1}
@@ -107,7 +115,7 @@ export default function QuickSale() {
             ]} {...register('mode', { onChange: clearLot })} />
           </div>
           {fromStock && model && Number.isInteger(Number(quantity)) && quantity >= 1 && quantity <= maxQuantity &&
-            <StockChoice key={`${model}-${quantity}`} model={model} quantity={quantity} register={register}
+            <StockChoice key={`${model}-${quantity}`} model={model} quantity={quantity} control={control}
               error={errors.stock_run_item_id} clear={clearLot} />}
           {command.error && <p role="alert" className="page-form-error">{command.error}</p>}
           <div className="flex flex-wrap items-center justify-between gap-3">

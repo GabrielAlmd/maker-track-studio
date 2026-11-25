@@ -1,3 +1,5 @@
+import FormSelect from '../components/ui/FormSelect';
+import SearchableSelect from '../components/ui/SearchableSelect';
 import StockWarnings from '../components/StockWarnings';
 import ProductionModal from '../components/ProductionModal';
 import PageHeader from '../components/ui/PageHeader';
@@ -99,7 +101,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
     );
 
   const {
-    register,
+    control, register,
     handleSubmit,
     getValues,
     setValue,
@@ -209,13 +211,12 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
         {submitError && <p className="page-form-error" role="alert">{submitError}</p>}
         <div>
           <label htmlFor="print-job-printer" className="block text-sm font-medium ui-text-secondary mb-1">{requiredLabel(t('printJobs.printer'))}</label>
-          <select id="print-job-printer" aria-required="true" {...register('printer_id')}
-            className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring">
-            <option value="">— {t('printJobs.selectPrinter')} —</option>
-            {printJob?.printer_id && !printers.some((printer) => printer.id === printJob.printer_id) &&
-              <option value={printJob.printer_id}>{printJob.printer_cost?.printer_name ?? t('printJobs.archivedPrinter')} ({t('printers.archived').toLowerCase()})</option>}
-            {printers.map((printer) => <option key={printer.id} value={printer.id}>{printer.name}{printer.is_default ? ` (${t('printers.default').toLowerCase()})` : ''}</option>)}
-          </select>
+          <FormSelect id="print-job-printer" name="printer_id" control={control} required
+            options={printJob?.printer_id && !printers.some(p => p.id === printJob.printer_id)
+              ? [{ id: printJob.printer_id, name: printJob.printer_cost?.printer_name ?? t('printJobs.archivedPrinter'), is_archived: true }, ...printers]
+              : printers}
+            getLabel={p => p.name + (p.is_default ? ` (${t('printers.default').toLowerCase()})` : p.is_archived ? ` (${t('printers.archived').toLowerCase()})` : '')}
+            clearLabel={t('printJobs.selectPrinter')} />
           {errors.printer_id && <p role="alert" className="ui-text-danger text-xs mt-1">{errors.printer_id.message}</p>}
           <p className="mt-1 text-xs ui-text-muted">{t('printJobs.printerCostHelp')}</p>
         </div>
@@ -498,9 +499,13 @@ function PrintJobs() {
         <div className="space-y-3 text-sm">
           <label className="block">{t('purchases.from')}<input type="date" value={list.filters.date_from || ''} onChange={(event) => list.changeFilters({ ...list.filters, date_from: event.target.value })} className="mt-1 w-full rounded border p-2" /></label>
           <label className="block">{t('purchases.to')}<input type="date" value={list.filters.date_to || ''} onChange={(event) => list.changeFilters({ ...list.filters, date_to: event.target.value })} className="mt-1 w-full rounded border p-2" /></label>
-          <label className="block">{t('printJobs.printer')}<select role="listbox" value={list.filters.printer_id || ''} onChange={(event) => list.changeFilters({ ...list.filters, printer_id: event.target.value })} className="mt-1 w-full rounded border p-2"><option value="">{t('printJobs.allPrinters')}</option>{printers?.map((printer) => <option key={printer.id} value={printer.id}>{printer.name}{printer.is_archived ? ` (${t('printers.archived').toLowerCase()})` : ''}</option>)}</select></label>
+          <div className="block"><SearchableSelect label={t('printJobs.printer')} options={printers ?? []} getLabel={p => p.name + (p.is_archived ? ` (${t('printers.archived').toLowerCase()})` : '')}
+            value={list.filters.printer_id || ''} clearLabel={t('printJobs.allPrinters')}
+            onChange={id => list.changeFilters({ ...list.filters, printer_id: id })} /></div>
           <div><span className="block mb-1">{t('dashboard.model')}</span><ModelSelect aria-label={t('dashboard.model')} value={list.filters.model_id || ''} onChange={(modelId) => list.changeFilters({ ...list.filters, model_id: modelId })} models={models ?? []} emptyLabel={t('printJobs.allModels')} /></div>
-          <label className="block">{t('dashboard.filament')}<select role="listbox" value={list.filters.filament_id || ''} onChange={(event) => list.changeFilters({ ...list.filters, filament_id: event.target.value })} className="mt-1 w-full rounded border p-2"><option value="">{t('printJobs.allFilaments')}</option>{filaments?.map((filament) => <option key={filament.id} value={filament.id}>{filament.brand} {filament.type} — {filament.color}</option>)}</select></label>
+          <div className="block"><FilamentSelect label={t('dashboard.filament')} filaments={filaments}
+            value={list.filters.filament_id || ''} clearLabel={t('printJobs.allFilaments')}
+            onChange={id => list.changeFilters({ ...list.filters, filament_id: id })} /></div>
         </div>
       </ListToolbar></div>
       {visibleJobs.length > 0 && <label className="mb-4 inline-flex items-center gap-2 text-sm ui-text-secondary"><SelectAllCheckbox bulk={bulk} />{t('bulk.selectAllVisible')}</label>}

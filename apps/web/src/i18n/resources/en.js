@@ -1,4 +1,12 @@
 export default {
+  selector: {
+    search: "Search options",
+    show: "Show options",
+    clear: "Clear selection",
+    empty: "No matching options",
+    error: "Could not load options",
+    more: "Load more",
+  },
   slicer: {
     "remove": "Remove unsaved run",
     "title": "Import slicer estimates",

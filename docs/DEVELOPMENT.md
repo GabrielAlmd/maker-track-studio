@@ -106,6 +106,47 @@ scenario under `apps/web/visual` and regenerate the relevant synthetic image in
 `docs/screenshots`. See the [web README](../apps/web/README.md) and
 [screenshot catalogue](screenshots/README.md).
 
+#### Searchable catalogue fields
+
+Use `SearchableSelect` in `apps/web/src/components/ui` for a single choice from
+a catalogue. Pass a controlled key and an `onChange` callback. Options default
+to `{ id, name }`. Supply `getKey`, `getLabel`, `getSearchText` or `renderOption`
+for other shapes. FormSelect connects the same input to React Hook Form and the
+form's Yup schema. Search text stays in the input until the user commits a
+choice. Brand entry also accepts new text.
+
+| Workflow | What users can search |
+| --- | --- |
+| Print Jobs and production runs | Printers, models and filaments in forms and list filters, including imported plate mappings |
+| Filaments and Purchases | Existing filaments, existing or new brands, and the configurable filament type catalogue |
+| Printers | Bundled presets by manufacturer or model before preview and apply |
+| Quick Sale | Models, active customers and eligible lots on the current stock page |
+| Budgets and proposals | Customers, models, printers and budget materials, including retained historical entries |
+| Orders | Channel and model filters and fields, compatible run items, fulfilment actions and original finance entries |
+
+Model and filament wrappers provide sorting and domain labels. Fixed choices
+such as status, language, page size, sort order and payment mode use native
+selects. Spreadsheet mapping uses native controls for the current file's
+worksheets and headers. List search and brand/type text filters accept partial
+queries. Allocation tables edit quantities for several jobs at once.
+
+Local catalogues filter the supplied options. For a server-backed catalogue,
+pass a stable `loadOptions({ query, cursor, signal })` that returns
+`{ items, nextCursor }`. The selector debounces the first request, offers
+additional pages and retry, and discards abandoned responses. Supply the
+current option in `options` when opening an existing record whose selection may
+be outside the first page. Quick Sale searches the existing models endpoint
+in pages of 25 and loads active customer choices from the Business catalogue.
+For lots, Quick Sale keeps server-side eligibility and its
+explicit stock paging controls. Changing the model, quantity or page requires
+a fresh lot selection.
+
+The shared component tests cover keyboard commit, cancellation, clearing,
+active-option announcements, blur, disabled controls and remote request races.
+The visual catalogue exercises both themes, Portuguese on a narrow viewport
+and stock-lot invalidation. The LAN browser test submits searched IDs to the
+same API used by Desktop.
+
 ### Change costs or a module
 
 Keep cost calculations shared between job reporting and Sales & Orders. Read

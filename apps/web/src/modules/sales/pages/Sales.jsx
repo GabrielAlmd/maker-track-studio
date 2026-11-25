@@ -1,3 +1,4 @@
+import SearchableSelect from '../../../components/ui/SearchableSelect';
 import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ReceiptText } from 'lucide-react';
@@ -77,18 +78,16 @@ function Sales() {
                 {['unpaid', 'paid', 'refunded'].map((status) => <option key={status} value={status}>{t(`sales.payment.${status}`)}</option>)}
               </select>
             </label>
-            <label className="block">{t('sales.channel')}
-              <select value={list.filters.sales_channel_id || ''} onChange={(event) => list.changeFilters({ ...list.filters, sales_channel_id: event.target.value })} className="mt-1 w-full rounded border p-2">
-                <option value="">{t('sales.allChannels')}</option>
-                {(channels ?? []).map((channel) => <option key={channel.id} value={channel.id}>{channel.name}{channel.is_archived ? ` (${t('sales.archived').toLowerCase()})` : ''}</option>)}
-              </select>
-            </label>
-            <label className="block">{t('sales.model')}
-              <select value={list.filters.model_id || ''} onChange={(event) => list.changeFilters({ ...list.filters, model_id: event.target.value })} className="mt-1 w-full rounded border p-2">
-                <option value="">{t('sales.allModels')}</option>
-                {(models ?? []).map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-            </label>
+            <div className="block">
+              <SearchableSelect label={t('sales.channel')} value={list.filters.sales_channel_id || ''} options={channels ?? []}
+                clearLabel={t('sales.allChannels')} getLabel={c => c.name + (c.is_archived ? ` (${t('sales.archived').toLowerCase()})` : '')}
+                onChange={id => list.changeFilters({ ...list.filters, sales_channel_id: id })} />
+            </div>
+            <div className="block">
+              <SearchableSelect label={t('sales.model')} value={list.filters.model_id || ''} options={models ?? []}
+                clearLabel={t('sales.allModels')}
+                onChange={id => list.changeFilters({ ...list.filters, model_id: id })} />
+            </div>
             <label className="block">{t('sales.from')}<input type="date" value={list.filters.date_from || ''} onChange={(event) => list.changeFilters({ ...list.filters, date_from: event.target.value })} className="mt-1 w-full rounded border p-2" /></label>
             <label className="block">{t('sales.to')}<input type="date" value={list.filters.date_to || ''} onChange={(event) => list.changeFilters({ ...list.filters, date_to: event.target.value })} className="mt-1 w-full rounded border p-2" /></label>
           </div>

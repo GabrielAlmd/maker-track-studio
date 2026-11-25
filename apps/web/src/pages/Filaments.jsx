@@ -21,7 +21,7 @@ import {
 
 import { getFilamentTypes } from '../services/filamentTypeService';
 import FilamentTypesManager from '../components/FilamentTypesManager';
-import FilamentTypeOptions from '../components/FilamentTypeOptions';
+import FilamentTypeSelect from '../components/FilamentTypeSelect';
 import FilamentTypeCatalog from '../components/FilamentTypeCatalog';
 import { EmptyState, InlineError, TableSkeleton } from '../components/ui/PageState';
 import { VALUE_FALLBACKS, formatCurrency, formatNumber, toFiniteNumber } from '../utils/formatters';
@@ -55,7 +55,6 @@ function FilamentModal({ filament, brands, catalog, onClose, onSaved }) {
   const {
     register,
     control,
-    watch,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -96,20 +95,14 @@ function FilamentModal({ filament, brands, catalog, onClose, onSaved }) {
           <div>
             <label htmlFor="filament-brand" className="block text-sm font-medium ui-text-secondary mb-1">{t('filaments.brand')}</label>
             <Controller name="brand" control={control} render={({ field }) => (
-              <BrandSelect id="filament-brand" {...field} brands={brands} invalid={!!errors.brand} />
+              <BrandSelect required id="filament-brand" {...field} brands={brands} invalid={!!errors.brand} />
             )} />
             {errors.brand && <p className="ui-text-danger text-xs mt-1">{errors.brand.message}</p>}
           </div>
           <div>
             <label htmlFor="filament-type" className="block text-sm font-medium ui-text-secondary mb-1">{t('filaments.type')}</label>
-            <select
-              id="filament-type"
-              {...register('type')}
-              disabled={typesLoading || !!typesError}
-              className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
-            >
-              <FilamentTypeOptions types={types || []} current={watch('type')} />
-            </select>
+            <FilamentTypeSelect id="filament-type" control={control} name="type" types={types}
+              disabled={typesLoading || !!typesError} />
             <FilamentTypeCatalog loading={typesLoading} error={typesError} onRetry={refetchTypes} onManage={() => setManagingTypes(true)} />
             {errors.type && <p className="ui-text-danger text-xs mt-1">{errors.type.message}</p>}
           </div>

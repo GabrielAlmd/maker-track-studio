@@ -31,7 +31,9 @@ async function exerciseQuickSale(page) {
   expect(created).toBe(201);
   await page.getByRole('link', { name: 'Quick Sale', exact: true }).click();
   await page.getByLabel('Sale reference').fill('Synthetic counter sale');
-  await page.getByLabel('Model', { exact: true }).selectOption({ label: 'Synthetic clamp' });
+  await page.getByLabel('Model', { exact: true }).fill('Synthetic clamp');
+  await expect(page.getByRole('option', { name: 'Synthetic clamp' })).toBeVisible();
+  await page.getByLabel('Model', { exact: true }).press('Enter');
   await page.getByLabel('Unit price (EUR cents)').fill('1299');
   await page.getByLabel('Quantity', { exact: true }).fill('0');
   await page.getByRole('button', { name: 'Confirm sale' }).click();
@@ -60,7 +62,8 @@ async function exerciseBusinessOperations(page) {
 
   await page.goto(`${origin}/#/business/budgets/new`);
   await page.getByLabel('Title', { exact: true }).fill('Synthetic housing');
-  await page.getByLabel('Customer', { exact: true }).selectOption({ label: 'Synthetic workshop' });
+  await page.getByLabel('Customer', { exact: true }).fill('Synthetic workshop');
+  await page.getByLabel('Customer', { exact: true }).press('Enter');
   await page.getByLabel('Name', { exact: true }).fill('Housing');
   const quantity = page.getByLabel('Quantity', { exact: true });
   await quantity.fill('0');

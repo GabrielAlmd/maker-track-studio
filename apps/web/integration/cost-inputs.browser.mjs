@@ -36,6 +36,7 @@ try {
         const responses = {
           '/health/ready': { status: 'ready' }, '/features': { sales_orders: false },
           '/print-jobs': pages, '/models': [], '/filaments': [],
+          '/v2/inventory/materials': [],
           '/printers': [{ id: 'browser-printer', name: 'Browser fixture', is_default: true, is_archived: false }],
         };
         if (request.method() === 'GET' && path in responses) {

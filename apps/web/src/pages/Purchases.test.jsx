@@ -152,7 +152,7 @@ describe('Purchases page', () => {
     expect(screen.getAllByLabelText('Filament')[1]).toHaveValue('');
     await user.type(screen.getByRole('combobox', { name: 'Brand' }), 'bamb');
     await user.click(screen.getByRole('option', { name: 'Bambu' }));
-    await user.selectOptions(screen.getByLabelText('Type'), 'PETG');
+    await user.type(screen.getByLabelText('Type'), 'PETG{Enter}');
     await user.type(screen.getByLabelText('Color'), 'Blue');
     await user.type(screen.getAllByLabelText('Price (€)')[1], '30');
     await user.type(screen.getAllByLabelText('Amount (kg)')[1], '2');
@@ -180,17 +180,19 @@ describe('Purchases page', () => {
     await user.type(screen.getByLabelText('Purchase Date'), '2026-04-01');
     await user.click(screen.getByRole('button', { name: /create new filament/i }));
     await user.type(screen.getByLabelText('Brand'), 'My brand');
+    await user.click(await screen.findByRole('combobox', { name: 'Type' }));
     expect(screen.getByRole('option', { name: 'Custom' })).toBeInTheDocument();
     await user.click(screen.getByText('Manage types'));
     await user.click(screen.getByText('Add type'));
     await user.type(screen.getByLabelText('Type 4'), 'PLA Silk');
     getFilamentTypes.mockResolvedValueOnce(['PLA', 'PETG', 'Custom', 'PLA Silk']);
     await user.click(screen.getByText('Save types'));
+    await user.click(await screen.findByRole('combobox', { name: 'Type' }));
     expect(await screen.findByRole('option', { name: 'PLA Silk' })).toBeInTheDocument();
     expect(updateFilamentTypes).toHaveBeenCalledWith(['PLA', 'PETG', 'Custom', 'PLA Silk']);
     expect(screen.getByLabelText('Brand')).toHaveValue('My brand');
     expect(screen.getByLabelText('Purchase Date')).toHaveValue('2026-04-01');
-    await user.selectOptions(screen.getByLabelText('Type'), 'PLA Silk');
+    await user.type(screen.getByLabelText('Type'), 'PLA Silk{Enter}');
     expect(screen.getByLabelText('Type')).toHaveValue('PLA Silk');
   });
 

@@ -10,7 +10,7 @@ import { InlineError, LoadingState } from '../../../components/ui/PageState';
 import { getModels } from '../../../services/modelService';
 import { formatCurrencyFromCents } from '../../../utils/formatters';
 import { numberField, textField } from '../utils/businessValidation';
-import { Field } from './BusinessFields';
+import { EntityField, Field } from './BusinessFields';
 
 const assumptions = {
   print_time_minutes: [0, 1_000_000],
@@ -51,7 +51,7 @@ function MaterialInputs({ index, control, register, errors, options, current }) 
       const retained = options.some(([id]) => id === row.filament_id) ? options :
         [...options, [row.filament_id, current?.sources?.materials[i]?.name ?? t('common.notRecorded')]];
       return <div key={row.fieldKey} className="grid items-end gap-3 sm:grid-cols-4">
-        <Field label="filament" options={retained} {...register(`${name}.${i}.filament_id`)} error={errors?.[i]?.filament_id} />
+        <EntityField required control={control} label="filament" options={retained} name={`${name}.${i}.filament_id`} error={errors?.[i]?.filament_id} />
         <Field label="weight" type="number" min={0} max={1_000_000} step="any" {...register(`${name}.${i}.weight_g`)} error={errors?.[i]?.weight_g} />
         <Field label="waste" type="number" min={0} max={1_000_000} step="any" {...register(`${name}.${i}.waste_g`)} error={errors?.[i]?.waste_g} />
         <button className="page-action page-action-secondary" type="button" onClick={() => remove(i)}>{t('common.remove')}</button>
@@ -102,7 +102,7 @@ export default function EstimateEditor({ kind, record, customers, onSave, comman
     <fieldset disabled={command.busy} className="space-y-4">
       {budget ? <>
         <Field label="title" {...register('title')} maxLength={160} required error={errors.title} />
-        <Field label="customer" {...register('customer_id')} options={[['', t('business.unassigned')], ...customers.filter((customer) => !customer.is_archived || record?.customer_id === customer.id).map(({ id, name }) => [id, name])]} />
+        <EntityField control={control} label="customer" name="customer_id" options={[['', t('business.unassigned')], ...customers.filter((customer) => !customer.is_archived || record?.customer_id === customer.id).map(({ id, name }) => [id, name])]} />
         {fields.map((item, index) => {
           const current = record?.items.find(({ id }) => id === item.id);
           const printerId = item.assumptions.printer_id;
@@ -112,10 +112,10 @@ export default function EstimateEditor({ kind, record, customers, onSave, comman
           return <fieldset key={item.fieldKey} className="rounded-lg border ui-border-subtle p-4">
             <legend className="px-2 font-semibold">{t('sales.itemNumber', { number: index + 1 })}</legend>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="model" {...register(`items.${index}.model_id`)} options={item.model_id && !modelOptions.some(([id]) => id === item.model_id) ? [...modelOptions, [item.model_id, item.name]] : modelOptions} />
+              <EntityField control={control} label="model" name={`items.${index}.model_id`} options={item.model_id && !modelOptions.some(([id]) => id === item.model_id) ? [...modelOptions, [item.model_id, item.name]] : modelOptions} />
               <Field label="name" {...register(`items.${index}.name`)} maxLength={200} error={errors.items?.[index]?.name} />
               <Field label="quantity" type="number" min={1} max={1_000_000} step={1} {...register(`items.${index}.quantity`)} error={errors.items?.[index]?.quantity} />
-              <Field label="printer" {...register(`items.${index}.assumptions.printer_id`)} options={availablePrinters} />
+              <EntityField control={control} label="printer" name={`items.${index}.assumptions.printer_id`} options={availablePrinters} />
               {Object.entries(assumptions).map(([key, [min, max, whole]]) => <Field key={key} label={key} type="number" min={min} max={max} step={whole === false ? 'any' : 1} {...register(`items.${index}.assumptions.${key}`)} error={errors.items?.[index]?.assumptions?.[key]} />)}
             </div>
             <div className="mt-4">

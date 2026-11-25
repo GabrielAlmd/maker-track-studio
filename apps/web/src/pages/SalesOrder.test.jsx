@@ -82,7 +82,7 @@ describe('Sales Order workflow', () => {
     const panel = within(await screen.findByRole('region', { name: 'Production plan' }));
     expect(await panel.findByText('Order production: Not started')).toBeInTheDocument();
     await user.click(await panel.findByRole('button', { name: 'Find run items' }));
-    await user.selectOptions(await panel.findByLabelText('Compatible run items'), source.print_run_item_id);
+    await user.type(await panel.findByLabelText('Compatible run items'), 'run-item{Enter}');
     await user.click(panel.getByRole('button', { name: 'Add run item' }));
     expect(panel.getByRole('button', { name: 'Refresh production' })).toBeDisabled();
     expect(panel.getByLabelText('Planned')).toHaveAttribute('readonly');
@@ -128,12 +128,12 @@ describe('Sales Order workflow', () => {
 
     await screen.findByRole('heading', { name: 'New order' });
     await user.type(screen.getByLabelText('Reference'), 'NEW-1');
-    await user.selectOptions(screen.getByLabelText('Sales channel'), 'channel-1');
-    await user.selectOptions(screen.getAllByLabelText('Model')[0], 'model-1');
+    await user.type(screen.getByLabelText('Sales channel'), 'Etsy{Enter}');
+    await user.type(screen.getAllByLabelText('Model')[0], 'Enclosure{Enter}');
     fireEvent.change(screen.getAllByLabelText('Quantity')[0], { target: { value: '2' } });
     await user.type(screen.getAllByLabelText('Unit selling price (€)')[0], '12');
     await user.click(screen.getByRole('button', { name: 'Add item' }));
-    await user.selectOptions(screen.getAllByLabelText('Model')[1], 'model-2');
+    await user.type(screen.getAllByLabelText('Model')[1], 'Bracket{Enter}');
     fireEvent.change(screen.getAllByLabelText('Quantity')[1], { target: { value: '3' } });
     await user.type(screen.getAllByLabelText('Unit selling price (€)')[1], '8');
 
@@ -217,7 +217,7 @@ describe('Sales Order workflow', () => {
     await screen.findByRole('heading', { name: 'New order' });
     expect(screen.getByLabelText('Sales channel')).toHaveValue('');
     await user.type(screen.getByLabelText('Reference'), 'NO-CHANNEL');
-    await user.selectOptions(screen.getByLabelText('Model'), 'model-1');
+    await user.type(screen.getByLabelText('Model'), 'Enclosure{Enter}');
     await user.type(screen.getByLabelText('Target profit (%)'), '150');
     expect(await screen.findByText('Unit cost: €10.00')).toBeInTheDocument();
     expect(screen.getByText('Suggested unit price: €25.00')).toBeInTheDocument();
@@ -252,7 +252,7 @@ describe('Sales Order workflow', () => {
     renderOrder();
     await screen.findByRole('heading', { name: 'New order' });
     await user.type(screen.getByLabelText('Reference'), 'INVALID-TARGET');
-    await user.selectOptions(screen.getByLabelText('Model'), 'model-1');
+    await user.type(screen.getByLabelText('Model'), 'Enclosure{Enter}');
     fireEvent.change(screen.getByLabelText('Target profit (%)'), { target: { value: '-1' } });
     await user.type(screen.getByLabelText('Unit selling price (€)'), '10');
     await user.click(screen.getByRole('button', { name: 'Create order' }));
@@ -273,7 +273,8 @@ describe('Sales Order workflow', () => {
     await user.click(screen.getByRole('button', { name: 'Create channel' }));
 
     await waitFor(() => expect(salesService.createSalesChannel).toHaveBeenCalledWith({ name: 'Craft fair', notes: 'In person' }));
-    await waitFor(() => expect(screen.getByLabelText('Sales channel')).toHaveValue('channel-new'));
+    await waitFor(() => expect(screen.getByLabelText('Sales channel')).toHaveValue('Craft fair'));
+    await user.click(screen.getByLabelText('Sales channel'));
     expect(screen.getByRole('option', { name: 'Craft fair' })).toBeInTheDocument();
   });
 
@@ -283,6 +284,7 @@ describe('Sales Order workflow', () => {
 
     await screen.findByRole('heading', { name: 'New order' });
     expect(salesService.getSalesChannels).toHaveBeenCalledWith('active');
+    await userEvent.click(screen.getByLabelText('Sales channel'));
     expect(screen.queryByRole('option', { name: /Old shop/ })).not.toBeInTheDocument();
   });
 
@@ -301,8 +303,9 @@ describe('Sales Order workflow', () => {
     const user = userEvent.setup();
     renderOrder('/business/orders/order-1');
 
-    expect(await screen.findByRole('option', { name: 'Etsy (archived)' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Sales channel')).toHaveValue('channel-1');
+    expect(await screen.findByLabelText('Sales channel')).toHaveValue('Etsy (archived)');
+    await user.click(screen.getByLabelText('Sales channel'));
+    expect(screen.getByRole('option', { name: 'Etsy (archived)' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(salesService.updateSalesOrder).toHaveBeenCalledWith('order-1', expect.objectContaining({ sales_channel_id: 'channel-1' })));
   });
@@ -337,7 +340,7 @@ describe('Sales Order workflow', () => {
 
     await screen.findByRole('heading', { name: 'New order' });
     await user.type(screen.getByLabelText('Reference'), 'OVER-ALLOCATED');
-    await user.selectOptions(screen.getByLabelText('Model'), 'model-1');
+    await user.type(screen.getByLabelText('Model'), 'Enclosure{Enter}');
     await user.type(screen.getByLabelText('Unit selling price (€)'), '10');
     await user.type(await screen.findByLabelText('Units assigned to Print Job job-1'), '2');
     await user.click(screen.getByRole('button', { name: 'Create order' }));

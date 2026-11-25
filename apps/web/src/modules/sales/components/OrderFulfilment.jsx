@@ -1,3 +1,4 @@
+import SearchableSelect from '../../../components/ui/SearchableSelect';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -26,12 +27,14 @@ function actionsFor(doc) {
   return actions;
 }
 
+const actionKey = action => action.kind + ':' + action.reference;
+
 function FulfilmentForm({ path, doc, refresh, onCancelled }) {
   const { t } = useTranslation();
   const command = useBusinessCommand();
   const actions = actionsFor(doc);
-  const [index, setIndex] = useState(0);
-  const selected = actions[index];
+  const [key, setKey] = useState('');
+  const selected = actions.find(action => actionKey(action) === key) ?? actions[0];
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: yupResolver(yup.object({
       units: yup.number().integer().min(1).max(selected?.max ?? 0).required(),
@@ -62,11 +65,9 @@ function FulfilmentForm({ path, doc, refresh, onCancelled }) {
       </details>}
     </div>)}
     {selected ? <form onSubmit={handleSubmit(save)} className="mt-4 flex flex-wrap items-end gap-3">
-      <label>{t('shipping.action')}<select className="block" value={index} onChange={(e) => setIndex(Number(e.target.value))}>
-        {actions.map((a, i) => <option value={i} key={a.kind + a.reference}>
-          {t(`shipping.${a.kind}`)} · {a.line.name} · {a.reference.slice(0, 8)} ({a.max})
-        </option>)}
-      </select></label>
+      <div><SearchableSelect label={t('shipping.action')}
+        options={actions} value={actionKey(selected)} getKey={actionKey} onChange={setKey} clearable={false}
+        getLabel={action => `${t(`shipping.${action.kind}`)} · ${action.line.name} · ${action.reference.slice(0, 8)} (${action.max})`} /></div>
       <label>{t('shipping.units')}<input type="number" className="block w-24" min="1" max={selected.max} step="1" required {...register('units')} /></label>
       <label>{t('shipping.reason')}<input className="block" required maxLength={512} {...register('reason')} /></label>
       <button className="page-action" disabled={command.busy}>{t('shipping.record')}</button>
