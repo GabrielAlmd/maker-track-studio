@@ -8,6 +8,7 @@ import (
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/models"
 	salesdto "github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/api"
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/budget"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
@@ -126,6 +127,15 @@ func TestQuickSaleStockDispatchRollbackAndConcurrentSales(t *testing.T) {
 	wrongModel := command
 	wrongModel.ModelID = other.ID
 	businessRequest[apiResponse](t, router, "POST", quickSales, wrongModel, 409)
+	cost := budget.QuickSaleEstimateInput{
+		Source: "manual", ManualUnitCents: 200, Target: &budget.PriceSelection{Mode: "markup", Value: new(int64(2500))},
+	}
+	input := budget.QuickSaleEstimateRequest{ModelID: product.ID, StockRunItemID: source, Quantity: 3, Cost: cost}
+	quote := businessRequest[budget.QuickSaleEstimateResult](t, router, "POST", quickSales+"/estimate", input, 200)
+	if quote.SuggestedUnitCents == nil || *quote.SuggestedUnitCents != 250 || quote.TotalCostCents != 600 {
+		t.Fatal(quote)
+	}
+	command.Cost, command.EstimateToken = &cost, quote.Token
 	if err := db.Exec(`CREATE TRIGGER reject_quick_dispatch BEFORE INSERT ON inventory_movements
 		WHEN NEW.kind = 'dispatch' BEGIN SELECT RAISE(ABORT, 'injected'); END`).Error; err != nil {
 		t.Fatal(err)
@@ -163,6 +173,23 @@ func TestQuickSaleStockDispatchRollbackAndConcurrentSales(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := businessOrders + "/" + sale.ID.String()
+	var replays int
+	for _, candidate := range []budget.QuickSaleCommand{command, otherSale} {
+		if response := performRequest(t, router, "POST", quickSales, candidate); response.Code == 201 {
+			replays++
+			var replay budget.OrderRevision
+			decodeBody(t, response, &replay)
+			if !reflect.DeepEqual(sale, replay) {
+				t.Fatal("dispatch replay changed the frozen terms")
+			}
+		} else if response.Code != 409 {
+			t.Fatal(response.Body.String())
+		}
+	}
+	if replays != 1 {
+		t.Fatal("expected one successful replay after stock was consumed")
+	}
+	businessRequest[apiResponse](t, router, "POST", quickSales+"/estimate", input, 409)
 	legacyOrderRequest[map[string]bool](t, router, "PUT", "/features", map[string]bool{"sales_orders": false}, 200)
 	disabledSale := command
 	disabledSale.OperationID = uuid.New()
@@ -173,6 +200,11 @@ func TestQuickSaleStockDispatchRollbackAndConcurrentSales(t *testing.T) {
 	target, _ := setupDesktopTestRouter(t)
 	if imported := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "sample.zip", archive.Body.Bytes()); imported.Code != 200 {
 		t.Fatal(imported.Body.String())
+	}
+	saved := businessRequest[budget.OrderRevision](t, target, "GET", root, nil, 200)
+	finance := businessRequest[budget.FinanceSummary](t, target, "GET", root+"/finance", nil, 200)
+	if !reflect.DeepEqual(saved.QuickSalePricing, sale.QuickSalePricing) || finance.EstimatedProfit == nil || *finance.EstimatedProfit != 150 {
+		t.Fatal("restore changed the stock sale pricing or profit", saved, finance)
 	}
 	fulfilment := businessRequest[apiResponse](t, target, "GET", root+"/fulfilment", nil, 200)
 	activity := businessRequest[activityTestPage](t, target, "GET", root+"/activity", nil, 200)
@@ -219,5 +251,134 @@ func TestQuickSaleUpgradeImportsSchemaSeventeen(t *testing.T) {
 	}
 	if restored := businessRequest[budget.FinanceSummary](t, target, "GET", financePath, nil, 200); !reflect.DeepEqual(original, restored) {
 		t.Fatal("schema 17 archive changed proposal-backed payment history")
+	}
+}
+
+func TestQuickSaleModelEstimateRechecksAndFreezesPricing(t *testing.T) {
+	router, db := setupDesktopTestRouter(t)
+	filament := models.Filament{Brand: "Synthetic", Type: "PLA", Color: "Blue", AvgPrice: 50}
+	if err := db.Create(&filament).Error; err != nil {
+		t.Fatal(err)
+	}
+	product := requestModel(t, router, "POST", "/models", gin.H{
+		"name": "Pricing model", "print_time": 1,
+		"material_requirements": []gin.H{{"material_type": "PLA", "color": "Blue", "part_weight_g": 100, "waste_weight_g": 0}},
+	}, 201)
+	input := budget.QuickSaleEstimateRequest{ModelID: product.ID, Quantity: 2, Cost: budget.QuickSaleEstimateInput{
+		Source: "model", MinutesPerUnit: 1, FilamentMapping: map[uuid.UUID]uuid.UUID{product.MaterialRequirements[0].ID: filament.ID},
+		Target: &budget.PriceSelection{Mode: "margin", Value: new(int64(4000))},
+	}}
+	path := quickSales + "/estimate"
+	businessRequest[apiResponse](t, router, "POST", path, input, 409)
+	legacyOrderRequest[map[string]bool](t, router, "PUT", "/features", map[string]bool{"sales_orders": true}, 200)
+	legacy := input
+	legacy.Cost.FilamentMapping = nil
+	businessRequest[apiResponse](t, router, "POST", path, legacy, 409)
+	invalid := input
+	invalid.Cost.Target = &budget.PriceSelection{Mode: "margin", Value: new(int64(10_000))}
+	businessRequest[apiResponse](t, router, "POST", path, invalid, 400)
+	invalid.Cost = budget.QuickSaleEstimateInput{Source: "manual", ManualUnitCents: 1 << 52}
+	businessRequest[apiResponse](t, router, "POST", path, invalid, 400)
+	quote := businessRequest[budget.QuickSaleEstimateResult](t, router, "POST", path, input, 200)
+	if quote.Production == nil || quote.Production.Estimate.MaterialCents < 500 || quote.SuggestedUnitCents == nil {
+		t.Fatal(quote)
+	}
+	manual := input
+	manual.Cost = budget.QuickSaleEstimateInput{Source: "manual", ManualUnitCents: 500, Target: input.Cost.Target}
+	manualQuote := businessRequest[budget.QuickSaleEstimateResult](t, router, "POST", path, manual, 200)
+	if manualQuote.TotalCostCents != 1000 || *manualQuote.SuggestedUnitCents != 833 {
+		t.Fatal(manualQuote)
+	}
+	command := budget.QuickSaleCommand{
+		Command: budget.Command{OperationID: uuid.New()}, Reference: "Estimated sale", ModelID: product.ID,
+		Quantity: input.Quantity, UnitPriceCents: 800, Cost: &input.Cost, EstimateToken: quote.Token,
+	}
+	updatePrice := func(price float64) {
+		t.Helper()
+		if err := db.Model(&filament).Update("avg_price", price).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	updatePrice(60)
+	businessRequest[apiResponse](t, router, "POST", quickSales, command, 409)
+	assertSalesOrderCounts(t, db, 0, 0)
+	quote = businessRequest[budget.QuickSaleEstimateResult](t, router, "POST", path, input, 200)
+	command.EstimateToken = quote.Token
+	sale := businessRequest[budget.OrderRevision](t, router, "POST", quickSales, command, 201)
+	if !reflect.DeepEqual(sale.QuickSalePricing.Production.Estimate, quote.Production.Estimate) || sale.QuickSalePricing.UnitCostCents != quote.UnitCostCents {
+		t.Fatal("confirmation did not freeze the accepted estimate", sale)
+	}
+	updatePrice(70)
+	replay := businessRequest[budget.OrderRevision](t, router, "POST", quickSales, command, 201)
+	if !reflect.DeepEqual(sale, replay) {
+		t.Fatal("retry repriced a confirmed sale")
+	}
+	root := businessOrders + "/" + sale.ID.String()
+	finance := businessRequest[budget.FinanceSummary](t, router, "GET", root+"/finance", nil, 200)
+	if finance.Payable != 1600 || finance.EstimatedProfit == nil || *finance.EstimatedProfit != 1600-quote.TotalCostCents {
+		t.Fatal(finance)
+	}
+	amendment := budget.AmendmentCommand{
+		Command:       budget.Command{OperationID: uuid.New(), ExpectedRevision: 1},
+		DeliveryTerms: new("Collection by arrangement"), Reason: "Confirm collection",
+	}
+	amended := businessRequest[budget.OrderRevision](t, router, "POST", root+"/amendments", amendment, 200)
+	if !reflect.DeepEqual(amended.QuickSalePricing, sale.QuickSalePricing) {
+		t.Fatal("amending delivery terms changed the cost snapshot")
+	}
+
+	target, _ := setupDesktopTestRouter(t)
+	restore := func(expected int) {
+		t.Helper()
+		archive := performRequest(t, router, "GET", "/desktop-data/export", nil)
+		res := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "sample.zip", archive.Body.Bytes())
+		if archive.Code != 200 || res.Code != expected {
+			t.Fatalf("restore: export %d, import %d: %s", archive.Code, res.Code, res.Body)
+		}
+	}
+	restore(200)
+	if restored := businessRequest[budget.OrderRevision](t, target, "GET", root, nil, 200); !reflect.DeepEqual(amended, restored) {
+		t.Fatal("backup restore changed the pricing snapshot", restored)
+	}
+	if err := db.Exec("UPDATE business_order_revisions SET quick_sale_pricing = json_set(quick_sale_pricing, '$.total_cost_cents', 1) WHERE id = ?", sale.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	restore(400)
+	if restored := businessRequest[budget.FinanceSummary](t, target, "GET", root+"/finance", nil, 200); !reflect.DeepEqual(finance, restored) {
+		t.Fatal("invalid backup changed confirmed finance")
+	}
+}
+
+func TestQuickSaleRestoresSchema21WithoutPricing(t *testing.T) {
+	router, db := setupDesktopTestRouter(t)
+	legacyOrderRequest[map[string]bool](t, router, "PUT", "/features", map[string]bool{"sales_orders": true}, 200)
+	_, product, _ := createSalesOrderReferences(t, db)
+	command := budget.QuickSaleCommand{
+		Command: budget.Command{OperationID: uuid.New()}, Reference: "Legacy manual price",
+		ModelID: product.ID, UnitPriceCents: 1500, Quantity: 1,
+	}
+	sale := businessRequest[budget.OrderRevision](t, router, "POST", quickSales, command, 201)
+	for _, statement := range []string{
+		"ALTER TABLE business_order_revisions DROP COLUMN quick_sale_pricing",
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	archive := performRequest(t, router, "GET", "/desktop-data/export", nil)
+	if archive.Code != 200 {
+		t.Fatal(archive.Body.String())
+	}
+	target, _ := setupDesktopTestRouter(t)
+	old := rewriteBackupSchemaVersion(t, archive.Body.Bytes(), 21)
+	if restored := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "sample.zip", old); restored.Code != 200 {
+		t.Fatal(restored.Body.String())
+	}
+	if replay := businessRequest[budget.OrderRevision](t, target, "POST", quickSales, command, 201); !reflect.DeepEqual(sale, replay) {
+		t.Fatal("migration changed a manual sale or its retry identity")
+	}
+	finance := businessRequest[budget.FinanceSummary](t, target, "GET", businessOrders+"/"+sale.ID.String()+"/finance", nil, 200)
+	if finance.Payable != 1500 || finance.EstimatedProfit != nil {
+		t.Fatal(finance)
 	}
 }

@@ -18,12 +18,14 @@ const quickSaleMaxQuantity = 1_000_000_000
 
 type QuickSaleCommand struct {
 	Command
-	Reference      string    `json:"reference"`
-	ModelID        uuid.UUID `json:"model_id"`
-	CustomerID     uuid.UUID `json:"customer_id"`
-	StockRunItemID uuid.UUID `json:"stock_run_item_id"`
-	Quantity       int64     `json:"quantity"`
-	UnitPriceCents int64     `json:"unit_price_cents"`
+	Reference      string                  `json:"reference"`
+	ModelID        uuid.UUID               `json:"model_id"`
+	CustomerID     uuid.UUID               `json:"customer_id"`
+	StockRunItemID uuid.UUID               `json:"stock_run_item_id"`
+	Quantity       int64                   `json:"quantity"`
+	UnitPriceCents int64                   `json:"unit_price_cents"`
+	Cost           *QuickSaleEstimateInput `json:"cost,omitempty"`
+	EstimateToken  string                  `json:"estimate_token,omitempty"`
 }
 
 func quickSaleStock(db *gorm.DB) gin.HandlerFunc {
@@ -57,12 +59,8 @@ type quickSaleLot struct {
 func createQuickSale(db *gorm.DB, id uuid.UUID, input QuickSaleCommand) (OrderRevision, error) {
 	return execute(db, "order", id, input.Command, input, func(tx *gorm.DB) (OrderRevision, uuid.UUID, int64, error) {
 		var terms OrderRevision
-		features, err := models.LoadFeatureConfig(tx)
-		if err != nil {
+		if err := requireQuickSaleEnabled(tx); err != nil {
 			return terms, id, 0, err
-		}
-		if !features["sales_orders"] {
-			return terms, id, 0, conflict("business_disabled", "Enable Business Operations before creating a Quick Sale")
 		}
 		reference := strings.TrimSpace(input.Reference)
 		if !validText(reference, 1, 160) || input.ModelID == uuid.Nil {
@@ -86,6 +84,21 @@ func createQuickSale(db *gorm.DB, id uuid.UUID, input QuickSaleCommand) (OrderRe
 			terms.CustomerID, terms.CustomerName = customer.ID, customer.Name
 		}
 
+		if (input.Cost == nil) != (input.EstimateToken == "") || (input.Cost != nil && len(input.EstimateToken) != 64) {
+			return terms, id, 0, invalid("estimate_token", "Preview the estimate before confirming")
+		}
+		if input.Cost != nil {
+			preview, err := calculateQuickSalePricing(tx, QuickSaleEstimateRequest{
+				ModelID: input.ModelID, StockRunItemID: input.StockRunItemID, Quantity: input.Quantity, Cost: *input.Cost,
+			})
+			if err != nil {
+				return terms, id, 0, err
+			}
+			if input.EstimateToken != preview.Token {
+				return terms, id, 0, conflict("estimate_changed", "The cost inputs changed. Preview the estimate again.")
+			}
+			terms.QuickSalePricing = &preview.QuickSalePricing
+		}
 		now := time.Now().UTC()
 		payable := input.Quantity * input.UnitPriceCents
 		order := storage.SalesOrder{Reference: reference, OrderDate: now, QuickSaleCents: &payable}
@@ -107,29 +120,34 @@ func createQuickSale(db *gorm.DB, id uuid.UUID, input QuickSaleCommand) (OrderRe
 	})
 }
 
-func dispatchQuickSale(tx *gorm.DB, input QuickSaleCommand, line storage.SalesOrderItem) error {
-	stockConflict := conflict("stock_unavailable", "The selected lot has insufficient available stock. Choose another lot or change the quantity.")
+func quickSaleStockConflict() error {
+	return conflict("stock_unavailable", "The selected lot has insufficient available stock. Choose another lot or change the quantity.")
+}
+
+func availableQuickSaleStock(tx *gorm.DB, modelID, lotID uuid.UUID, quantity int64) (salesdto.ProductionSource, inventory.Balance, error) {
+	var empty salesdto.ProductionSource
 	var sources []salesdto.ProductionSource
 	err := storage.ProductionSources(tx).
-		Where("item.id = ? AND item.model_id = ? AND run.status = ?", input.StockRunItemID, input.ModelID, "completed").
+		Where("item.id = ? AND item.model_id = ? AND run.status = ?", lotID, modelID, "completed").
 		Scan(&sources).Error
 	if err != nil {
-		return err
+		return empty, inventory.Balance{}, err
 	}
-	if len(sources) != 1 || sources[0].UnitsAvailable < input.Quantity {
-		return stockConflict
+	if len(sources) != 1 || sources[0].UnitsAvailable < quantity {
+		return empty, inventory.Balance{}, quickSaleStockConflict()
 	}
-	balance, err := inventory.OutputAvailability(tx, input.ModelID, input.StockRunItemID)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return stockConflict
+	balance, err := inventory.OutputAvailability(tx, modelID, lotID)
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && balance.Available < quantity) {
+		return empty, inventory.Balance{}, quickSaleStockConflict()
 	}
+	return sources[0], balance, err
+}
+
+func dispatchQuickSale(tx *gorm.DB, input QuickSaleCommand, line storage.SalesOrderItem) error {
+	source, balance, err := availableQuickSaleStock(tx, input.ModelID, input.StockRunItemID, input.Quantity)
 	if err != nil {
 		return err
 	}
-	if balance.Available < input.Quantity {
-		return stockConflict
-	}
-	source := sources[0]
 	allocation := storage.SalesOrderAllocation{
 		SalesOrderItemID: line.ID, PrintRunItemID: &source.PrintRunItemID,
 		PrintJobID: &source.PrintJobID, UnitsAllocated: line.Quantity,
@@ -145,18 +163,18 @@ func dispatchQuickSale(tx *gorm.DB, input QuickSaleCommand, line storage.SalesOr
 	}
 	receipt, err := inventory.ApplyFulfilment(tx, command)
 	if err != nil {
-		return quickSaleStockError(err, stockConflict)
+		return quickSaleStockError(err)
 	}
 	dispatch := uuid.NewSHA1(input.OperationID, []byte("quick-sale-dispatch"))
 	command.OperationID, command.SourceID, command.Reference = dispatch, dispatch, reservation
 	command.Kind, command.ExpectedRevision = "dispatch", receipt.Balance.Revision
 	_, err = inventory.ApplyFulfilment(tx, command)
-	return quickSaleStockError(err, stockConflict)
+	return quickSaleStockError(err)
 }
 
-func quickSaleStockError(err, stockConflict error) error {
+func quickSaleStockError(err error) error {
 	if errors.Is(err, inventory.ErrConflict) {
-		return stockConflict
+		return quickSaleStockConflict()
 	}
 	return err
 }

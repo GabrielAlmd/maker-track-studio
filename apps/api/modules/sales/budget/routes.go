@@ -32,6 +32,7 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) *gin.RouterGroup {
 	internal.GET("/orders/:id/finance", bind(orderFinance))
 	internal.POST("/orders/:id/finance", bind(command(true, recordFinance)))
 	internal.GET("/quick-sales/stock/:id", bind(quickSaleStock))
+	internal.POST("/quick-sales/estimate", bind(businessRequestHandler(false, http.StatusOK, previewQuickSale)))
 	internal.POST("/quick-sales", bind(command(false, createQuickSale)))
 	internal.POST("/orders", bind(command(false, confirmOrder)))
 	internal.GET("/orders/:id", bind(detail[OrderRevision]))
@@ -117,9 +118,17 @@ func detail[T any](db *gorm.DB) gin.HandlerFunc {
 }
 
 func command[Input, Result any](update bool, write func(*gorm.DB, uuid.UUID, Input) (Result, error)) func(*gorm.DB) gin.HandlerFunc {
+	status := http.StatusCreated
+	if update {
+		status = http.StatusOK
+	}
+	return businessRequestHandler(update, status, write)
+}
+
+func businessRequestHandler[Input, Result any](update bool, status int, write func(*gorm.DB, uuid.UUID, Input) (Result, error)) func(*gorm.DB) gin.HandlerFunc {
 	return func(db *gorm.DB) gin.HandlerFunc {
 		return func(c *gin.Context) {
-			id, status := uuid.Nil, http.StatusCreated
+			id := uuid.Nil
 			if update {
 				var err error
 				id, err = pathID(c)
@@ -127,7 +136,6 @@ func command[Input, Result any](update bool, write func(*gorm.DB, uuid.UUID, Inp
 					reply(c, 0, nil, err)
 					return
 				}
-				status = http.StatusOK
 			}
 			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 512<<10)
 			var input Input
@@ -147,7 +155,7 @@ func command[Input, Result any](update bool, write func(*gorm.DB, uuid.UUID, Inp
 				return
 			}
 			switch any(input).(type) {
-			case AmendmentCommand, ConfirmationCommand, FinanceCommand, QuickSaleCommand:
+			case AmendmentCommand, ConfirmationCommand, FinanceCommand, QuickSaleCommand, QuickSaleEstimateRequest:
 				decoder := json.NewDecoder(bytes.NewReader(encoded))
 				decoder.DisallowUnknownFields()
 				if err := decoder.Decode(&input); err != nil {

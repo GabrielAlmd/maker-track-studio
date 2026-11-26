@@ -10,6 +10,8 @@ import { useApi } from '../../../hooks/useApi';
 import { getModels } from '../../../services/modelService';
 import { formatCurrencyFromCents, formatDate } from '../../../utils/formatters';
 import { EntityField, Field } from '../components/BusinessFields';
+import QuickSaleEstimate from '../components/QuickSaleEstimate';
+import { decimalFromHundredths, parseHundredths } from '../utils/moneyInput';
 import useBusinessCommand from '../components/useBusinessCommand';
 import { allCustomers, listQuickSaleStock } from '../services/businessService';
 import { numberField, textField } from '../utils/businessValidation';
@@ -21,7 +23,7 @@ const schema = yup.object({
   model_id: yup.string().uuid().required(),
   customer_id: yup.string().transform((value) => value || undefined).uuid(),
   quantity: numberField(1, maxQuantity),
-  unit_price_cents: numberField(1, maxCents).test('total', (value, { parent }) =>
+  unit_price: numberField(1, maxCents).transform((_, text) => parseHundredths(text)).test('total', (value, { parent }) =>
     Number.isSafeInteger(value * parent.quantity)),
   mode: yup.string().oneOf(['made_to_order', 'stock']).required(),
   stock_run_item_id: yup.string().transform((value) => value || undefined).uuid().when('mode', {
@@ -29,7 +31,7 @@ const schema = yup.object({
   }),
 });
 
-function StockChoice({ model, quantity, control, error, clear }) {
+function StockChoice({ model, quantity, control, error, clear, onSelect }) {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const load = useCallback(() => listQuickSaleStock(model, quantity, page), [model, quantity, page]);
@@ -42,7 +44,7 @@ function StockChoice({ model, quantity, control, error, clear }) {
         ...data.items.map((lot) => [lot.print_run_item_id, t('business.quickLotLabel', {
           date: formatDate(lot.print_date), count: lot.units_available, lot: lot.print_run_item_id.slice(0, 8),
         })]),
-      ]} name="stock_run_item_id" /> : <p className="text-sm ui-text-secondary">{t('business.quickNoStock')}</p>}
+      ]} name="stock_run_item_id" onSelect={onSelect} /> : <p className="text-sm ui-text-secondary">{t('business.quickNoStock')}</p>}
     <div className="flex flex-wrap gap-2">
       <button type="button" className="page-action page-action-secondary" disabled={loading}
         onClick={() => { clear(); refetch(); }}>{t('business.quickRefreshStock')}</button>
@@ -77,17 +79,31 @@ export default function QuickSale() {
   const command = useBusinessCommand();
   const { control, register, watch, setValue, handleSubmit, formState: { errors } } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { reference: '', model_id: '', customer_id: '', quantity: 1, unit_price_cents: '', mode: 'made_to_order', stock_run_item_id: '' },
+    defaultValues: { reference: '', model_id: '', customer_id: '', quantity: 1, unit_price: '', mode: 'made_to_order', stock_run_item_id: '' },
   });
-  const [model, quantity, price, mode, lot] = watch(['model_id', 'quantity', 'unit_price_cents', 'mode', 'stock_run_item_id']);
+  const [model, quantity, price, mode, lot] = watch(['model_id', 'quantity', 'unit_price', 'mode', 'stock_run_item_id']);
   const fromStock = mode === 'stock';
-  const total = quantity * price;
-  const clearLot = () => setValue('stock_run_item_id', '', { shouldValidate: false });
+  const [estimateOpen, setEstimateOpen] = useState(false);
+  const [estimate, setEstimate] = useState(null);
+  const context = {
+    model_id: model, quantity: Number(quantity),
+    stock_run_item_id: fromStock ? lot || undefined : undefined,
+  };
+  const estimateKey = JSON.stringify(context);
+  const ready = model && Number.isInteger(context.quantity) && context.quantity >= 1 && context.quantity <= maxQuantity && (!fromStock || lot);
+  const quote = estimateOpen && estimate?.key === estimateKey ? estimate.quote : null;
+  const total = context.quantity * parseHundredths(price);
+  const clearLot = () => {
+    setValue('stock_run_item_id', '', { shouldValidate: false });
+    setEstimate(null);
+  };
 
-  async function submit({ mode, customer_id, stock_run_item_id, ...values }) {
+  async function submit({ mode, customer_id, stock_run_item_id, unit_price, ...values }) {
+    if (estimateOpen && !quote) return;
     const order = await command.run('quick-sales', {
-      ...values, customer_id: customer_id || undefined,
+      ...values, customer_id: customer_id || undefined, unit_price_cents: unit_price,
       stock_run_item_id: mode === 'stock' ? stock_run_item_id : undefined,
+      cost: quote?.cost, estimate_token: quote?.pricing.token,
     });
     if (order) navigate(`/business/orders/${order.id}`, { replace: true });
   }
@@ -108,21 +124,34 @@ export default function QuickSale() {
               options={[['', t('business.quickSelectModel')]]} name="model_id" onSelect={clearLot} />
             <Field label="quantity" error={errors.quantity} type="number" min={1} max={maxQuantity} step={1}
               {...register('quantity', { onChange: clearLot })} />
-            <Field label="quickPrice" error={errors.unit_price_cents} type="number" min={1} max={maxCents} step={1}
-              {...register('unit_price_cents')} />
+            <Field label="quickPrice" error={errors.unit_price} inputMode="decimal"
+              {...register('unit_price')} />
             <Field label="quickFulfilment" options={[
               ['made_to_order', t('business.quickMadeToOrder')], ['stock', t('business.quickInStock')],
             ]} {...register('mode', { onChange: clearLot })} />
           </div>
           {fromStock && model && Number.isInteger(Number(quantity)) && quantity >= 1 && quantity <= maxQuantity &&
             <StockChoice key={`${model}-${quantity}`} model={model} quantity={quantity} control={control}
-              error={errors.stock_run_item_id} clear={clearLot} />}
+              error={errors.stock_run_item_id} clear={clearLot} onSelect={() => setEstimate(null)} />}
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={estimateOpen} onChange={event => {
+              setEstimateOpen(event.target.checked);
+              setEstimate(null);
+            }} />
+            {t('business.quickEstimate')}
+          </label>
+          {estimateOpen && (ready ?
+            <QuickSaleEstimate key={estimateKey} context={context} quote={quote}
+              onQuote={next => setEstimate(next ? { key: estimateKey, quote: next } : null)}
+              onApply={cents => setValue('unit_price', decimalFromHundredths(cents), { shouldValidate: true })}
+              finalTotal={Number.isSafeInteger(total) && total > 0 ? total : 0} /> :
+            <p role="status" className="text-sm ui-text-secondary">{t('business.quickChooseCostContext')}</p>)}
           {command.error && <p role="alert" className="page-form-error">{command.error}</p>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="font-semibold" aria-live="polite">
               {Number.isSafeInteger(total) && total > 0 && t('business.quickTotal', { amount: formatCurrencyFromCents(total) })}
             </p>
-            <button type="submit" className="page-action" disabled={command.busy || (fromStock && !lot)}>
+            <button type="submit" className="page-action" disabled={command.busy || (fromStock && !lot) || (estimateOpen && !quote)}>
               {t(fromStock ? 'business.quickConfirmStock' : 'business.quickConfirm')}
             </button>
           </div>

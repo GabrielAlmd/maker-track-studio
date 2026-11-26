@@ -42,6 +42,9 @@ func ReadBackup(source *gorm.DB, schemaVersion int) (Backup, error) {
 			return data, errInvalidBackup
 		}
 	}
+	if schemaVersion >= QuickSalePricingBackupSchema && !source.Migrator().HasColumn(&OrderRevision{}, "quick_sale_pricing") {
+		return data, errInvalidBackup
+	}
 	if schemaVersion >= 18 && !source.Migrator().HasColumn(&OrderRevision{}, "customer_name") {
 		return data, errInvalidBackup
 	}

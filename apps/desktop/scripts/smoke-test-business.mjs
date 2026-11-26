@@ -24,12 +24,19 @@ const model = await (await request('/models', 'POST', 201, {
 assert.equal(model.material_weight, 20);
 assert.equal(model.material_summary.color_status, 'multiple');
 const path = '/v2/business/quick-sales';
-const command = { operation_id: randomUUID(), reference: 'Packaged smoke sale', model_id: model.id, quantity: 2, unit_price_cents: 1250 };
+const cost = { source: 'manual', manual_unit_cents: 500, target: { mode: 'margin', value: 4000 } };
+const estimateInput = { model_id: model.id, quantity: 2, cost };
+const estimate = await (await request(`${path}/estimate`, 'POST', 200, estimateInput)).json();
+assert.equal(estimate.suggested_unit_price_cents, 833);
+const command = { ...estimateInput, operation_id: randomUUID(), reference: 'Packaged smoke sale',
+  unit_price_cents: 1250, estimate_token: estimate.token };
 const sale = await (await request(path, 'POST', 201, command)).json();
 const order = `/sales-orders/${sale.id}`;
 const original = await (await request(order, 'GET', 200)).json();
 assert.equal(original.source, 'quick_sale');
 assert.equal(original.profitability.revenue_cents, 2500);
+const finance = `/v2/business/orders/${sale.id}/finance`;
+assert.equal((await (await request(finance, 'GET', 200)).json()).estimated_profit_cents, 1500);
 
 await request('/features', 'PUT', 200, { sales_orders: false });
 await request(path, 'POST', 409, { ...command, operation_id: randomUUID() });
@@ -43,4 +50,5 @@ assert.equal(features.sales_orders, false);
 await request('/features', 'PUT', 200, { sales_orders: true });
 assert.deepEqual(await (await request(path, 'POST', 201, command)).json(), sale);
 assert.deepEqual(await (await request(order, 'GET', 200)).json(), original);
+assert.equal((await (await request(finance, 'GET', 200)).json()).estimated_profit_cents, 1500);
 console.log('Packaged Model materials, Quick Sale, feature toggle and SQLite backup/restore passed');

@@ -1,11 +1,14 @@
 package budget
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/GabrielAlmd/maker-track-studio/apps/api/modules/sales/storage"
 	"github.com/google/uuid"
 )
+
+const QuickSalePricingBackupSchema = 22
 
 func (data Backup) validateOrderHistory(refs map[revisionKey]bool, schemaVersion int) error {
 	proposals := map[revisionKey]Proposal{}
@@ -30,6 +33,9 @@ func (data Backup) validateOrderHistory(refs map[revisionKey]bool, schemaVersion
 		if r.ID == uuid.Nil || r.ConfirmedAt.IsZero() || !validText(r.PurchaseOrder, 0, 160) || !validText(r.DeliveryTerms, 0, 2000) {
 			return errInvalidBackup
 		}
+		if r.QuickSalePricing != nil && (!direct || schemaVersion < QuickSalePricingBackupSchema) {
+			return errInvalidBackup
+		}
 		if direct {
 			if schemaVersion < 18 || r.ProposalRevision != 0 ||
 				(r.CustomerID == uuid.Nil && r.CustomerName != "") ||
@@ -48,7 +54,8 @@ func (data Backup) validateOrderHistory(refs map[revisionKey]bool, schemaVersion
 			}
 		} else if r.Revision != previous.Revision+1 || r.ProposalID != previous.ProposalID || r.ProposalRevision != previous.ProposalRevision ||
 			r.CustomerID != previous.CustomerID || r.CustomerName != previous.CustomerName || !r.ConfirmedAt.Equal(previous.ConfirmedAt) ||
-			!validText(r.Reason, 1, 500) || r.CreatedAt.Before(previous.CreatedAt) {
+			!validText(r.Reason, 1, 500) || r.CreatedAt.Before(previous.CreatedAt) ||
+			!reflect.DeepEqual(r.QuickSalePricing, previous.QuickSalePricing) {
 			return errInvalidBackup
 		}
 		refs[revisionKey{"order", r.ID, r.Revision}] = true
@@ -70,6 +77,7 @@ func (data Backup) ValidateOrderLinks(orders []storage.SalesOrder, items []stora
 	lines := map[uuid.UUID]map[uuid.UUID]ProposalLine{}
 	type directTerms struct {
 		payable  int64
+		pricing  *QuickSalePricing
 		lineSeen bool
 	}
 	direct := make(map[uuid.UUID]directTerms)
@@ -89,8 +97,8 @@ func (data Backup) ValidateOrderLinks(orders []storage.SalesOrder, items []stora
 				(order.FulfilmentStatus != storage.SalesOrderFulfilmentConfirmed && order.FulfilmentStatus != storage.SalesOrderFulfilmentPreparing && order.FulfilmentStatus != storage.SalesOrderFulfilmentCancelled) {
 				return errInvalidBackup
 			}
-			direct[order.ID] = directTerms{payable: *order.QuickSaleCents}
-			bases[order.ID] = financeBasis{payable: *order.QuickSaleCents}
+			direct[order.ID] = directTerms{payable: *order.QuickSaleCents, pricing: r.QuickSalePricing}
+			bases[order.ID] = quickSaleFinance(*order.QuickSaleCents, r.QuickSalePricing)
 			continue
 		}
 		if order.QuickSaleCents != nil || order.AcceptedProposalID == nil || *order.AcceptedProposalID != r.ProposalID {
@@ -110,7 +118,8 @@ func (data Backup) ValidateOrderLinks(orders []storage.SalesOrder, items []stora
 		if terms, ok := direct[item.SalesOrderID]; ok {
 			quantity := int64(item.Quantity)
 			if terms.lineSeen || item.BudgetLineID != nil || item.DiscountCents != 0 || quantity < 1 || quantity > quickSaleMaxQuantity ||
-				item.UnitPriceCents < 1 || item.UnitPriceCents > maxSafeInteger/quantity || item.UnitPriceCents*quantity != terms.payable {
+				item.UnitPriceCents < 1 || item.UnitPriceCents > maxSafeInteger/quantity || item.UnitPriceCents*quantity != terms.payable ||
+				!validQuickSalePricing(terms.pricing, quantity) {
 				return errInvalidBackup
 			}
 			terms.lineSeen = true

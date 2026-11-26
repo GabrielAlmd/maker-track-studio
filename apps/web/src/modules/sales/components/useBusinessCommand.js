@@ -26,7 +26,12 @@ export default function useBusinessCommand() {
     } catch (failure) {
       const status = failure?.response?.status;
       const code = failure?.response?.data?.error?.code;
-      setError(t(code === 'stock_unavailable' ? 'business.quickStockChanged' : status === 409 ? 'business.conflict' : status === 400 ? 'business.invalid' : 'business.saveError'));
+      const knownError = {
+        stock_unavailable: 'business.quickStockChanged',
+        cost_unavailable: 'business.quickMissingCost',
+        estimate_changed: 'business.quickEstimateChanged',
+      }[code];
+      setError(t(knownError ?? (status === 409 ? 'business.conflict' : status === 400 ? 'business.invalid' : 'business.saveError')));
       if (status >= 400 && status < 500 && code !== 'concurrent_update') retry.current = null;
       return null;
     } finally {

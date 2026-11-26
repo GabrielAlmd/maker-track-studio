@@ -135,8 +135,13 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share backup schema version 21 and ZIP
-format version 1. Schema 21 adds filament archive and warning settings. The
+Current desktop and self-hosted builds share backup schema version 22 and ZIP
+format version 1. Schema 22 (Sales module version 9) adds a nullable
+`business_order_revisions.quick_sale_pricing` snapshot. Restore checks frozen
+cost and suggested cents against their assumptions and the confirmed
+quantity. Older Quick Sales and archives retain their agreed prices and null
+estimates. Roll back by restoring a pre-upgrade ZIP with a compatible binary.
+Schema 21 adds filament archive and warning settings. The
 core inventory marker advances to 5. Restore validates tracking transitions
 while replaying ledger history in sequence. Earlier backups restore with
 tracking and warnings enabled and active catalogue entries. To downgrade,

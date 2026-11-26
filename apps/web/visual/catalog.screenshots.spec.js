@@ -342,7 +342,7 @@ const scenarios = [
       await expect(page.getByRole('option', { name: 'Workshop Bracket' })).toBeVisible();
       await page.getByLabel('Model', { exact: true }).press('Enter');
       await page.getByLabel('Quantity', { exact: true }).fill('2');
-      await page.getByLabel('Unit price (EUR cents)').fill('1299');
+      await page.getByLabel('Unit price (EUR)').fill('12.99');
       await page.getByLabel('Fulfilment', { exact: true }).selectOption('stock');
       await page.getByLabel('Finished stock lot').fill('55555555');
       await page.getByLabel('Finished stock lot').press('Enter');
@@ -367,7 +367,21 @@ const scenarios = [
       await lot.fill('55555555');
       await lot.press('Enter');
       await expect(page.getByText('Sale total €25.98', { exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Confirm and dispatch' })).toBeEnabled();
+      await page.route('**/api/v2/business/quick-sales/estimate', async route => {
+        expect(route.request().postDataJSON()).toMatchObject({
+          quantity: 2, cost: { source: 'manual', manual_unit_cents: 500, target: { mode: 'margin', value: 4000 } },
+        });
+        await route.fulfill({ json: { token: 'synthetic-estimate', source: 'manual', unit_cost_cents: 500,
+          total_cost_cents: 1000, suggested_unit_price_cents: 833 } });
+      });
+      await page.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }).check();
+      await page.getByLabel('Cost per unit (EUR)').fill('5.00');
+      await page.getByLabel('Target (%)').fill('40');
+      await page.getByRole('button', { name: 'Calculate estimate' }).click();
+      await page.getByRole('button', { name: 'Apply suggested price' }).click();
+      await expect(page.getByText('Sale total €16.66', { exact: true })).toBeVisible();
+      await expect(page.getByText(/Estimated profit at final price €6.66/)).toBeVisible();
+      await expect(confirm).toBeEnabled();
     },
   },
   {
