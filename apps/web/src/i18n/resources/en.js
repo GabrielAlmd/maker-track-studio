@@ -209,6 +209,7 @@ export default {
     complete: 'Complete', incomplete: 'Incomplete',
   },
   modelMaterials: {
+    useValue: 'Use “{{value}}”',
     partDetails: 'Part {{weight}}',
     wasteDetails: 'Waste {{weight}}',
     preferenceDetails: 'Preferred filament',

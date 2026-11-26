@@ -148,6 +148,19 @@ const scenarios = [
     },
   },
   {
+    slug: 'models-material-suggestions', route: 'models', prepare: async (page) => {
+      await ready.models(page);
+      await page.getByRole('button', { name: 'Add New Model' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Add New Model' });
+      await dialog.getByRole('button', { name: 'Add material requirement' }).click();
+      await dialog.getByRole('combobox', { name: 'Material type' }).fill('pla');
+      await dialog.getByRole('option', { name: 'PLA', exact: true }).click();
+      await dialog.getByRole('combobox', { name: 'Color (optional)' }).click();
+      await expect(dialog.getByRole('option', { name: 'Matte Black' })).toBeVisible();
+      await expect(dialog.getByRole('option', { name: 'Ocean Blue' })).toHaveCount(0);
+    },
+  },
+  {
     slug: 'models-filters', route: 'models', prepare: async (page) => {
       await ready.models(page);
       await page.locator('summary').filter({ hasText: 'Filters' }).click();

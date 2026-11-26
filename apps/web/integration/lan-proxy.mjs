@@ -36,6 +36,11 @@ async function exerciseMaterialLifecycle(page) {
 }
 
 async function exerciseModelMaterials(page) {
+  const created = await page.evaluate(async () => (await fetch('/api/filaments', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brand: 'Synthetic', type: 'PETG', color: 'Blue', avg_price: 20 }),
+  })).status);
+  expect(created).toBe(201);
   await page.getByRole('link', { name: 'Models', exact: true }).click();
   await page.getByRole('button', { name: 'Add New Model' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add New Model' });
@@ -43,8 +48,10 @@ async function exerciseModelMaterials(page) {
   await dialog.getByLabel('Print Time (min)').fill('25');
   await dialog.getByRole('button', { name: 'Add material requirement' }).click();
   const part = dialog.getByLabel('Part weight (g)');
-  await dialog.getByLabel('Material type').fill('PETG');
-  await dialog.getByLabel('Color (optional)').fill('Blue');
+  await dialog.getByRole('combobox', { name: 'Material type' }).fill('petg');
+  await dialog.getByRole('option', { name: 'PETG', exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'Color (optional)' }).click();
+  await dialog.getByRole('option', { name: 'Blue', exact: true }).click();
   await part.fill('-2');
   await dialog.getByRole('button', { name: 'Create Model' }).click();
   await expect(part).toHaveAttribute('aria-invalid', 'true');
@@ -60,11 +67,6 @@ async function exerciseModelMaterials(page) {
 }
 
 async function exerciseProductionEstimate(page) {
-  const created = await page.evaluate(async () => (await fetch('/api/filaments', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brand: 'Synthetic', type: 'PETG', color: 'Blue', avg_price: 20 }),
-  })).status);
-  expect(created).toBe(201);
   let releaseCatalogue;
   const catalogue = new Promise(resolve => { releaseCatalogue = resolve; });
   const delayCatalogue = async route => {

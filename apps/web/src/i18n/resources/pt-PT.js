@@ -209,6 +209,7 @@ export default {
     complete: 'Concluído', incomplete: 'Incompleto',
   },
   modelMaterials: {
+    useValue: 'Usar «{{value}}»',
     partDetails: 'Peça {{weight}}',
     wasteDetails: 'Desperdício {{weight}}',
     preferenceDetails: 'Filamento preferido',

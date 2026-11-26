@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '../hooks/useApi';
+import { getFilamentTypes } from '../services/filamentTypeService';
 import { getFilaments } from '../services/filamentService';
 import { blankRequirement, maxModelGrams, maxRequirements, summarizeModelMaterials } from '../utils/modelMaterials';
 import { formatNumber } from '../utils/formatters';
@@ -11,6 +12,18 @@ import Modal from './ui/Modal';
 const fieldClass = 'w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring';
 const secondaryAction = 'page-action page-action-secondary';
 const filamentLabel = filament => [filament.brand, filament.type, filament.color].filter(Boolean).join(' · ');
+
+const textValue = value => value;
+const normalize = value => (value ?? '').trim().toLowerCase();
+
+function catalogueValues(values) {
+  const unique = new Map();
+  for (const value of values) {
+    const key = normalize(value);
+    if (key && !unique.has(key)) unique.set(key, value.trim());
+  }
+  return [...unique.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
 
 function grams(value, t) {
   return value == null ? t('common.unknown') : t('modelMaterials.grams', { grams: formatNumber(value, { maximumFractionDigits: 6 }) });
@@ -78,24 +91,50 @@ function ModelSlicerReview({ append, disabled }) {
   </div>;
 }
 
-function MaterialRequirementField({ row, index, register, control, errors, remove, catalog }) {
+function MaterialRequirementField({ row, index, register, control, errors, remove, catalog, types, materialType, getValues, setValue }) {
   const { t } = useTranslation();
   const { data, loading, error } = catalog;
   const prefix = `material_requirements.${index}`;
   const fieldPrefix = useId();
+  const active = (data ?? []).filter(filament => !filament.archived);
+  const typeOptions = catalogueValues([...(types.data ?? []), ...active.map(filament => filament.type)]);
+  const colorOptions = catalogueValues(active.filter(filament => normalize(filament.type) === normalize(materialType))
+    .map(filament => filament.color));
+  function applyPreference(id) {
+    const filament = active.find(option => option.id === id);
+    if (!filament) return;
+    for (const [field, value] of [['material_type', filament.type], ['color', filament.color]]) {
+      const name = `${prefix}.${field}`;
+      if (!normalize(getValues(name)) && normalize(value)) {
+        setValue(name, value.trim(), { shouldDirty: true, shouldValidate: true });
+      }
+    }
+  }
   return <fieldset className="min-w-0 rounded border ui-border-default p-3 space-y-2 text-sm">
     <legend className="px-1">{row.source_tool ? t('modelMaterials.tool', { number: row.source_tool }) : t('modelMaterials.requirement', { number: index + 1 })}</legend>
     {row.review_grams != null && <p className="ui-text-muted">{t('modelMaterials.reportedGrams', { weight: grams(row.review_grams, t) })}</p>}
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      {[['material_type', 'type'], ['color', 'color'], ['part_weight_g', 'part'], ['waste_weight_g', 'waste']].map(([field, label]) => {
-        const numeric = field.endsWith('_g');
+      {[['material_type', 'type', typeOptions, types.loading || loading, types.error && error],
+        ['color', 'color', colorOptions, loading, error]].map(([field, label, options, pending, failed]) => {
+        const fieldError = errors?.[field];
+        const id = `${fieldPrefix}-${field}`;
+        return <div key={field} className="min-w-0">
+          <FormSelect id={id} name={`${prefix}.${field}`} control={control} label={t(`modelMaterials.${label}`)}
+            options={options} getKey={textValue} getLabel={textValue} maxLength={100}
+            required={field === 'material_type'} clearable={false} loading={pending} error={failed}
+            createLabel={value => t('modelMaterials.useValue', { value })}
+            aria-describedby={fieldError ? `${id}-error` : undefined} />
+          {fieldError && <span id={`${id}-error`} className="ui-text-danger block" role="alert">{fieldError.message}</span>}
+        </div>;
+      })}
+      {[['part_weight_g', 'part'], ['waste_weight_g', 'waste']].map(([field, label]) => {
         const fieldError = errors?.[field];
         const id = `${fieldPrefix}-${field}`;
         return <div key={field}>
           <label htmlFor={id}>{t(`modelMaterials.${label}`)}</label>
-          <input id={id} className={fieldClass} type={numeric ? 'number' : 'text'} aria-invalid={fieldError ? true : undefined}
+          <input id={id} className={fieldClass} type="number" aria-invalid={fieldError ? true : undefined}
             aria-describedby={fieldError ? `${id}-error` : undefined}
-            {...(numeric ? { min: 0, max: maxModelGrams, step: 'any' } : { maxLength: 100 })}
+            min={0} max={maxModelGrams} step="any"
             {...register(`${prefix}.${field}`)} />
           {fieldError && <span id={`${id}-error`} className="ui-text-danger block" role="alert">{fieldError.message}</span>}
         </div>;
@@ -103,24 +142,25 @@ function MaterialRequirementField({ row, index, register, control, errors, remov
     </div>
     <FormSelect name={`${prefix}.preferred_filament_id`} control={control} label={t('modelMaterials.preference')}
       options={(data ?? []).filter(f => !f.archived || f.id === row.preferred_filament_id)} getLabel={filamentLabel} loading={loading} error={error ? t('modelMaterials.catalogError') : undefined}
-      clearLabel={t('modelMaterials.noPreference')} />
+      clearLabel={t('modelMaterials.noPreference')} onSelect={applyPreference} />
     <button type="button" className={secondaryAction} onClick={() => remove(index)}>{t('modelMaterials.remove', { number: index + 1 })}</button>
   </fieldset>;
 }
 
-function MaterialRequirementFields({ fields, register, control, remove, errors }) {
+function MaterialRequirementFields({ fields, rows, register, control, remove, errors, getValues, setValue }) {
   const catalog = useApi(getFilaments);
-  return fields.map((row, index) => <MaterialRequirementField key={row.formKey} {...{ row, index, register, control, remove, catalog }}
-    errors={errors?.[index]} />);
+  const types = useApi(getFilamentTypes);
+  return fields.map((row, index) => <MaterialRequirementField key={row.formKey} {...{ row, index, register, control, remove, catalog, types, getValues, setValue }}
+    materialType={rows?.[index]?.material_type} errors={errors?.[index]} />);
 }
 
-export function ModelMaterialsEditor({ fields, rows, append, remove, register, control, errors, disabled }) {
+export function ModelMaterialsEditor({ fields, rows, append, remove, register, control, errors, disabled, getValues, setValue }) {
   const { t } = useTranslation();
   return <section aria-label={t('modelMaterials.title')} className="space-y-3">
     <h3 className="font-semibold">{t('modelMaterials.title')}</h3>
     <p className="text-sm ui-text-muted">{t(fields.length ? 'modelMaterials.perUnit' : 'modelMaterials.legacy')}</p>
     <ModelSlicerReview append={append} disabled={disabled || fields.length > 0} />
-    {fields.length > 0 && <MaterialRequirementFields {...{ fields, register, control, remove, errors }} />}
+    {fields.length > 0 && <MaterialRequirementFields {...{ fields, rows, register, control, remove, errors, getValues, setValue }} />}
     {errors?.message && <p role="alert" className="ui-text-danger text-sm">{errors.message}</p>}
     {fields.length > 0 && <MaterialSummary summary={summarizeModelMaterials(rows)} />}
     <button type="button" disabled={disabled || fields.length >= maxRequirements} className={secondaryAction}
