@@ -13,17 +13,18 @@ import (
 
 // The ID is the SalesOrder ID. Revision 1 is the original acceptance.
 type OrderRevision struct {
-	ID               uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
-	Revision         int64     `json:"revision" gorm:"primaryKey;autoIncrement:false"`
-	ProposalID       uuid.UUID `json:"proposal_id" gorm:"type:uuid;not null"`
-	ProposalRevision int64     `json:"proposal_revision"`
-	CustomerName     string    `json:"customer_name,omitempty"`
-	CustomerID       uuid.UUID `json:"customer_id"`
-	ConfirmedAt      time.Time `json:"confirmed_at"`
-	PurchaseOrder    string    `json:"purchase_order"`
-	DeliveryTerms    string    `json:"delivery_terms"`
-	Reason           string    `json:"reason,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID               uuid.UUID         `json:"id" gorm:"type:uuid;primaryKey"`
+	Revision         int64             `json:"revision" gorm:"primaryKey;autoIncrement:false"`
+	ProposalID       uuid.UUID         `json:"proposal_id" gorm:"type:uuid;not null"`
+	ProposalRevision int64             `json:"proposal_revision"`
+	CustomerName     string            `json:"customer_name,omitempty"`
+	CustomerID       uuid.UUID         `json:"customer_id"`
+	ConfirmedAt      time.Time         `json:"confirmed_at"`
+	PurchaseOrder    string            `json:"purchase_order"`
+	DeliveryTerms    string            `json:"delivery_terms"`
+	Reason           string            `json:"reason,omitempty"`
+	CreatedAt        time.Time         `json:"created_at"`
+	QuickSalePricing *QuickSalePricing `json:"quick_sale_pricing,omitempty" gorm:"serializer:json"`
 }
 
 func (OrderRevision) TableName() string { return "business_order_revisions" }

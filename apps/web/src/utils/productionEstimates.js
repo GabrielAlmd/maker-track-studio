@@ -1,10 +1,14 @@
 const normalize = value => (value ?? '').trim().toLowerCase();
 const grams = (value, precision) => Number(value.toFixed(precision));
 
-function suggestFilament(requirement, filaments, stock, weight) {
-  const matches = filaments.filter(filament => !filament.archived && !stock.get(filament.id)?.archived
+export function matchingFilaments(requirement, filaments, stock, allowOtherColors = false) {
+  return filaments.filter(filament => !filament.archived && !stock.get(filament.id)?.archived
     && normalize(filament.type) === normalize(requirement.material_type)
-    && (!normalize(requirement.color) || normalize(filament.color) === normalize(requirement.color)));
+    && (allowOtherColors || !normalize(requirement.color) || normalize(filament.color) === normalize(requirement.color)));
+}
+
+function suggestFilament(requirement, filaments, stock, weight) {
+  const matches = matchingFilaments(requirement, filaments, stock);
   const preferred = matches.find(filament => filament.id === requirement.preferred_filament_id);
   const available = matches.filter(filament => {
     const balance = stock.get(filament.id);
@@ -42,7 +46,7 @@ export function estimateRunMaterials(items, models, filaments, stock, precision 
     const group = groups.get(groupKey) ?? { filament_id: filament, weight: 0, waste: 0, sources: [] };
     group.weight += weight;
     group.waste = waste === null || group.waste === null ? null : group.waste + waste;
-    group.sources.push({ key, model: model.name, type: requirement.material_type, color: requirement.color, quantity });
+    group.sources.push({ key, requirementID: requirement.id, model: model.name, type: requirement.material_type, color: requirement.color, quantity });
     groups.set(groupKey, group);
   }
 

@@ -143,6 +143,15 @@ func proposalFinance(p Proposal) financeBasis {
 	return financeBasis{payable: p.NetCents, estimatedProfit: &profit}
 }
 
+func quickSaleFinance(payable int64, pricing *QuickSalePricing) financeBasis {
+	basis := financeBasis{payable: payable}
+	if pricing != nil {
+		profit := payable - pricing.TotalCostCents
+		basis.estimatedProfit = &profit
+	}
+	return basis
+}
+
 func financeInputs(tx *gorm.DB, id uuid.UUID) (financeBasis, []FinanceEntry, error) {
 	order, err := readRevision[OrderRevision](tx, id, 1)
 	if err != nil {
@@ -157,7 +166,7 @@ func financeInputs(tx *gorm.DB, id uuid.UUID) (financeBasis, []FinanceEntry, err
 		if sale.QuickSaleCents == nil {
 			return basis, nil, gorm.ErrRecordNotFound
 		}
-		basis.payable = *sale.QuickSaleCents
+		basis = quickSaleFinance(*sale.QuickSaleCents, order.QuickSalePricing)
 	} else {
 		p, err := readRevision[Proposal](tx, order.ProposalID, order.ProposalRevision)
 		if err != nil {

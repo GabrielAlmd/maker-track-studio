@@ -50,6 +50,13 @@ export function formatCurrencyFromCents(value, { fractionDigits = 2, fallback = 
   const cents = toFiniteNumber(value);
   if (cents === null) return fallback;
 
+  if (fractionDigits === 2 && Number.isSafeInteger(cents)) {
+    const formatter = new Intl.NumberFormat(activeIntlLocale(), { style: 'currency', currency: 'EUR' });
+    const fraction = String(Math.abs(cents % 100)).padStart(2, '0');
+    const wholeEuros = Math.trunc((cents - cents % 100) / 100);
+    const signedEuros = cents < 0 && wholeEuros === 0 ? -0 : wholeEuros;
+    return formatter.formatToParts(signedEuros).map(part => part.type === 'fraction' ? fraction : part.value).join('');
+  }
   return formatCurrency(cents / 100, { fractionDigits, fallback });
 }
 

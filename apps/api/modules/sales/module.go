@@ -15,7 +15,7 @@ type Module struct{}
 var _ modules.Module = Module{}
 
 func (Module) ID() string               { return "sales_orders" }
-func (Module) Version() int             { return 8 }
+func (Module) Version() int             { return 9 }
 func (Module) RequiresCoreVersion() int { return modules.CoreVersion }
 func (Module) EnabledByDefault() bool   { return false }
 func (Module) BackupTables() []string {

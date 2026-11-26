@@ -145,6 +145,7 @@ func TestProductionPlanMigrationRetainsLegacyAllocation(t *testing.T) {
 		"ALTER TABLE sales_orders DROP COLUMN production_revision",
 		"ALTER TABLE sales_orders DROP COLUMN quick_sale_cents",
 		"ALTER TABLE business_order_revisions DROP COLUMN customer_name",
+		"ALTER TABLE business_order_revisions DROP COLUMN quick_sale_pricing",
 		"UPDATE module_versions SET version = 4 WHERE id = 'sales_orders'",
 	} {
 		if err := db.Exec(statement).Error; err != nil {
@@ -167,6 +168,9 @@ func TestProductionPlanMigrationRetainsLegacyAllocation(t *testing.T) {
 		if !migrated.Migrator().HasTable(&salesmodels.SalesProductionPlan{}) ||
 			!migrated.Migrator().HasIndex(&salesmodels.SalesOrderAllocation{}, "idx_sales_allocation_line_run_item") {
 			t.Fatal("missing production plan schema or allocation uniqueness constraint")
+		}
+		if !migrated.Migrator().HasColumn("business_order_revisions", "quick_sale_pricing") {
+			t.Fatal("missing nullable Quick Sale pricing column")
 		}
 		var saved salesmodels.SalesOrderAllocation
 		if err := migrated.Take(&saved, "id = ?", allocation.ID).Error; err != nil {

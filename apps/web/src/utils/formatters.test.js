@@ -49,3 +49,8 @@ describe('numeric display formatters', () => {
     expect(formatDate('2026-09-18T12:00:00Z')).toMatch(/^18.*2026$/);
   });
 });
+
+it('preserves cents at the safe integer limit and formats negative fractional euros', () => {
+  expect(formatCurrencyFromCents(Number.MAX_SAFE_INTEGER)).toBe('€90,071,992,547,409.91');
+  expect(formatCurrencyFromCents(-1)).toBe('-€0.01');
+});
