@@ -21,6 +21,24 @@ async function waitForBundledFonts(page) {
   });
 }
 
+async function expectEqualColumns(first, second) {
+  const [left, right] = await Promise.all([first.boundingBox(), second.boundingBox()]);
+  expect(left).not.toBeNull();
+  expect(right).not.toBeNull();
+  expect(Math.abs(left.y - right.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(left.width - right.width)).toBeLessThanOrEqual(1);
+  expect(left.x + left.width).toBeLessThan(right.x);
+}
+
+async function expectStackedFields(first, second) {
+  const [top, bottom] = await Promise.all([first.boundingBox(), second.boundingBox()]);
+  expect(top).not.toBeNull();
+  expect(bottom).not.toBeNull();
+  expect(Math.abs(top.x - bottom.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(top.width - bottom.width)).toBeLessThanOrEqual(1);
+  expect(top.y + top.height).toBeLessThan(bottom.y);
+}
+
 const ready = {
   dashboard: async (page) => {
     await expect(page.getByText('Modular Enclosure')).toBeVisible();
@@ -52,7 +70,7 @@ const scenarios = [
       await page.route('**/api/v2/inventory/materials?*', route => route.fulfill({ json: {
         items: [
           { id: 'f1', brand: 'Bambu Lab', type: 'PLA', color: 'Matte Black', threshold_mg: 100000, balance: { verified: true, on_hand: 45000, reserved: 0, available: 45000, revision: 1 } },
-          { id: 'f2', brand: 'Prusament', type: 'PLA', color: 'Galaxy Silver', tracking_enabled: false, archived: true, threshold_mg: 0, balance: { verified: false, revision: 2 } },
+          { id: 'f2', brand: 'Prusament', type: 'PLA', color: 'Galaxy Silver', product_url: 'https://catalog.example.test/galaxy-silver', tracking_enabled: false, archived: true, threshold_mg: 0, balance: { verified: false, revision: 2 } },
           { id: 'f3', brand: 'Polymaker', type: 'PETG', color: 'Forest Green', warnings_enabled: false, threshold_mg: 20000, balance: { verified: false, on_hand: 17000, revision: 0 } },
         ],
         total: 3, page: 1, page_size: 25,
@@ -65,6 +83,7 @@ const scenarios = [
         await page.getByRole('button', { name: 'Detalhes de Prusament PLA — Galaxy Silver' }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog.getByRole('button', { name: 'Retomar controlo' })).toBeVisible();
+        await expect(dialog.getByRole('link', { name: 'Voltar a encomendar' })).toHaveAttribute('href', 'https://catalog.example.test/galaxy-silver');
         await expect(dialog.getByText('Operador local', { exact: true })).toBeVisible();
       } else {
         await expect(page.getByText('Stock not tracked', { exact: true }).first()).toBeVisible();
@@ -200,6 +219,9 @@ const scenarios = [
       await ready.filaments(page);
       await page.getByRole('button', { name: 'Add New Filament' }).click();
       await expect(page.getByRole('heading', { name: 'Add New Filament' })).toBeVisible();
+      await page.getByLabel('Product URL (optional)').fill('https://catalog.example.test/sample');
+      const scores = page.getByRole('dialog').getByRole('spinbutton');
+      await expectEqualColumns(scores.nth(0), scores.nth(1));
     },
   },
   {
@@ -315,7 +337,11 @@ const scenarios = [
       await expect(page.getByText('Units allocated')).toHaveCount(0);
     },
   },
-  { slug: 'purchases', route: 'purchases', prepare: ready.purchases },
+  { slug: 'purchases', route: 'purchases', prepare: async (page) => {
+    await ready.purchases(page);
+    await expect(page.getByText('Workshop Supply · PLA-MB-1')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Reorder' })).toHaveAttribute('href', 'https://shop.example.test/pla-mb-1');
+  } },
   { slug: 'reports', route: 'reports', fullPage: true, prepare: async (page) => {
     await expect(page.getByRole('heading', { name: 'Reports & Data Export' })).toBeVisible();
     await page.getByRole('radio', { name: 'Period report' }).check();
@@ -555,8 +581,11 @@ const scenarios = [
       await expect(page.getByLabel('Canal de venda')).toHaveAttribute('placeholder', 'Sem canal de venda');
     },
   },
-  {
-    slug: 'purchases-add', route: 'purchases', prepare: async (page) => {
+  ...[false, true].map(mobile => ({
+    slug: mobile ? 'purchases-add-mobile' : 'purchases-add',
+    route: 'purchases',
+    ...(mobile ? { viewport: { width: 390, height: 844 } } : {}),
+    prepare: async (page) => {
       await ready.purchases(page);
       await page.getByRole('button', { name: 'Record Purchase' }).click();
       await page.getByLabel('Purchase Date').fill('2026-09-18');
@@ -569,8 +598,41 @@ const scenarios = [
       await page.getByLabel('Color').fill('Jade White');
       await page.getByLabel('Price (€)').fill('24.99');
       await page.getByLabel('Amount (kg)').fill('1');
-      await brand.click();
-      await expect(page.getByText('Total: €24.99')).toBeVisible();
+      await page.getByLabel('Product URL (optional)').fill('https://catalog.example.test/jade');
+      await page.getByLabel('Supplier', { exact: true }).fill('Workshop Supply');
+      await page.getByLabel('Supplier reference', { exact: true }).fill('PLA-JW-1');
+      await page.getByLabel('Purchase URL', { exact: true }).fill('https://shop.example.test/pla-jw-1');
+      const dialog = page.getByRole('dialog');
+      const supplier = dialog.getByLabel('Supplier', { exact: true });
+      const reference = dialog.getByLabel('Supplier reference', { exact: true });
+      await expectEqualColumns(dialog.getByLabel('Price (€)'), dialog.getByLabel('Amount (kg)'));
+      if (mobile) {
+        await expectStackedFields(supplier, reference);
+      } else {
+        await expectEqualColumns(brand, dialog.getByLabel('Color'));
+        await expectEqualColumns(supplier, reference);
+      }
+      await expect(dialog.getByText('Total: €24.99')).toBeVisible();
+      const submit = dialog.getByRole('button', { name: 'Record Purchase' });
+      await submit.scrollIntoViewIfNeeded();
+      await expect(submit).toBeInViewport();
+      if (!mobile) await expect(dialog.getByLabel('Purchase Date')).toBeInViewport({ ratio: 1 });
+      expect(await dialog.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(mobile ? 390 : 576);
+    },
+  })),
+  {
+    slug: 'purchases-edit', route: 'purchases', prepare: async (page) => {
+      await ready.purchases(page);
+      const row = page.getByRole('row').filter({ hasText: 'Workshop Supply' });
+      await row.getByRole('button', { name: 'Edit' }).click();
+      const dialog = page.getByRole('dialog');
+      const supplier = dialog.getByLabel('Supplier', { exact: true });
+      const reference = dialog.getByLabel('Supplier reference', { exact: true });
+      await expect(supplier).toHaveValue('Workshop Supply');
+      await expect(reference).toHaveValue('PLA-MB-1');
+      await expectEqualColumns(supplier, reference);
+      await expectEqualColumns(dialog.getByLabel('Price (€)'), dialog.getByLabel('Amount (kg)'));
+      await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeInViewport();
     },
   },
   {

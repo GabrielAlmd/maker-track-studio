@@ -12,7 +12,7 @@ export const models = [
 ];
 
 export const filaments = [
-  { id: 'f1', brand: 'Bambu Lab', type: 'PLA', color: 'Matte Black', avg_price: 24.99, personal_score: 5, times_used: 48, purchases: [{ id: 'fp1' }] },
+  { id: 'f1', brand: 'Bambu Lab', type: 'PLA', color: 'Matte Black', product_url: 'https://catalog.example.test/matte-black', avg_price: 24.99, personal_score: 5, times_used: 48, purchases: [{ id: 'fp1' }] },
   { id: 'f2', brand: 'Bambu Lab', type: 'PETG', color: 'Ocean Blue', avg_price: 29.5, personal_score: 4, times_used: 21, purchases: [{ id: 'fp2' }] },
   { id: 'f3', brand: 'Prusament', type: 'PLA', color: 'Galaxy Silver', avg_price: 31.9, personal_score: 5, times_used: 34, purchases: [{ id: 'fp3' }] },
 ];
@@ -33,7 +33,7 @@ export const printJobs = [
 ];
 
 export const purchases = [
-  { id: 'p1', filament_id: 'f1', filament: filaments[0], price: 24.99, amount: 1, purchase_date: '2026-09-12T00:00:00.000Z' },
+  { id: 'p1', filament_id: 'f1', filament: filaments[0], price: 24.99, amount: 1, supplier: 'Workshop Supply', supplier_reference: 'PLA-MB-1', purchase_url: 'https://shop.example.test/pla-mb-1', purchase_date: '2026-09-12T00:00:00.000Z' },
   { id: 'p2', filament_id: 'f2', filament: filaments[1], price: 59, amount: 2, purchase_date: '2026-09-08T00:00:00.000Z' },
   { id: 'p3', filament_id: 'f3', filament: filaments[2], price: 31.9, amount: 1, purchase_date: '2026-08-29T00:00:00.000Z' },
 ];
@@ -47,7 +47,12 @@ const migrationSchema = {
       { key: 'notes', label: 'Notes', required: false, aliases: [], example: 'Primary printer' },
     ] },
     { key: 'filaments', label: 'Filaments', fields: [{ key: 'brand', label: 'Brand', required: true, aliases: [], example: 'Bambu Lab' }] },
-    { key: 'purchases', label: 'Purchases', fields: [{ key: 'filament', label: 'Filament', required: true, aliases: [], example: 'Bambu Lab | PLA | Black' }] },
+    { key: 'purchases', label: 'Purchases', fields: [
+      { key: 'filament', label: 'Filament', required: true, aliases: [], example: 'Bambu Lab | PLA | Black' },
+      { key: 'supplier', label: 'Supplier', required: false, aliases: [], example: '' },
+      { key: 'supplier_reference', label: 'Supplier reference', required: false, aliases: [], example: '' },
+      { key: 'purchase_url', label: 'Purchase URL', required: false, aliases: [], example: '' },
+    ] },
     { key: 'models', label: 'Models', fields: [{ key: 'name', label: 'Name', required: true, aliases: [], example: 'Desk organiser' }] },
     { key: 'print_jobs', label: 'Print Jobs', fields: [{ key: 'printer', label: 'Printer', required: true, aliases: [], example: 'Workshop A1' }] },
   ],

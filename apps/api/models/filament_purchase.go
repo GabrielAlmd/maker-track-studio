@@ -8,14 +8,17 @@ import (
 )
 
 type FilamentPurchase struct {
-	ID           uuid.UUID `gorm:"type:uuid;primaryKey"`
-	FilamentID   uuid.UUID `gorm:"type:uuid;not null"`
-	Filament     Filament  `gorm:"foreignKey:FilamentID"`
-	Price        float64   `gorm:"not null"`
-	Amount       float64   `gorm:"not null"` // in kg
-	PurchaseDate time.Time `gorm:"not null"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	Supplier          string    `gorm:"not null;default:''"`
+	SupplierReference string    `gorm:"not null;default:''"`
+	PurchaseURL       string    `gorm:"not null;default:''"`
+	ID                uuid.UUID `gorm:"type:uuid;primaryKey"`
+	FilamentID        uuid.UUID `gorm:"type:uuid;not null"`
+	Filament          Filament  `gorm:"foreignKey:FilamentID"`
+	Price             float64   `gorm:"not null"`
+	Amount            float64   `gorm:"not null"` // in kg
+	PurchaseDate      time.Time `gorm:"not null"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 func (FilamentPurchase) TableName() string {

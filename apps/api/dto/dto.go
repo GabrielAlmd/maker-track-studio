@@ -8,17 +8,21 @@ import (
 )
 
 type FilamentPurchaseDTO struct {
-	ID           uuid.UUID    `json:"id"`
-	FilamentID   uuid.UUID    `json:"filament_id"`
-	Price        float64      `json:"price"`
-	Amount       float64      `json:"amount"`
-	PurchaseDate time.Time    `json:"purchase_date"`
-	CreatedAt    time.Time    `json:"created_at"`
-	UpdatedAt    time.Time    `json:"updated_at"`
-	Filament     *FilamentDTO `json:"filament,omitempty"` // optional, for expanded view
+	Supplier          string       `json:"supplier,omitempty"`
+	SupplierReference string       `json:"supplier_reference,omitempty"`
+	PurchaseURL       string       `json:"purchase_url,omitempty"`
+	ID                uuid.UUID    `json:"id"`
+	FilamentID        uuid.UUID    `json:"filament_id"`
+	Price             float64      `json:"price"`
+	Amount            float64      `json:"amount"`
+	PurchaseDate      time.Time    `json:"purchase_date"`
+	CreatedAt         time.Time    `json:"created_at"`
+	UpdatedAt         time.Time    `json:"updated_at"`
+	Filament          *FilamentDTO `json:"filament,omitempty"` // optional, for expanded view
 }
 
 type FilamentDTO struct {
+	ProductURL     string                `json:"product_url,omitempty"`
 	Archived       bool                  `json:"archived"`
 	ID             uuid.UUID             `json:"id"`
 	Brand          string                `json:"brand"`

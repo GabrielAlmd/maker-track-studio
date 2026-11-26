@@ -119,11 +119,20 @@ describe('Purchases page', () => {
       throw new Error('purchase_date input not found');
     }
     await user.type(purchaseDateInput, '2026-04-01');
+    await user.type(screen.getByLabelText('Supplier', { exact: true }), ' Workshop Supply ');
+    await user.type(screen.getByLabelText('Supplier reference', { exact: true }), 'S-123');
+    const url = screen.getByLabelText('Purchase URL');
+    await user.type(url, 'file:///tmp/spool');
+    await user.click(screen.getAllByRole('button', { name: /record purchase/i })[1]);
+    expect(await screen.findByText(/Enter a valid HTTP or HTTPS URL/)).toBeVisible();
+    expect(filamentPurchaseService.createFilamentPurchaseBatch).not.toHaveBeenCalled();
+    await user.clear(url);
+    await user.type(url, ' https://shop.example.test/spool ');
     await user.click(screen.getAllByRole('button', { name: /record purchase/i })[1]);
 
     await waitFor(() => {
       expect(filamentPurchaseService.createFilamentPurchaseBatch).toHaveBeenCalledWith({
-        items: [{ filament_id: 'f1', price: 21.5, amount: 1 }],
+        items: [{ filament_id: 'f1', price: 21.5, amount: 1, supplier: 'Workshop Supply', supplier_reference: 'S-123', purchase_url: 'https://shop.example.test/spool' }],
         purchase_date: '2026-04-01T00:00:00.000Z',
       });
     });
@@ -149,11 +158,15 @@ describe('Purchases page', () => {
     expect(createActions).toHaveLength(2);
     expect(screen.queryByRole('option', { name: /new filament/i })).not.toBeInTheDocument();
     await user.click(createActions[1]);
+    expect(screen.getAllByLabelText('Filament')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Select an existing filament' }));
     expect(screen.getAllByLabelText('Filament')[1]).toHaveValue('');
+    await user.click(screen.getAllByRole('button', { name: /create new filament/i })[1]);
     await user.type(screen.getByRole('combobox', { name: 'Brand' }), 'bamb');
     await user.click(screen.getByRole('option', { name: 'Bambu' }));
     await user.type(screen.getByLabelText('Type'), 'PETG{Enter}');
     await user.type(screen.getByLabelText('Color'), 'Blue');
+    await user.type(screen.getByLabelText('Product URL (optional)'), 'https://catalog.example.test/blue');
     await user.type(screen.getAllByLabelText('Price (€)')[1], '30');
     await user.type(screen.getAllByLabelText('Amount (kg)')[1], '2');
     expect(screen.getByText('Total: €50.00')).toBeInTheDocument();
@@ -161,8 +174,8 @@ describe('Purchases page', () => {
     await waitFor(() => expect(filamentPurchaseService.createFilamentPurchaseBatch).toHaveBeenCalledWith({
       purchase_date: '2026-04-01T00:00:00.000Z',
       items: [
-        { filament_id: 'f1', price: 20, amount: 1 },
-        { new_filament: { brand: 'Bambu', type: 'PETG', color: 'Blue' }, price: 30, amount: 2 },
+        { filament_id: 'f1', price: 20, amount: 1, supplier: '', supplier_reference: '', purchase_url: '' },
+        { new_filament: { brand: 'Bambu', type: 'PETG', color: 'Blue', product_url: 'https://catalog.example.test/blue' }, price: 30, amount: 2, supplier: '', supplier_reference: '', purchase_url: '' },
       ],
     }));
     expect(screen.getByRole('combobox', { name: 'Brand' })).toHaveValue('Bambu');

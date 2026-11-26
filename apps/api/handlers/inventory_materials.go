@@ -18,6 +18,7 @@ type materialInventoryRow struct {
 	Archived        bool              `json:"archived"`
 	WarningsEnabled bool              `json:"warnings_enabled"`
 	TrackingEnabled bool              `json:"tracking_enabled" gorm:"-"`
+	ProductURL      string            `json:"product_url,omitempty"`
 	ThresholdMG     int64             `json:"threshold_mg"`
 	Balance         inventory.Balance `json:"balance" gorm:"embedded"`
 }
@@ -72,7 +73,7 @@ func InventoryMaterials(db *gorm.DB) gin.HandlerFunc {
 					Offset((params.Page - 1) * params.PageSize).Limit(params.PageSize)
 			}
 			return query.Select(`id, brand, type, color, archived, NOT warnings_disabled AS warnings_enabled,
-				stock_threshold_mg AS threshold_mg, COALESCE(stock.on_hand, 0) AS on_hand,
+				product_url, stock_threshold_mg AS threshold_mg, COALESCE(stock.on_hand, 0) AS on_hand,
 				COALESCE(stock.reserved, 0) AS reserved, COALESCE(stock.verified, 0) AS verified,
 				COALESCE(stock.tracking_paused, 0) AS tracking_paused,
 				COALESCE(stock.tracking_gap, 0) AS tracking_gap, COALESCE(stock.revision, 0) AS revision`).

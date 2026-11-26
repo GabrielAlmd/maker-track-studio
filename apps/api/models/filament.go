@@ -8,6 +8,7 @@ import (
 )
 
 type Filament struct {
+	ProductURL       string    `gorm:"not null;default:''"`
 	WarningsDisabled bool      `gorm:"not null;default:false"`
 	Archived         bool      `gorm:"not null;default:false"`
 	StockThresholdMG int64     `gorm:"not null;default:0"`

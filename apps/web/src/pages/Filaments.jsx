@@ -1,3 +1,6 @@
+import { PurchaseDetailField } from '../components/PurchaseDetailsFields';
+import ReorderLink from '../components/ReorderLink';
+import { purchaseURLSchema } from '../utils/purchaseDetails';
 import PageHeader from '../components/ui/PageHeader';
 import { useCallback, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -29,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 import BrandSelect from '../components/BrandSelect';
 
 const filamentSchema = (t) => yup.object({
+  product_url: purchaseURLSchema(t),
   brand: yup.string().required(t('validation.brandRequired')),
   type: yup.string().required(t('validation.typeRequired')),
   color: yup.string().required(t('validation.colorRequired')),
@@ -64,6 +68,7 @@ function FilamentModal({ filament, brands, catalog, onClose, onSaved }) {
           brand: filament.brand,
           type: filament.type,
           color: filament.color,
+          product_url: filament.product_url ?? '',
           avg_price: filament.avg_price,
           personal_score: filament.personal_score,
         }
@@ -116,41 +121,44 @@ function FilamentModal({ filament, brands, catalog, onClose, onSaved }) {
             />
             {errors.color && <p className="ui-text-danger text-xs mt-1">{errors.color.message}</p>}
           </div>
-          <div>
-            <label htmlFor="filament-average-price" className="block text-sm font-medium ui-text-secondary mb-1">
-              {t('filaments.averagePriceLong')}
-            </label>
-            <input
-              id="filament-average-price"
-              type="number"
-              min="0.01"
-              max={Number.MAX_SAFE_INTEGER}
-              step="0.01"
-              {...register('avg_price')}
-              className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
-              placeholder="e.g. 22.99"
-            />
-            {errors.avg_price && (
-              <p className="ui-text-danger text-xs mt-1">{errors.avg_price.message}</p>
-            )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="filament-average-price" className="block text-sm font-medium ui-text-secondary mb-1">
+                {t('filaments.averagePriceLong')}
+              </label>
+              <input
+                id="filament-average-price"
+                type="number"
+                min="0.01"
+                max={Number.MAX_SAFE_INTEGER}
+                step="0.01"
+                {...register('avg_price')}
+                className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
+                placeholder="e.g. 22.99"
+              />
+              {errors.avg_price && (
+                <p className="ui-text-danger text-xs mt-1">{errors.avg_price.message}</p>
+              )}
+            </div>
+            <div>
+              <label htmlFor="filament-personal-score" className="block text-sm font-medium ui-text-secondary mb-1">
+                {t('filaments.personalScore')}
+              </label>
+              <input
+                id="filament-personal-score"
+                type="number"
+                min="1"
+                max="5"
+                step="1"
+                {...register('personal_score')}
+                className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
+              />
+              {errors.personal_score && (
+                <p className="ui-text-danger text-xs mt-1">{errors.personal_score.message}</p>
+              )}
+            </div>
           </div>
-          <div>
-            <label htmlFor="filament-personal-score" className="block text-sm font-medium ui-text-secondary mb-1">
-              {t('filaments.personalScore')}
-            </label>
-            <input
-              id="filament-personal-score"
-              type="number"
-              min="1"
-              max="5"
-              step="1"
-              {...register('personal_score')}
-              className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
-            />
-            {errors.personal_score && (
-              <p className="ui-text-danger text-xs mt-1">{errors.personal_score.message}</p>
-            )}
-          </div>
+          <PurchaseDetailField name="product_url" label="productURL" register={register} error={errors.product_url} url />
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -337,7 +345,10 @@ function Filaments() {
                               {f.type}
                             </span>
                           </td>
-                          <th scope="row" className="min-w-36 px-5 py-3 font-semibold ui-text-primary">{f.color}</th>
+                          <th scope="row" className="min-w-36 px-5 py-3 font-semibold ui-text-primary">
+                            {f.color}
+                            {f.product_url && <div className="text-xs font-normal"><ReorderLink url={f.product_url} /></div>}
+                          </th>
                           <td className="w-40 whitespace-nowrap px-5 py-3 font-semibold tabular-nums ui-text-primary">
                             {Array.isArray(f.purchases) && f.purchases.length === 0
                               ? VALUE_FALLBACKS.noPurchaseData

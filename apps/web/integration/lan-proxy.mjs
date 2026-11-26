@@ -49,6 +49,45 @@ async function exerciseMaterialLifecycle(page) {
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
 }
 
+async function exercisePurchaseSuppliers(page) {
+  await page.getByRole('link', { name: 'Purchases', exact: true }).click();
+  await page.getByRole('button', { name: /record (first )?purchase/i }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Purchase Date').fill('2026-11-20');
+  await dialog.getByLabel('Filament', { exact: true }).fill('Copper');
+  await dialog.getByRole('option', { name: 'Synthetic PLA — Copper' }).click();
+  await dialog.getByLabel('Price (€)').fill('22.50');
+  await dialog.getByLabel('Amount (kg)').fill('1');
+  await dialog.getByLabel('Supplier', { exact: true }).fill('Synthetic supplier');
+  await dialog.getByLabel('Supplier reference').fill('COPPER-1');
+  const purchaseURL = 'https://shop.example.test/copper';
+  await dialog.getByLabel('Purchase URL').fill(purchaseURL);
+  const recorded = page.waitForResponse(response => response.url() === `${origin}/api/filament-purchases/batch`
+    && response.request().method() === 'POST');
+  await dialog.getByRole('button', { name: 'Record Purchase' }).click();
+  const response = await recorded;
+  expect(response.status()).toBe(201);
+  const [purchase] = await response.json();
+  expect(purchase).toMatchObject({ supplier: 'Synthetic supplier', supplier_reference: 'COPPER-1', purchase_url: purchaseURL });
+
+  const row = page.getByRole('row').filter({ hasText: 'Synthetic supplier · COPPER-1' });
+  const reorder = row.getByRole('link', { name: 'Reorder' });
+  await expect(reorder).toBeVisible();
+  await page.context().route(purchaseURL, route => route.fulfill({ body: '<title>Synthetic supplier</title>', contentType: 'text/html' }));
+  const [supplierTab] = await Promise.all([page.waitForEvent('popup'), reorder.click()]);
+  await expect(supplierTab).toHaveTitle('Synthetic supplier');
+  expect(await supplierTab.evaluate(() => ({ referrer: document.referrer, opener: window.opener }))).toEqual({ referrer: '', opener: null });
+  await supplierTab.close();
+
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await expect(dialog.getByLabel('Purchase URL')).toHaveValue(purchaseURL);
+  await dialog.getByLabel('Supplier reference').fill('COPPER-2');
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'Synthetic supplier · COPPER-2' })).toBeVisible();
+  const balance = await page.evaluate(async id => (await fetch(`/api/v2/inventory/balances/filament/${id}`)).json(), purchase.filament_id);
+  expect(balance).toMatchObject({ verified: true, on_hand: 1012500 });
+}
+
 async function exerciseModelMaterials(page) {
   const created = await page.evaluate(async () => (await fetch('/api/filaments', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -298,12 +337,13 @@ try {
   await page.reload();
   await expect(page.getByText('Browser fixture', { exact: true })).toBeVisible();
   await exerciseMaterialLifecycle(page);
+  await exercisePurchaseSuppliers(page);
   await exerciseModelMaterials(page);
   await exerciseProductionEstimate(page);
   await exerciseBusinessOperations(page);
   expect(errors).toEqual([]);
   await context.close();
-  console.log('PASS: Chromium authenticated UI, readiness, API writes, Inventory reconciliation, Model materials, production estimates and Business Operations');
+  console.log('PASS: Chromium authenticated UI, readiness, API writes, Inventory reconciliation, purchase suppliers, Model materials, production estimates and Business Operations');
 } finally {
   await browser.close();
 }

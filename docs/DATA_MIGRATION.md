@@ -33,6 +33,12 @@ Purchase and Print Job relationships use readable natural references:
 References must resolve to exactly one existing or planned record. The preview
 reports missing or ambiguous references before persistence.
 
+Filaments can map `product_url`. Purchases can map `supplier`,
+`supplier_reference` and `purchase_url`. When updating existing records, keep
+a destination unmapped to preserve its value. Map a blank cell to clear it.
+Use a full SQLite backup to transfer purchase IDs and all same-day purchase
+records without applying the spreadsheet duplicate rules.
+
 ## Validation and duplicates
 
 The preview classifies every source row as ready, warning, duplicate or invalid.

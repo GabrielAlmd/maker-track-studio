@@ -166,3 +166,17 @@ After a tracking gap, each physical count settles the earlier source contributio
 Send one or more booleans to `PATCH /v2/inventory/materials/:id` using `tracking_enabled`, `warnings_enabled`, and `archived`. Include the displayed balance's `expected_revision` when changing tracking. Success returns 204. A stale transition returns 409. Reload the inventory and review the count or setting before retrying. The material list includes all three settings. During a pause, balance quantities represent historical ledger totals and `verified` is false.
 
 Backup schema 21 retains settings and ledger transitions. Earlier databases default to active filaments with tracking and warnings enabled. Keep a pre-upgrade backup with its compatible binary for rollback.
+
+
+## Supplier details and reorder links
+
+In **Filaments**, edit a material to set its reusable product URL. The catalog
+and **Inventory** material details show **Reorder** when a valid product URL is
+available. In **Purchases**, select the same catalog material when buying it
+from a different store. Each purchase line can store its own supplier, reference
+and purchase URL. Use **Edit** in purchase history to correct those details.
+Catalog URL changes leave past purchase links intact.
+
+**Reorder** in purchase history opens that purchase's link. Desktop opens the
+system browser and Self-Hosted opens a new tab. Reordering opens the link on
+request and leaves purchase records and stock alone.

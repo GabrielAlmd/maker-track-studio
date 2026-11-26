@@ -135,8 +135,12 @@ plan and test restores before a workspace exceeds those limits.
 
 ## Compatibility and upgrade procedure
 
-Current desktop and self-hosted builds share backup schema version 22 and ZIP
-format version 1. Schema 22 (Sales module version 9) adds a nullable
+Current desktop and self-hosted builds share backup schema version 23 and ZIP
+format version 1. Schema 23 adds four optional filament and purchase fields.
+Startup adds empty columns to existing databases and keeps record IDs, prices,
+quantities and inventory movements. Version 22 and earlier archives restore
+without requiring these columns. Use a pre-upgrade ZIP with its compatible build
+to roll back. Schema 22 (Sales module version 9) adds a nullable
 `business_order_revisions.quick_sale_pricing` snapshot. Restore checks frozen
 cost and suggested cents against their assumptions and the confirmed
 quantity. Older Quick Sales and archives retain their agreed prices and null

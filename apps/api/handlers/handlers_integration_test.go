@@ -42,6 +42,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	}
 
 	if err := db.AutoMigrate(
+		&models.Filament{}, &models.FilamentPurchase{},
 		&models.Printer{},
 		&models.ModelMaterialRequirement{},
 		&models.PrintJob{},

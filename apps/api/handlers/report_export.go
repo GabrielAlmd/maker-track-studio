@@ -32,8 +32,8 @@ type exportDataset struct {
 
 var exportDatasets = []exportDataset{
 	{"printers", "printers", "printers", "id,name,manufacturer,model,notes,is_default,is_archived,cost_config,created_at,updated_at", "", ""},
-	{"filaments", "materials", "filaments", "id,brand,type,color,avg_price,personal_score,times_used,times_purchased,created_at,updated_at", "", ""},
-	{"filament_purchases", "purchases", "filament_purchases", "id,filament_id,price,amount,purchase_date,created_at,updated_at", "purchase_date", ""},
+	{"filaments", "materials", "filaments", "id,brand,type,color,avg_price,personal_score,times_used,times_purchased,created_at,updated_at,product_url", "", ""},
+	{"filament_purchases", "purchases", "filament_purchases", "id,filament_id,price,amount,purchase_date,created_at,updated_at,supplier,supplier_reference,purchase_url", "purchase_date", ""},
 	{"models", "print_jobs", "models", "id,name,image_url,material_weight,print_time,waste_material,is_multicolor,created_at,updated_at", "", ""},
 	{"model_material_requirements", "print_jobs", "model_material_requirements", "id,model_id,position,material_type,color,part_weight_g,waste_weight_g,preferred_filament_id,source_tool", "", ""},
 	{"print_jobs", "print_jobs", "print_jobs", "id,printer_id,printer_cost,model_id,print_date,units_printed,labor_hours,print_time_minutes,created_at,updated_at,workflow_version,revision", "print_date", ""},

@@ -13,6 +13,7 @@ import (
 )
 
 type FilamentInput struct {
+	ProductURL     *string `json:"product_url"`
 	Brand          string  `json:"brand" binding:"required,max=200"`
 	Type           string  `json:"type" binding:"required,max=200"`
 	Color          string  `json:"color" binding:"required,max=200"`
@@ -84,15 +85,7 @@ func GetFilaments(db *gorm.DB) gin.HandlerFunc {
 			// Map purchases
 			var purchases []dto.FilamentPurchaseDTO
 			for _, p := range f.Purchases {
-				purchases = append(purchases, dto.FilamentPurchaseDTO{
-					ID:           p.ID,
-					FilamentID:   p.FilamentID,
-					Price:        p.Price,
-					Amount:       p.Amount,
-					PurchaseDate: p.PurchaseDate,
-					CreatedAt:    p.CreatedAt,
-					UpdatedAt:    p.UpdatedAt,
-				})
+				purchases = append(purchases, purchaseDTO(p))
 			}
 			// Map print jobs
 			var printJobs []dto.PrintJobFilamentDTO
@@ -106,6 +99,7 @@ func GetFilaments(db *gorm.DB) gin.HandlerFunc {
 			}
 			dtoList = append(dtoList, dto.FilamentDTO{
 				Archived:       f.Archived,
+				ProductURL:     f.ProductURL,
 				ID:             f.ID,
 				Brand:          f.Brand,
 				Type:           f.Type,
@@ -164,15 +158,7 @@ func GetFilament(db *gorm.DB) gin.HandlerFunc {
 		// Map purchases
 		var purchases []dto.FilamentPurchaseDTO
 		for _, p := range f.Purchases {
-			purchases = append(purchases, dto.FilamentPurchaseDTO{
-				ID:           p.ID,
-				FilamentID:   p.FilamentID,
-				Price:        p.Price,
-				Amount:       p.Amount,
-				PurchaseDate: p.PurchaseDate,
-				CreatedAt:    p.CreatedAt,
-				UpdatedAt:    p.UpdatedAt,
-			})
+			purchases = append(purchases, purchaseDTO(p))
 		}
 		// Map print jobs
 		var printJobs []dto.PrintJobFilamentDTO
@@ -186,6 +172,7 @@ func GetFilament(db *gorm.DB) gin.HandlerFunc {
 		}
 		dtoObj := dto.FilamentDTO{
 			Archived:       f.Archived,
+			ProductURL:     f.ProductURL,
 			ID:             f.ID,
 			Brand:          f.Brand,
 			Type:           f.Type,
@@ -214,7 +201,7 @@ func GetFilament(db *gorm.DB) gin.HandlerFunc {
 func CreateFilament(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input FilamentInput
-		if err := c.ShouldBindJSON(&input); err != nil {
+		if err := c.ShouldBindJSON(&input); err != nil || !optionalPurchaseURL(input.ProductURL) {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
@@ -236,12 +223,16 @@ func CreateFilament(db *gorm.DB) gin.HandlerFunc {
 			TimesUsed:      input.TimesUsed,
 			TimesPurchased: input.TimesPurchased,
 		}
+		if input.ProductURL != nil {
+			filament.ProductURL = *input.ProductURL
+		}
 		if err := db.Create(&filament).Error; err != nil {
 			c.JSON(500, gin.H{"error": "Failed to create filament"})
 			return
 		}
 		dtoObj := dto.FilamentDTO{
 			Archived:       filament.Archived,
+			ProductURL:     filament.ProductURL,
 			ID:             filament.ID,
 			Brand:          filament.Brand,
 			Type:           filament.Type,
@@ -282,7 +273,7 @@ func UpdateFilament(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var input FilamentInput
-		if err := c.ShouldBindJSON(&input); err != nil {
+		if err := c.ShouldBindJSON(&input); err != nil || !optionalPurchaseURL(input.ProductURL) {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
@@ -304,12 +295,18 @@ func UpdateFilament(db *gorm.DB) gin.HandlerFunc {
 		filament.TimesUsed = input.TimesUsed
 		filament.TimesPurchased = input.TimesPurchased
 
-		if err := db.Model(&filament).Select("Brand", "Type", "Color", "AvgPrice", "PersonalScore", "TimesUsed", "TimesPurchased").Updates(&filament).Error; err != nil {
+		fields := []string{"Brand", "Type", "Color", "AvgPrice", "PersonalScore", "TimesUsed", "TimesPurchased"}
+		if input.ProductURL != nil {
+			filament.ProductURL = *input.ProductURL
+			fields = append(fields, "ProductURL")
+		}
+		if err := db.Model(&filament).Select(fields).Updates(&filament).Error; err != nil {
 			c.JSON(500, gin.H{"error": "Failed to update filament"})
 			return
 		}
 		dtoObj := dto.FilamentDTO{
 			Archived:       filament.Archived,
+			ProductURL:     filament.ProductURL,
 			ID:             filament.ID,
 			Brand:          filament.Brand,
 			Type:           filament.Type,
