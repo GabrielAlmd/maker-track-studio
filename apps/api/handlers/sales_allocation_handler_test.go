@@ -306,6 +306,37 @@ func TestSalesAllocationReplacementRollsBackOnPersistenceFailure(t *testing.T) {
 	}
 }
 
+func TestSalesAllocationRollsBackWhenTheSavedResponseCannotBeRead(t *testing.T) {
+	router, db := setupTestRouter(t)
+	channel, product, _ := createSalesOrderReferences(t, db)
+	job := createAllocationPrintJob(t, db, product.ID, 10)
+	order := createAllocationOrder(t, router, channel.ID, product.ID, "ORDER-READ-FAILURE", 7)
+
+	callback := "test:fail_sales_allocation_response"
+	if err := db.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) {
+		if _, loadingResponse := tx.Statement.Preloads["Items.Allocations"]; loadingResponse &&
+			tx.Statement.Schema != nil && tx.Statement.Schema.Table == "sales_orders" {
+			tx.AddError(errors.New("forced allocation response read failure"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	defer db.Callback().Query().Remove(callback)
+
+	response := performRequest(t, router, http.MethodPut, "/sales-orders/"+order.ID.String()+"/allocations",
+		allocationDocument(salesdto.SalesOrderAllocationRequest{
+			SalesOrderItemID: order.Items[0].ID, PrintJobID: job.ID, UnitsAllocated: 7,
+		}))
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("forced response read failure: %d %s", response.Code, response.Body.String())
+	}
+	var committed int64
+	if err := db.Model(&salesmodels.SalesOrderAllocation{}).Where("sales_order_item_id = ?", order.Items[0].ID).
+		Count(&committed).Error; err != nil || committed != 0 {
+		t.Fatalf("allocation committed despite response failure: %d %v", committed, err)
+	}
+}
+
 func TestSalesAllocationConcurrentRequestsCannotOverAllocate(t *testing.T) {
 	router, db := setupTestRouter(t)
 	channel, product, _ := createSalesOrderReferences(t, db)

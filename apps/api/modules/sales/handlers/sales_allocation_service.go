@@ -140,6 +140,7 @@ func loadSalesOrderAllocationsDTO(db *gorm.DB, orderID uuid.UUID) (salesdto.Sale
 }
 
 func replaceSalesOrderAllocations(db *gorm.DB, orderID uuid.UUID, input salesdto.SalesOrderAllocationsRequest) (salesdto.SalesOrderAllocationsDTO, error) {
+	var result salesdto.SalesOrderAllocationsDTO
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// SQLite permits one writer. Taking its writer lock before any capacity
 		// read serializes allocation checks across different Sales Orders too.
@@ -264,7 +265,10 @@ func replaceSalesOrderAllocations(db *gorm.DB, orderID uuid.UUID, input salesdto
 				}
 			}
 		}
-		return nil
+		// Read the saved response before releasing the writer lock so a
+		// competing allocation cannot lock the tables after we have committed.
+		result, err = loadSalesOrderAllocationsDTO(tx, orderID)
+		return err
 	})
 	if err != nil {
 		if isSQLiteAllocationLockError(err) {
@@ -272,7 +276,7 @@ func replaceSalesOrderAllocations(db *gorm.DB, orderID uuid.UUID, input salesdto
 		}
 		return salesdto.SalesOrderAllocationsDTO{}, err
 	}
-	return loadSalesOrderAllocationsDTO(db, orderID)
+	return result, nil
 }
 
 func isSQLiteAllocationLockError(err error) bool {
