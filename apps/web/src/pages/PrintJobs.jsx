@@ -352,17 +352,19 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
             {filamentRows.map((row, index) => (
               <div key={row.id ?? index} className="flex flex-wrap gap-2 items-center">
                 <FilamentSelect
-                  aria-label={`${t('filaments.title').slice(0, -1)} ${index + 1}`}
+                  aria-label={`${t('production.filament')} ${index + 1}`}
                   value={row.filament_id}
                   onChange={(filamentId) => updateFilamentRow(index, 'filament_id', filamentId)}
                   filaments={filaments}
-                  className="flex-1"
+                  className="min-w-52 flex-1"
                 />
                 <input
                   type="number"
                   step="0.01"
                   min="0"
                   placeholder="g"
+                  aria-label={`${t('production.grams')} ${index + 1}`}
+                  max="1000000000"
                   value={row.weight_used}
                   onChange={(e) => updateFilamentRow(index, 'weight_used', e.target.value)}
                   className="w-20 border ui-border-default rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
@@ -371,6 +373,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
                   type="number"
                   step="0.01"
                   min="0"
+                  max="1000000000"
                   placeholder={t('printJobs.wasteGrams')}
                   aria-label={`${t('printJobs.wasteGrams')} ${index + 1}`}
                   value={row.waste_weight_g ?? ''}

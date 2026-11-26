@@ -235,8 +235,12 @@ const scenarios = [
     slug: 'print-jobs-add-narrow', route: 'print-jobs', viewport: { width: 390, height: 844 }, prepare: async (page) => {
       await ready.printJobs(page);
       await page.getByRole('button', { name: 'Add Print Job' }).click();
-      await expect(page.getByRole('heading', { name: 'Add New Print Job' })).toBeVisible();
-      await expect(page.getByText(/Model values are estimates/)).toBeVisible();
+      const dialog = page.getByRole('dialog', { name: 'Add New Print Job' });
+      await dialog.getByRole('combobox', { name: 'Model' }).fill('modular');
+      await dialog.getByRole('option', { name: 'Modular Enclosure' }).click();
+      await expect(dialog.getByLabel('Filament 2')).toHaveValue('Bambu Lab PETG — Ocean Blue');
+      await dialog.getByLabel('Filament 1').scrollIntoViewIfNeeded();
+      await expect(dialog.getByText(/Model values are estimates/)).toBeVisible();
     },
   },
   { slug: 'printers', route: 'printers', prepare: ready.printers },
