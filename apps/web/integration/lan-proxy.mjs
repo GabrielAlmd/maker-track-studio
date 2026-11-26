@@ -59,6 +59,33 @@ async function exerciseModelMaterials(page) {
   await details.getByRole('button', { name: 'Close' }).click();
 }
 
+async function exerciseProductionEstimate(page) {
+  const created = await page.evaluate(async () => (await fetch('/api/filaments', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brand: 'Synthetic', type: 'PETG', color: 'Blue', avg_price: 20 }),
+  })).status);
+  expect(created).toBe(201);
+  await page.getByRole('link', { name: 'Print Jobs', exact: true }).click();
+  await page.getByRole('button', { name: 'Plan production' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Plan production' });
+  await dialog.getByLabel('Printer', { exact: true }).fill('Browser fixture');
+  await dialog.getByRole('option', { name: 'Browser fixture' }).click();
+  await dialog.getByLabel('Model', { exact: true }).fill('Synthetic housing shell');
+  await dialog.getByRole('option', { name: 'Synthetic housing shell' }).click();
+  await dialog.getByLabel('planned', { exact: true }).fill('2');
+  await expect(dialog.getByLabel('Filament', { exact: true })).toHaveValue('Synthetic PETG — Blue');
+  await expect(dialog.getByLabel('Total grams')).toHaveValue('43');
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v2/production/jobs'
+    && response.request().method() === 'POST');
+  await dialog.getByRole('button', { name: 'Save production' }).click();
+  const response = await saved;
+  expect(response.status()).toBe(201);
+  const production = await response.json();
+  expect(production.runs[0].materials[0]).toMatchObject({
+    estimated_weight_g: 43, weight_used: 43, measurement_state: 'estimated',
+  });
+}
+
 async function exerciseQuickSale(page) {
   const created = await page.evaluate(async () => {
     const response = await fetch('/api/models', {
@@ -217,10 +244,11 @@ try {
   await expect(page.getByText('Browser fixture', { exact: true })).toBeVisible();
   await exerciseMaterialLifecycle(page);
   await exerciseModelMaterials(page);
+  await exerciseProductionEstimate(page);
   await exerciseBusinessOperations(page);
   expect(errors).toEqual([]);
   await context.close();
-  console.log('PASS: Chromium authenticated UI, readiness, API writes, Model materials and Business Operations');
+  console.log('PASS: Chromium authenticated UI, readiness, API writes, Model materials, production estimates and Business Operations');
 } finally {
   await browser.close();
 }

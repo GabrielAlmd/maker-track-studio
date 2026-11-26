@@ -1,6 +1,9 @@
 import FormSelect from '../components/ui/FormSelect';
 import SearchableSelect from '../components/ui/SearchableSelect';
-import StockWarnings from '../components/StockWarnings';
+import { StockWarningList } from '../components/StockWarnings';
+import MaterialEstimateDetails from '../components/MaterialEstimateDetails';
+import { useEstimateStock } from '../hooks/useEstimateStock';
+import { combineMappedEstimates, estimateRunMaterials } from '../utils/productionEstimates';
 import ProductionModal from '../components/ProductionModal';
 import PageHeader from '../components/ui/PageHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -63,6 +66,9 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
   const requiredLabel = (label) => <>{label} <span aria-hidden="true" className="text-xs capitalize ui-text-muted">({t('required')})</span></>;
   const isEdit = !!printJob;
   const automaticTime = useRef(false);
+  const materialOverrides = useRef(Boolean(printJob?.filaments?.length));
+  const [estimateConflict, setEstimateConflict] = useState(false);
+  const inventory = useEstimateStock();
   const [submitError, setSubmitError] = useState(null);
   const [creatingModel, setCreatingModel] = useState(false);
   const [availableModels, setAvailableModels] = useState(models ?? []);
@@ -89,16 +95,34 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
       : []
   );
 
-  const addFilamentRow = () =>
-    setFilamentRows((prev) => [...prev, { filament_id: '', weight_used: '', waste_weight_g: '', measurement_state: 'verified' }]);
+  const addFilamentRow = () => {
+    materialOverrides.current = true;
+    setFilamentRows(prev => [...prev, { filament_id: '', weight_used: '', estimated_weight_g: '', waste_weight_g: '', measurement_state: 'verified' }]);
+  };
 
-  const removeFilamentRow = (index) =>
-    setFilamentRows((prev) => prev.filter((_, i) => i !== index));
+  const removeFilamentRow = (index) => {
+    materialOverrides.current = true;
+    setFilamentRows(prev => prev.filter((_, i) => i !== index));
+  };
 
-  const updateFilamentRow = (index, field, value) =>
-    setFilamentRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value, ...(field === 'weight_used' ? { _automaticWeight: false, measurement_state: 'verified', ...(row._automaticWeight ? { waste_weight_g: '' } : {}) } : {}) } : row))
-    );
+  const updateFilamentRow = (index, field, value) => {
+    const row = filamentRows[index];
+    const legacyEstimate = row._sources?.length === 1 && !row._sources[0].type;
+    materialOverrides.current = true;
+    setFilamentRows(prev => prev.map((current, i) => {
+      if (i !== index) return current;
+      if (field === 'weight_used' && legacyEstimate && current.measurement_state === 'estimated') {
+        return { ...current, weight_used: value, measurement_state: 'verified', waste_weight_g: '' };
+      }
+      if (field === 'measurement_state' && value === 'verified') {
+        const estimate = Number(current.weight_used);
+        return { ...current, measurement_state: value, estimated_weight_g: estimate > 0 ? estimate : current.estimated_weight_g,
+          weight_used: '', waste_weight_g: '' };
+      }
+      if (field === 'weight_used' && !current._sources) return { ...current, weight_used: value, measurement_state: 'verified' };
+      return { ...current, [field]: value };
+    }));
+  };
 
   const {
     control, register,
@@ -121,7 +145,7 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
       : { printer_id: printers.find((printer) => printer.is_default)?.id ?? '', units_printed: 1, labor_hours: 0, print_time_minutes: '' },
   });
 
-  const applyModelDefaults = (modelId, unitsValue, modelChanged = false, selectedModel) => {
+  const applyModelDefaults = (modelId, unitsValue, modelChanged = false, selectedModel, replace = false) => {
     const model = selectedModel ?? availableModels.find((item) => item.id === modelId);
     const units = Number(unitsValue);
     if (!Number.isSafeInteger(units) || units < 1) return;
@@ -132,22 +156,18 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
         shouldDirty: true,
         shouldValidate: true,
       });
-      automaticTime.current = !!model;
+      automaticTime.current = Boolean(model);
     }
 
-    const materialWeight = Number(model?.material_weight);
-    const wasteMaterial = Number(model?.waste_material ?? 0);
-    const weight = (materialWeight + wasteMaterial) * units;
-    const weightUsed = Number.isFinite(weight) && weight > 0 ? Number(weight.toFixed(2)) : '';
-    setFilamentRows((rows) => {
-      const automatic = rows.find((row) => row._automaticWeight);
-      const manual = rows.filter((row) => !row._automaticWeight);
-      if (!model || !weightUsed) return manual;
-      const estimatedWaste = Number.isFinite(wasteMaterial * units) ? Number((wasteMaterial * units).toFixed(2)) : 0;
-      if (automatic) return [...manual, { ...automatic, weight_used: weightUsed, estimated_weight_g: weightUsed, waste_weight_g: estimatedWaste }];
-      // A model default is useful only when no material split has been entered.
-      return manual.length ? manual : [{ filament_id: '', weight_used: weightUsed, estimated_weight_g: weightUsed, waste_weight_g: estimatedWaste, measurement_state: 'estimated', _automaticWeight: true }];
-    });
+    if (materialOverrides.current && !replace) {
+      setEstimateConflict(true);
+      return;
+    }
+
+    const suggestions = estimateRunMaterials([{ model_id: modelId, planned: units }], model ? [model] : [], filaments, inventory.stock, 2);
+    setFilamentRows(suggestions);
+    if (replace) materialOverrides.current = false;
+    setEstimateConflict(false);
   };
 
   const handleModelCreated = (createdModel) => {
@@ -169,8 +189,10 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
         waste_weight_g: yup.number().transform((value, original) => original === '' ? null : value)
           .nullable().min(0, t('validation.nonNegative'))
           .test('within-total', t('validation.wasteWithinTotal'), function (value) { return value == null || value <= Number(this.parent.weight_used); }),
-      })).validate(filamentRows);
-      const ids = filamentRows.map((row) => row.filament_id);
+      })).max(100).validate(filamentRows);
+      const materialRows = combineMappedEstimates(filamentRows, 2);
+      await yup.array().of(yup.object({ weight_used: yup.number().max(1e9) })).validate(materialRows);
+      const ids = materialRows.map((row) => row.filament_id);
       if (new Set(ids).size !== ids.length) throw new Error(t('validation.duplicateFilament'));
       const payload = {
         printer_id: data.printer_id,
@@ -179,13 +201,13 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
         units_printed: Number(data.units_printed),
         labor_hours: Number(data.labor_hours),
         print_time_minutes: data.print_time_minutes ? Number(data.print_time_minutes) : null,
-        filaments: filamentRows.map((row) => ({
+        filaments: materialRows.map((row) => ({
           ...(row.id ? { id: row.id } : {}),
           filament_id: row.filament_id,
           weight_used: Number(row.weight_used),
           measurement_state: row.measurement_state,
-          ...(row.estimated_weight_g !== '' ? { estimated_weight_g: Number(row.estimated_weight_g) } : {}),
-          ...(row.waste_weight_g !== '' ? { waste_weight_g: Number(row.waste_weight_g) } : {}),
+          ...(row.estimated_weight_g !== '' ? { estimated_weight_g: Number(row.measurement_state === 'estimated' ? row.weight_used : row.estimated_weight_g) } : {}),
+          ...(row.waste_weight_g !== '' && row.waste_weight_g != null ? { waste_weight_g: Number(row.waste_weight_g) } : {}),
         })),
       };
       if (isEdit) {
@@ -319,6 +341,13 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
           {filamentRows.length === 0 && (
             <p className="text-xs ui-text-muted italic">{t('printJobs.noFilamentsYet')}</p>
           )}
+          {estimateConflict && <div className="mb-2 text-xs ui-text-muted" role="status">
+            <p>{t('materialEstimates.kept')}</p>
+            {!isEdit && watch('model_id') && <button type="button" className="page-action page-action-secondary"
+              onClick={() => applyModelDefaults(getValues('model_id'), getValues('units_printed'), false, undefined, true)}>
+              {t('materialEstimates.replace')}
+            </button>}
+          </div>}
           <div className="space-y-2">
             {filamentRows.map((row, index) => (
               <div key={row.id ?? index} className="flex flex-wrap gap-2 items-center">
@@ -348,7 +377,12 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
                   onChange={(e) => updateFilamentRow(index, 'waste_weight_g', e.target.value)}
                   className="w-24 border ui-border-default rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
                 />
-                <span className="text-xs ui-text-muted">{t(`printJobs.materialState.${row.measurement_state ?? 'legacy_unverified'}`)}</span>
+                {row._sources?.some(source => source.type) ? <select
+                  aria-label={`${t('production.measurement')} ${index + 1}`}
+                  value={row.measurement_state} onChange={event => updateFilamentRow(index, 'measurement_state', event.target.value)}>
+                  <option value="estimated">{t('production.estimate')}</option>
+                  <option value="verified">{t('production.actual')}</option>
+                </select> : <span className="text-xs ui-text-muted">{t(`printJobs.materialState.${row.measurement_state ?? 'legacy_unverified'}`)}</span>}
                 {row.measurement_state === 'verified' && row.estimated_weight_g !== '' && row.estimated_weight_g != null && (
                   <span className="text-xs ui-text-muted">{t('printJobs.estimateLabel')}: {Number(row.estimated_weight_g).toFixed(2)} g</span>
                 )}
@@ -360,13 +394,14 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
+                <MaterialEstimateDetails row={row} rows={filamentRows} filaments={filaments} stock={inventory.stock} />
               </div>
             ))}
           </div>
           {filamentRows.length > 0 && <p className="mt-2 text-xs ui-text-secondary">
             {t('printJobs.totalMaterial')}: {filamentRows.reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g · {t('printJobs.verifiedMaterial')}: {filamentRows.filter((row) => row.measurement_state === 'verified').reduce((total, row) => total + (Number(row.weight_used) || 0), 0).toFixed(2)} g
           </p>}
-          <StockWarnings requirements={filamentRows} />
+          <StockWarningList requirements={filamentRows} inventory={inventory} />
           <p className="mt-1 text-xs ui-text-muted">{t('printJobs.materialHelp')}</p>
         </div>
 

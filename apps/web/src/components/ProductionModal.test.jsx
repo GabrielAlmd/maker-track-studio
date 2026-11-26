@@ -1,11 +1,82 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import ProductionModal from './ProductionModal';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import api from '../services/api';
+import ProductionModal from './ProductionModal';
 
-vi.mock('../services/api', () => ({ default: { request: vi.fn(), get: vi.fn() } }));
+vi.mock('../services/api', () => ({ default: { get: vi.fn(), request: vi.fn() } }));
+
 const printers = [{ id: 'printer-1', name: 'Workshop', is_default: true }];
 
-beforeEach(() => vi.clearAllMocks());
+const material = { id: 'r1', material_type: 'PLA', color: 'Black', part_weight_g: 5 };
+const models = [
+  { id: 'm1', name: 'Bracket', material_requirements: [material] },
+  { id: 'm2', name: 'Cover', material_requirements: [{ ...material, part_weight_g: 2 }] },
+  { id: 'm3', name: 'Spacer', material_requirements: [{ ...material, color: 'Orange' }] },
+];
+
+function renderProduction() {
+  render(<ProductionModal models={models}
+    filaments={[{ id: 'f1', brand: 'Workshop', type: 'PLA', color: 'Black' }]}
+    printers={[{ id: 'p1', name: 'Workshop printer', is_default: true }]}
+    onClose={vi.fn()} onSaved={vi.fn()} />);
+}
+
+async function chooseModel(user, run, name, index = 0) {
+  await user.type(run.getAllByRole('combobox', { name: 'Model', exact: true })[index], name);
+  await user.click(screen.getByRole('option', { name }));
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  api.get.mockResolvedValue({ data: [] });
+  api.request.mockResolvedValue({});
+});
+
+it('aggregates mixed models per plate and submits estimates through the production API', async () => {
+  const user = userEvent.setup();
+  renderProduction();
+  const first = within(screen.getByRole('group', { name: 'Run 1' }));
+  await chooseModel(user, first, 'Bracket');
+  fireEvent.change(first.getByLabelText('planned'), { target: { value: '3' } });
+  await user.click(first.getByRole('button', { name: 'Add model' }));
+  await chooseModel(user, first, 'Cover', 1);
+  expect(first.getByLabelText('Total grams')).toHaveValue(17);
+  expect(first.getByText('Bracket × 3 · PLA / Black')).toBeVisible();
+  expect(first.getByText('Cover × 1 · PLA / Black')).toBeVisible();
+
+  await user.click(screen.getByRole('button', { name: 'Add run' }));
+  const second = within(screen.getByRole('group', { name: 'Run 2' }));
+  await chooseModel(user, second, 'Spacer');
+  await user.click(screen.getByRole('button', { name: 'Save production' }));
+  expect(await second.findByText('Select a filament for each material row')).toBeVisible();
+  expect(api.request).not.toHaveBeenCalled();
+  await user.type(second.getByRole('combobox', { name: 'Filament' }), 'black');
+  await user.click(screen.getByRole('option', { name: /black/i }));
+  await user.click(screen.getByRole('button', { name: 'Save production' }));
+  await waitFor(() => expect(api.request).toHaveBeenCalled());
+  const { runs } = api.request.mock.calls[0][0].data;
+  expect(runs.map(run => run.materials)).toEqual([17, 5].map(weight => [{
+    filament_id: 'f1', weight_used: weight, estimated_weight_g: weight, waste_weight_g: null, measurement_state: 'estimated',
+  }]));
+});
+
+it('keeps imported plate grams and duration when selecting a model and changing the quantity', async () => {
+  const user = userEvent.setup();
+  renderProduction();
+  const text = '; filament used [g] = 0, 0, 28\n; estimated printing time (normal mode) = 41m';
+  fireEvent.change(screen.getByLabelText('Import slicer estimates'), {
+    target: { files: [{ name: 'plate.gcode', size: text.length, text: async () => text }] },
+  });
+  const run = within(await screen.findByRole('group', { name: 'Run 2' }));
+  await chooseModel(user, run, 'Bracket');
+  fireEvent.change(run.getByLabelText('planned'), { target: { value: '2' } });
+  expect(run.getByLabelText('Total grams')).toHaveValue(28);
+  expect(run.getByDisplayValue('41')).toBeVisible();
+  expect(run.getByText(/Material rows were kept/)).toBeVisible();
+  await user.click(run.getByRole('button', { name: 'Replace materials with model estimates' }));
+  expect(run.getByLabelText('Total grams')).toHaveValue(10);
+  expect(run.getByDisplayValue('41')).toBeVisible();
+});
 
 it('saves a planned run and reuses its operation ID after a lost response', async () => {
   const saved = vi.fn();
@@ -39,7 +110,7 @@ it('appends imported estimates, preserves manual runs and requires review before
   expect(screen.getAllByLabelText('planned')[1]).toHaveValue(null);
   expect(screen.getAllByLabelText('Estimated time (minutes)')[1]).toHaveValue(2);
   fireEvent.submit(screen.getByRole('button', { name: 'Save production' }).closest('form'));
-  await screen.findByRole('alert');
+  expect(await screen.findByText('Select a filament for each material row')).toBeVisible();
   expect(api.request).not.toHaveBeenCalled();
   fireEvent.change(screen.getAllByLabelText('planned')[1], { target: { value: '3' } });
   fireEvent.change(screen.getByLabelText('Filament'), { target: { value: 'Blue' } });
