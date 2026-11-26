@@ -127,6 +127,61 @@ describe('PrintJobs page', () => {
     })));
   });
 
+  it('waits for a delayed filament catalogue before calculating a model mapping', async () => {
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
+    modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', material_requirements: [
+      { id: 'r1', material_type: 'PLA', color: 'Black', part_weight_g: 12 },
+    ] }]);
+    let loadFilaments;
+    filamentService.getFilaments.mockReturnValueOnce(new Promise(resolve => { loadFilaments = resolve; }));
+    const user = userEvent.setup();
+    render(<PrintJobs />);
+
+    const plan = screen.getByRole('button', { name: 'Plan production' });
+    await waitFor(() => expect(plan).toBeEnabled());
+    await user.click(plan);
+    const model = screen.getByRole('combobox', { name: 'Model', exact: true });
+    expect(model).toBeDisabled();
+    expect(screen.getByText('Loading filament catalogue…')).toBeVisible();
+    loadFilaments([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
+    await waitFor(() => expect(model).toBeEnabled());
+    await chooseModel(user);
+    expect(screen.getByRole('combobox', { name: 'Filament' })).toHaveValue('Generic PLA — Black');
+  });
+
+  it('preloads a structured model and preserves edited estimates across quantity changes', async () => {
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
+    modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', print_time: 60, material_requirements: [
+      { id: 'r1', material_type: 'PLA', color: 'Black', part_weight_g: 12, waste_weight_g: 1 },
+      { id: 'r2', material_type: 'PETG', color: 'Blue', part_weight_g: 4, waste_weight_g: null },
+    ] }]);
+    filamentService.getFilaments.mockResolvedValue([
+      { id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' },
+      { id: 'f2', brand: 'Generic', type: 'PETG', color: 'Blue' },
+    ]);
+    printJobService.createPrintJob.mockResolvedValue({ id: 'new-job' });
+    const user = userEvent.setup();
+    render(<PrintJobs />);
+    await user.click(await screen.findByRole('button', { name: /add first print job/i }));
+    await chooseModel(user);
+    expect(screen.getByRole('combobox', { name: 'Filament 2' })).toHaveValue('Generic PETG — Blue');
+    const [black, blue] = screen.getAllByPlaceholderText('g');
+    expect(black).toHaveValue(13);
+    expect(blue).toHaveValue(4);
+    fireEvent.change(blue, { target: { value: '6' } });
+    fireEvent.change(document.querySelector('input[name="units_printed"]'), { target: { value: '2' } });
+    expect(screen.getByText(/Material rows were kept/)).toBeVisible();
+    expect(blue).toHaveValue(6);
+    fireEvent.change(document.querySelector('input[name="print_date"]'), { target: { value: '2026-04-03' } });
+    await user.click(screen.getByRole('button', { name: /create print job/i }));
+    await waitFor(() => expect(printJobService.createPrintJob).toHaveBeenCalledWith(expect.objectContaining({
+      filaments: [
+        expect.objectContaining({ filament_id: 'f1', weight_used: 13, estimated_weight_g: 13, measurement_state: 'estimated' }),
+        expect.objectContaining({ filament_id: 'f2', weight_used: 6, estimated_weight_g: 6, measurement_state: 'estimated' }),
+      ],
+    })));
+  });
+
   it('submits manually entered two-decimal filament weight unchanged', async () => {
     printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([]);

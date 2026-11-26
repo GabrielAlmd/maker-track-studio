@@ -148,6 +148,19 @@ const scenarios = [
     },
   },
   {
+    slug: 'models-material-suggestions', route: 'models', prepare: async (page) => {
+      await ready.models(page);
+      await page.getByRole('button', { name: 'Add New Model' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Add New Model' });
+      await dialog.getByRole('button', { name: 'Add material requirement' }).click();
+      await dialog.getByRole('combobox', { name: 'Material type' }).fill('pla');
+      await dialog.getByRole('option', { name: 'PLA', exact: true }).click();
+      await dialog.getByRole('combobox', { name: 'Color (optional)' }).click();
+      await expect(dialog.getByRole('option', { name: 'Matte Black' })).toBeVisible();
+      await expect(dialog.getByRole('option', { name: 'Ocean Blue' })).toHaveCount(0);
+    },
+  },
+  {
     slug: 'models-filters', route: 'models', prepare: async (page) => {
       await ready.models(page);
       await page.locator('summary').filter({ hasText: 'Filters' }).click();
@@ -187,16 +200,23 @@ const scenarios = [
     await dialog.getByLabel('Import slicer estimates').setInputFiles(['visual/fixtures/plate-a.gcode', 'visual/fixtures/plate-b.gcode']);
     await expect(dialog.getByText('Imported estimate: plate-a.gcode')).toBeVisible();
     await dialog.getByRole('button', { name: 'Remove unsaved run' }).first().click();
-    await expect(dialog.getByText('Imported tool 3 — map to a filament')).toBeVisible();
+    const firstPlate = dialog.getByRole('group', { name: 'Run 1', exact: true });
+    const model = firstPlate.getByRole('combobox', { name: 'Model', exact: true });
+    await model.fill('Modular Enclosure');
+    await dialog.getByRole('option', { name: 'Modular Enclosure' }).click();
+    await firstPlate.getByLabel('planned', { exact: true }).fill('2');
+    await expect(firstPlate.getByText('Imported tool 3 — map to a filament')).toBeVisible();
+    await expect(firstPlate.getByRole('status')).toContainText('Material rows were kept.');
   } },
   { slug: 'print-jobs-plan', route: 'print-jobs', prepare: async (page) => {
     await ready.printJobs(page);
     await page.getByRole('button', { name: 'Plan production' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Date', { exact: true }).fill('2026-09-18');
-    await dialog.getByRole('combobox', { name: 'Model', exact: true }).fill('Workshop Bracket');
-    await dialog.getByRole('combobox', { name: 'Model', exact: true }).press('Enter');
-    await dialog.getByRole('button', { name: 'Add material' }).click();
+    const model = dialog.getByRole('combobox', { name: 'Model', exact: true });
+    await model.fill('Modular Enclosure');
+    await dialog.getByRole('option', { name: 'Modular Enclosure' }).click();
+    await expect(dialog.getByText('Modular Enclosure × 1 · PETG / Ocean Blue')).toBeVisible();
     await expect(dialog.getByText('Estimates do not represent recorded consumption.', { exact: false })).toBeVisible();
   } },
   { slug: 'print-jobs', route: 'print-jobs', prepare: ready.printJobs },
@@ -218,8 +238,8 @@ const scenarios = [
       await modal.getByRole('option', { name: 'Modular Enclosure' }).click();
       await modal.locator('input[name="print_date"]').fill('2026-09-18');
       await modal.locator('input[name="labor_hours"]').fill('0.25');
-      await modal.getByLabel('Filament 1').fill('matte');
-      await modal.getByRole('option', { name: 'Bambu Lab PLA — Matte Black' }).click();
+      await expect(modal.getByLabel('Filament 1')).toHaveValue('Bambu Lab PLA — Matte Black');
+      await expect(modal.getByLabel('Filament 2')).toHaveValue('Bambu Lab PETG — Ocean Blue');
       await expect(modal.getByText(/Total material: .* g/)).toBeVisible();
       await expect(modal).toBeVisible();
     },
@@ -228,8 +248,12 @@ const scenarios = [
     slug: 'print-jobs-add-narrow', route: 'print-jobs', viewport: { width: 390, height: 844 }, prepare: async (page) => {
       await ready.printJobs(page);
       await page.getByRole('button', { name: 'Add Print Job' }).click();
-      await expect(page.getByRole('heading', { name: 'Add New Print Job' })).toBeVisible();
-      await expect(page.getByText(/Model values are estimates/)).toBeVisible();
+      const dialog = page.getByRole('dialog', { name: 'Add New Print Job' });
+      await dialog.getByRole('combobox', { name: 'Model' }).fill('modular');
+      await dialog.getByRole('option', { name: 'Modular Enclosure' }).click();
+      await expect(dialog.getByLabel('Filament 2')).toHaveValue('Bambu Lab PETG — Ocean Blue');
+      await dialog.getByLabel('Filament 1').scrollIntoViewIfNeeded();
+      await expect(dialog.getByText(/Model values are estimates/)).toBeVisible();
     },
   },
   { slug: 'printers', route: 'printers', prepare: ready.printers },

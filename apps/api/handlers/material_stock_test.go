@@ -104,11 +104,12 @@ func TestProductionMaterialStock(t *testing.T) {
 			if res := performRequest(t, r, "PATCH", "/v2/inventory/materials/"+paused.ID.String(), map[string]any{"tracking_enabled": false, "expected_revision": 0}); res.Code != 204 {
 				t.Fatal(res.Body.String())
 			}
-			input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-19T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "items": []any{map[string]any{"planned": 1, "model_id": product.ID}}, "materials": []any{}}}}
+			input := map[string]any{"operation_id": uuid.NewString(), "expected_revision": 0, "printer_id": printer.ID, "print_date": "2026-11-19T00:00:00Z", "runs": []any{map[string]any{"status": "planned", "items": []any{map[string]any{"planned": 2, "model_id": product.ID}}, "materials": []any{map[string]any{"filament_id": a.ID, "weight_used": 20, "estimated_weight_g": 20, "measurement_state": "estimated"}}}}}
 			res := performRequest(t, r, "POST", "/v2/production/jobs", input)
 			if res.Code != 201 {
 				t.Fatal(res.Body.String())
 			}
+			assertStock(t, db, a.ID, 0)
 			var data map[string]any
 			decodeBody(t, res, &data)
 			path := "/v2/production/jobs/" + data["id"].(string)
@@ -126,7 +127,11 @@ func TestProductionMaterialStock(t *testing.T) {
 					} else {
 						item["rejected"] = 1
 					}
-					run["materials"] = []any{map[string]any{"filament_id": a.ID, "weight_used": 12.345, "waste_weight_g": 2, "measurement_state": "verified"}, map[string]any{"filament_id": b.ID, "weight_used": 3.001, "measurement_state": "verified"}, map[string]any{"filament_id": paused.ID, "weight_used": 11, "measurement_state": "verified"}, map[string]any{"filament_id": c.ID, "weight_used": 99, "estimated_weight_g": 99, "measurement_state": "estimated"}}
+					estimate := run["materials"].([]any)[0].(map[string]any)
+					estimate["weight_used"] = 12.345
+					estimate["waste_weight_g"] = 2
+					estimate["measurement_state"] = "verified"
+					run["materials"] = []any{estimate, map[string]any{"filament_id": b.ID, "weight_used": 3.001, "measurement_state": "verified"}, map[string]any{"filament_id": paused.ID, "weight_used": 11, "measurement_state": "verified"}, map[string]any{"filament_id": c.ID, "weight_used": 99, "estimated_weight_g": 99, "measurement_state": "estimated"}}
 					db.Exec("CREATE TRIGGER fail_stock_receipt BEFORE INSERT ON production_operations BEGIN SELECT RAISE(ABORT, 'injected'); END")
 					if failed := performRequest(t, r, "PUT", path, input); failed.Code != 500 {
 						t.Fatal(failed.Body.String())
@@ -140,6 +145,9 @@ func TestProductionMaterialStock(t *testing.T) {
 					t.Fatal(res.Body.String())
 				}
 				decodeBody(t, res, &data)
+				if state == "in_progress" {
+					assertStock(t, db, a.ID, 0)
+				}
 			}
 			assertStock(t, db, a.ID, -12345)
 			assertStock(t, db, b.ID, -3001)

@@ -4,8 +4,11 @@ In **Models**, open a model by name to see its material breakdown, or choose
 **Edit** to maintain it. Add one requirement for each material or color you
 want to plan separately. Enter a material type, such as PLA or PETG, and a
 part weight in grams for one finished unit. Color can be left blank. Select a
-preferred catalogue filament if you have one. The preference can be changed or
-cleared independently of the estimated type, color and weights.
+preferred catalogue filament if you have one. The type picker suggests
+configured and active catalogue types. The color picker suggests colors from
+active filaments of that type. Both fields accept custom values. Choosing a
+preferred filament fills in blank type and color fields and preserves values
+you have entered.
 
 Enter zero waste if it is known to be zero. Leave waste blank if it is
 unknown. The known waste subtotal is shown as incomplete when any row has

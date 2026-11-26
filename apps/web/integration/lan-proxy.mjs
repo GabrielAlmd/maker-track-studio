@@ -36,6 +36,11 @@ async function exerciseMaterialLifecycle(page) {
 }
 
 async function exerciseModelMaterials(page) {
+  const created = await page.evaluate(async () => (await fetch('/api/filaments', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brand: 'Synthetic', type: 'PETG', color: 'Blue', avg_price: 20 }),
+  })).status);
+  expect(created).toBe(201);
   await page.getByRole('link', { name: 'Models', exact: true }).click();
   await page.getByRole('button', { name: 'Add New Model' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add New Model' });
@@ -43,8 +48,10 @@ async function exerciseModelMaterials(page) {
   await dialog.getByLabel('Print Time (min)').fill('25');
   await dialog.getByRole('button', { name: 'Add material requirement' }).click();
   const part = dialog.getByLabel('Part weight (g)');
-  await dialog.getByLabel('Material type').fill('PETG');
-  await dialog.getByLabel('Color (optional)').fill('Blue');
+  await dialog.getByRole('combobox', { name: 'Material type' }).fill('petg');
+  await dialog.getByRole('option', { name: 'PETG', exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'Color (optional)' }).click();
+  await dialog.getByRole('option', { name: 'Blue', exact: true }).click();
   await part.fill('-2');
   await dialog.getByRole('button', { name: 'Create Model' }).click();
   await expect(part).toHaveAttribute('aria-invalid', 'true');
@@ -57,6 +64,38 @@ async function exerciseModelMaterials(page) {
   await expect(details.getByText('PETG · Blue')).toBeVisible();
   await expect(details.getByText('Known waste (total incomplete)')).toBeVisible();
   await details.getByRole('button', { name: 'Close' }).click();
+}
+
+async function exerciseProductionEstimate(page) {
+  let releaseCatalogue;
+  const catalogue = new Promise(resolve => { releaseCatalogue = resolve; });
+  const delayCatalogue = async route => {
+    await catalogue;
+    await route.continue();
+  };
+  await page.route('**/api/filaments', delayCatalogue);
+  await page.getByRole('link', { name: 'Print Jobs', exact: true }).click();
+  await page.getByRole('button', { name: 'Plan production' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Plan production' });
+  await expect(dialog.getByLabel('Model', { exact: true })).toBeDisabled();
+  releaseCatalogue();
+  await dialog.getByLabel('Printer', { exact: true }).fill('Browser fixture');
+  await dialog.getByRole('option', { name: 'Browser fixture' }).click();
+  await dialog.getByLabel('Model', { exact: true }).fill('Synthetic housing shell');
+  await dialog.getByRole('option', { name: 'Synthetic housing shell' }).click();
+  await dialog.getByLabel('planned', { exact: true }).fill('2');
+  await expect(dialog.getByLabel('Filament', { exact: true })).toHaveValue('Synthetic PETG — Blue');
+  await page.unroute('**/api/filaments', delayCatalogue);
+  await expect(dialog.getByLabel('Total grams')).toHaveValue('43');
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v2/production/jobs'
+    && response.request().method() === 'POST');
+  await dialog.getByRole('button', { name: 'Save production' }).click();
+  const response = await saved;
+  expect(response.status()).toBe(201);
+  const production = await response.json();
+  expect(production.runs[0].materials[0]).toMatchObject({
+    estimated_weight_g: 43, weight_used: 43, measurement_state: 'estimated',
+  });
 }
 
 async function exerciseQuickSale(page) {
@@ -217,10 +256,11 @@ try {
   await expect(page.getByText('Browser fixture', { exact: true })).toBeVisible();
   await exerciseMaterialLifecycle(page);
   await exerciseModelMaterials(page);
+  await exerciseProductionEstimate(page);
   await exerciseBusinessOperations(page);
   expect(errors).toEqual([]);
   await context.close();
-  console.log('PASS: Chromium authenticated UI, readiness, API writes, Model materials and Business Operations');
+  console.log('PASS: Chromium authenticated UI, readiness, API writes, Model materials, production estimates and Business Operations');
 } finally {
   await browser.close();
 }

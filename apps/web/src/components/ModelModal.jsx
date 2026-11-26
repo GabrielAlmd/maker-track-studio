@@ -48,7 +48,7 @@ export default function ModelModal({ model, onClose, onSaved }) {
   const { t } = useTranslation();
   const isEdit = !!model;
   const [submitError, setSubmitError] = useState(null);
-  const { control, register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+  const { control, register, getValues, setValue, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: yupResolver(modelSchema(t)),
     defaultValues: model
       ? {
@@ -129,7 +129,7 @@ export default function ModelModal({ model, onClose, onSaved }) {
             <label htmlFor="is_multicolor" className="text-sm font-medium ui-text-secondary">{t('models.multicolorPrint')}</label>
           </div>
         </>}
-        <ModelMaterialsEditor {...{ fields, rows, append, remove, register, control }} errors={errors.material_requirements} disabled={isSubmitting} />
+        <ModelMaterialsEditor {...{ fields, rows, append, remove, register, control, getValues, setValue }} errors={errors.material_requirements} disabled={isSubmitting} />
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm ui-text-secondary border ui-border-default rounded-md hover:ui-surface-hover">{t('common.cancel')}</button>
           <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm ui-text-inverse ui-bg-primary rounded-md hover:ui-bg-primary-hover disabled:opacity-50 flex items-center gap-2" aria-busy={isSubmitting}>

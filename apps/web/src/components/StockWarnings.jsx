@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEstimateStock } from '../hooks/useEstimateStock';
 import { AlertTriangle, ChevronRight } from 'lucide-react';
 import { StatusBadge } from './ui/PageState';
-import { getMaterials, stockWarning } from '../services/inventoryService';
+import { stockWarning } from '../services/inventoryService';
 
 export default function StockWarnings({ requirements }) {
-  const [items, setItems] = useState(null), [failed, setFailed] = useState(false);
-  useEffect(() => { let active = true; getMaterials().then((rows) => { if (active) setItems(rows); }).catch(() => { if (active) setFailed(true); }); return () => { active = false; }; }, []);
+  const inventory = useEstimateStock();
+  return <StockWarningList requirements={requirements} inventory={inventory} />;
+}
+
+export function StockWarningList({ requirements, inventory: { rows: items, failed } }) {
   if (failed) return <p role="status">Stock warnings unavailable. <a href="#/inventory">Review inventory</a></p>;
   if (!items) return <p role="status">Loading stock warnings…</p>;
   const required = requirements && requirements.reduce((totals, row) => { totals[row.filament_id] = (totals[row.filament_id] || 0) + Math.round(Number(row.weight_used || 0) * 1000); return totals; }, {});

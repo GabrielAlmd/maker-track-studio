@@ -3,11 +3,13 @@ import userEvent from '@testing-library/user-event';
 import ModelModal from './ModelModal';
 import { ModelDetails } from './ModelMaterials';
 import { createModel, updateModel } from '../services/modelService';
+import { getFilamentTypes } from '../services/filamentTypeService';
 import { getFilaments } from '../services/filamentService';
 import api from '../services/api';
 
 vi.mock('../services/modelService');
 vi.mock('../services/filamentService');
+vi.mock('../services/filamentTypeService');
 vi.mock('../services/api', () => ({ default: { post: vi.fn() } }));
 
 const fixture = { name: 'Housing', print_time: 20, material_weight: 15, waste_material: 2, is_multicolor: true };
@@ -22,7 +24,41 @@ function upload(name, content = '') {
 describe('Model material requirements', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getFilamentTypes.mockResolvedValue(['PLA', 'PETG', 'TPU']);
     getFilaments.mockResolvedValue([{ id: 'preferred', brand: 'Fixture', type: 'PLA', color: 'Blue' }]);
+  });
+
+  it('suggests configured types and distinct colors from active filaments of that type', async () => {
+    getFilaments.mockResolvedValue([
+      { id: 'blue', brand: 'Fixture', type: 'PLA', color: 'Blue' },
+      { id: 'blue-alt', brand: 'Other', type: 'pla', color: ' blue ' },
+      { id: 'red', brand: 'Fixture', type: 'PLA', color: 'Red', archived: true },
+      { id: 'orange', brand: 'Fixture', type: 'PETG', color: 'Orange' },
+    ]);
+    const user = userEvent.setup();
+    render(<ModelModal model={legacy} onClose={vi.fn()} onSaved={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add material requirement' }));
+    const type = screen.getByRole('combobox', { name: 'Material type' });
+    await user.click(type);
+    expect(await screen.findByRole('option', { name: 'TPU' })).toBeVisible();
+    await user.click(screen.getByRole('option', { name: 'PLA', exact: true }));
+    const color = screen.getByRole('combobox', { name: 'Color (optional)' });
+    await user.click(color);
+    expect(screen.getAllByRole('option', { name: 'Blue', exact: true })).toHaveLength(1);
+    expect(screen.queryByRole('option', { name: /red|orange/i })).toBeNull();
+    await user.type(color, 'Violet');
+    await user.click(screen.getByRole('option', { name: 'Use “Violet”' }));
+    expect(color).toHaveValue('Violet');
+  });
+
+  it('fills blank values from an explicitly selected preferred filament', async () => {
+    const user = userEvent.setup();
+    render(<ModelModal model={legacy} onClose={vi.fn()} onSaved={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Add material requirement' }));
+    await user.click(screen.getByRole('combobox', { name: 'Preferred filament (optional)' }));
+    await user.click(await screen.findByRole('option', { name: 'Fixture · PLA · Blue' }));
+    expect(screen.getByRole('combobox', { name: 'Material type' })).toHaveValue('PLA');
+    expect(screen.getByRole('combobox', { name: 'Color (optional)' })).toHaveValue('Blue');
   });
 
   it('edits a legacy model without assuming its split, with optional catalogue preference', async () => {

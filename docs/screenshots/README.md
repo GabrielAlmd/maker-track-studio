@@ -6,8 +6,9 @@ documentation, including the future project README.
 The images are generated from deterministic fixture data, not from a developer's
 local database. File names follow `<page-or-state>-<theme>.png`, so documentation
 can use stable links such as `dashboard-light.png` or `models-add-dark.png`.
-Model details and the G-code review use `models-material-details-*.png` and
-`models-material-review-*.png` with synthetic requirement rows and tool slots.
+Model details, G-code review and catalogue suggestions use
+`models-material-details-*.png`, `models-material-review-*.png` and
+`models-material-suggestions-*.png` with synthetic catalogue data.
 
 The catalogue covers:
 
