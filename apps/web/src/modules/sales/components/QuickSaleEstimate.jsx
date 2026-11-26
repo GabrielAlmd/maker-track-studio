@@ -15,6 +15,12 @@ import { parseHundredths } from '../utils/moneyInput';
 import { numberField } from '../utils/businessValidation';
 import { EntityField, Field } from './BusinessFields';
 
+const maxMinutes = 1_000_000;
+
+function validPrintMinutes(minutes) {
+  return Number.isInteger(minutes) && minutes > 0 && minutes <= maxMinutes ? minutes : undefined;
+}
+
 const schema = yup.object({
   source: yup.string().oneOf(['manual', 'model']).required(),
   target: yup.string().oneOf(['', 'margin', 'markup']).defined(),
@@ -29,7 +35,9 @@ const schema = yup.object({
     otherwise: field => field.strip(),
   }),
   minutes: yup.number().when('source', {
-    is: 'model', then: () => numberField(1, 1_000_000), otherwise: field => field.strip(),
+    is: 'model', then: field => field.transform((value, original) => original === '' ? undefined : value)
+      .integer().min(1).max(maxMinutes),
+    otherwise: field => field.strip(),
   }),
   labor: yup.number().when('source', {
     is: 'model', then: () => numberField(0, 1_000_000, false), otherwise: field => field.strip(),
@@ -37,7 +45,7 @@ const schema = yup.object({
   printer: yup.string().transform(value => value || undefined).uuid(),
 });
 
-function ModelAssumptions({ model, control, register, errors, onMapping, invalidate }) {
+function ModelAssumptions({ model, control, register, errors, timeOverride, onMapping, invalidate }) {
   const { t } = useTranslation();
   const load = useCallback(async () => {
     const [product, filaments, materials, printers] = await Promise.all([
@@ -48,29 +56,46 @@ function ModelAssumptions({ model, control, register, errors, onMapping, invalid
   }, [model]);
   const { data, loading, error, refetch } = useApi(load);
 
+  const minutes = validPrintMinutes(data?.product.print_time);
+  const overriddenMinutes = validPrintMinutes(Number(timeOverride));
+  const minutesField = <Field label="quickMinutes" error={errors.minutes} type="number"
+    min={1} max={maxMinutes} step={1} placeholder={minutes?.toString()} {...register('minutes')} />;
+
   return <>
-    <p className="text-sm ui-text-secondary sm:col-span-2">{t('business.quickModelAssumptions')}</p>
     {loading && <p role="status" className="text-sm sm:col-span-2">{t('business.quickLoadingCost')}</p>}
     {error && <button type="button" className="page-action page-action-secondary sm:col-span-2" onClick={() => { invalidate(); refetch(); }}>{t('business.quickRetryCost')}</button>}
-    {data && <EntityField control={control} label="quickPrinter" name="printer" onSelect={invalidate} error={errors.printer} options={[
-      ['', t('business.quickAppCosts')], ...data.printers.map(printer => [printer.id, printer.name]),
-    ]} />}
-    <Field label="quickMinutes" error={errors.minutes} type="number" min={1} max={1_000_000} step={1} {...register('minutes')} />
-    <Field label="quickLabor" error={errors.labor} type="number" min={0} max={1_000_000} step="any" {...register('labor')} />
-    {data && <button type="button" className="page-action page-action-secondary self-end justify-self-start" onClick={() => onMapping(data)}>
-      {t('business.quickPreview')}
-    </button>}
+    {data && <>
+      <p className="text-sm ui-text-secondary sm:col-span-2">
+        {overriddenMinutes ? t('business.quickOverrideMinutes', { minutes: overriddenMinutes })
+          : minutes ? t('business.quickSavedMinutes', { minutes }) : t('business.quickMissingMinutes')}
+      </p>
+      {!minutes && minutesField}
+      <details className="text-sm sm:col-span-2" open={errors.minutes || errors.labor || errors.printer ? true : undefined}>
+        <summary className="cursor-pointer ui-text-secondary">{t('business.quickCostSettings')}</summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {minutes && minutesField}
+          <EntityField control={control} label="quickPrinter" name="printer" onSelect={invalidate} error={errors.printer} options={[
+            ['', t('business.quickAppCosts')], ...data.printers.map(printer => [printer.id, printer.name]),
+          ]} />
+          <Field label="quickLabor" error={errors.labor} type="number" min={0} max={1_000_000} step="any" {...register('labor')} />
+          <p className="ui-text-secondary sm:col-span-2">{t('business.quickModelAssumptions')}</p>
+        </div>
+      </details>
+      <button type="button" className="page-action page-action-secondary justify-self-start" onClick={() => onMapping(data)}>
+        {t('business.quickPreview')}
+      </button>
+    </>}
   </>;
 }
 
 export default function QuickSaleEstimate({ context, quote, onQuote, onApply, finalTotal }) {
   const { t } = useTranslation();
   const { model_id: model, stock_run_item_id: lot, quantity } = context;
-  const { control, register, watch, handleSubmit, formState: { errors } } = useForm({
+  const { control, register, watch, setError: setFieldError, handleSubmit, formState: { errors } } = useForm({
     resolver: yupResolver(schema),
     defaultValues: { source: lot ? 'manual' : 'model', manual: '', target: 'margin', rate: '', minutes: '', labor: 0, printer: '' },
   });
-  const [source, target] = watch(['source', 'target']);
+  const [source, target, timeOverride] = watch(['source', 'target', 'minutes']);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const attempt = useRef(0);
@@ -90,10 +115,15 @@ export default function QuickSaleEstimate({ context, quote, onQuote, onApply, fi
     if (values.target) cost.target = { mode: values.target, value: values.rate };
     if (values.source === 'manual') cost.manual_unit_cents = values.manual;
     else {
+      const minutes = values.minutes ?? validPrintMinutes(data.product.print_time);
+      if (minutes === undefined) {
+        setFieldError('minutes', { type: 'required' }, { shouldFocus: true });
+        return;
+      }
       const rows = estimateRunMaterials([{ model_id: model, planned: quantity }], [data.product], data.filaments, data.stock);
       cost.filament_mapping = Object.fromEntries(rows.flatMap(row => row.filament_id
         ? row._sources.filter(item => item.requirementID).map(item => [item.requirementID, row.filament_id]) : []));
-      Object.assign(cost, { minutes_per_unit: values.minutes, labor_hours_per_unit: values.labor, printer_id: values.printer });
+      Object.assign(cost, { minutes_per_unit: minutes, labor_hours_per_unit: values.labor, printer_id: values.printer });
     }
     const request = ++attempt.current;
     onQuote(null);
@@ -130,7 +160,7 @@ export default function QuickSaleEstimate({ context, quote, onQuote, onApply, fi
       ]} />
       {target && <Field label="quickTargetRate" error={errors.rate} inputMode="decimal" {...field('rate')} />}
       {source === 'model' ? <ModelAssumptions model={model} control={control} register={field} errors={errors}
-        invalidate={invalidate} onMapping={data => preview(data)()} /> :
+        timeOverride={timeOverride} invalidate={invalidate} onMapping={data => preview(data)()} /> :
         <button type="button" className="page-action page-action-secondary self-end justify-self-start" onClick={() => preview()()}>
           {t('business.quickPreview')}
         </button>}

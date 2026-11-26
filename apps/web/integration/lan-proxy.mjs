@@ -114,14 +114,20 @@ async function exerciseProductionEstimate(page) {
 
 async function exerciseQuickSale(page) {
   const created = await page.evaluate(async () => {
-    const response = await fetch('/api/models', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Synthetic clamp', material_weight: 20, print_time: 30 }),
+    const options = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    const filament = await fetch('/api/filaments', {
+      ...options, body: JSON.stringify({ brand: 'Synthetic', type: 'PLA', color: 'Forest', avg_price: 50 }),
     });
-    return response.status;
+    const model = await fetch('/api/models', {
+      ...options,
+      body: JSON.stringify({
+        name: 'Synthetic clamp', print_time: 30,
+        material_requirements: [{ material_type: 'PLA', color: 'Forest', part_weight_g: 100, waste_weight_g: 0 }],
+      }),
+    });
+    return { filament: filament.status, model: model.status };
   });
-  expect(created).toBe(201);
+  expect(created).toEqual({ filament: 201, model: 201 });
   await page.getByRole('link', { name: 'Quick Sale', exact: true }).click();
   await page.getByLabel('Sale reference').fill('Synthetic counter sale');
   await page.getByLabel('Model', { exact: true }).fill('Synthetic clamp');
@@ -133,12 +139,20 @@ async function exerciseQuickSale(page) {
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveAttribute('aria-invalid', 'true');
   await page.getByLabel('Quantity', { exact: true }).fill('2');
   await page.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }).check();
-  await page.getByLabel('Cost source', { exact: true }).selectOption('manual');
-  await page.getByLabel('Cost per unit (EUR)').fill('5.00');
+  await expect(page.getByText(/saved print time of 30 min per unit/)).toBeVisible();
+  await expect(page.getByLabel('Print minutes per unit')).toBeHidden();
   await page.getByLabel('Target (%)').fill('40');
+  const preview = page.waitForResponse(response => response.url().endsWith('/quick-sales/estimate'));
   await page.getByRole('button', { name: 'Calculate estimate' }).click();
+  const response = await preview;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON().cost).toMatchObject({
+    source: 'model', minutes_per_unit: 30, target: { mode: 'margin', value: 4000 },
+  });
+  const quote = await response.json();
+  expect(quote.unit_cost_cents).toBeGreaterThanOrEqual(500);
   await page.getByRole('button', { name: 'Apply suggested price' }).click();
-  await expect(page.getByLabel('Unit price (EUR)')).toHaveValue('8.33');
+  await expect(page.getByLabel('Unit price (EUR)')).toHaveValue((quote.suggested_unit_price_cents / 100).toFixed(2));
   await page.getByLabel('Unit price (EUR)').fill('12.99');
   await page.getByRole('button', { name: 'Confirm sale' }).click();
   await expect(page.getByRole('heading', { name: 'Synthetic counter sale' })).toBeVisible();
@@ -147,7 +161,9 @@ async function exerciseQuickSale(page) {
   await page.getByRole('link', { name: 'Financials', exact: true }).click();
   await expect(page.getByText('€25.98', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText('Estimated Quick Sale profit', { exact: true })).toBeVisible();
-  await expect(page.getByText('€15.98', { exact: true })).toBeVisible();
+  const profit = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' })
+    .format((2598 - quote.total_cost_cents) / 100);
+  await expect(page.getByText(profit, { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'History', exact: true }).click();
   await expect(page.getByText('Quick Sale confirmed', { exact: true })).toBeVisible();
   return saleId;

@@ -19,13 +19,15 @@ const lot = '22222222-2222-4222-8222-222222222222';
 const material = '33333333-3333-4333-8333-333333333333';
 const filament = '44444444-4444-4444-8444-444444444444';
 
+const product = {
+  id: model, print_time: 15, material_requirements: [{ id: material, material_type: 'PLA', color: 'Blue', part_weight_g: 10 }],
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
   allCustomers.mockResolvedValue([]);
   getModels.mockResolvedValue({ items: [{ id: model, name: 'Synthetic bracket' }], page_size: 25, total: 1 });
-  getModel.mockResolvedValue({
-    id: model, material_requirements: [{ id: material, material_type: 'PLA', color: 'Blue', part_weight_g: 10 }],
-  });
+  getModel.mockResolvedValue(product);
   getFilaments.mockResolvedValue([{ id: filament, type: 'PLA', color: 'Blue' }]);
   getMaterials.mockResolvedValue([]);
   getPrinters.mockResolvedValue([]);
@@ -50,10 +52,11 @@ async function start() {
   return user;
 }
 
-it('previews shared model assumptions, applies the target price, and confirms edited cents', async () => {
+it('uses saved model details, applies the target price, and confirms edited cents', async () => {
   const user = await start();
   await user.click(screen.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }));
-  await user.type(screen.getByLabelText('Print minutes per unit'), '15');
+  expect(await screen.findByText(/saved print time of 15 min per unit/)).toBeVisible();
+  expect(screen.getByLabelText('Print minutes per unit')).not.toBeVisible();
   await user.type(screen.getByLabelText('Target (%)'), '100');
   const preview = await screen.findByRole('button', { name: 'Calculate estimate' });
   await user.click(preview);
@@ -82,6 +85,40 @@ it('previews shared model assumptions, applies the target price, and confirms ed
   expect(saveRecord).toHaveBeenLastCalledWith('quick-sales', expect.objectContaining({
     unit_price_cents: 910, estimate_token: 'estimate-token', cost: expect.objectContaining({ source: 'model' }),
   }), undefined);
+});
+
+it('asks for print time only when missing and keeps time overrides available', async () => {
+  getModel.mockResolvedValue({ ...product, print_time: 0 });
+  const user = await start();
+  await user.click(screen.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }));
+  expect(await screen.findByText(/no usable print time/)).toBeVisible();
+  await user.type(screen.getByLabelText('Target (%)'), '20');
+  const preview = screen.getByRole('button', { name: 'Calculate estimate' });
+  await user.click(preview);
+  const minutes = screen.getByLabelText('Print minutes per unit');
+  expect(minutes).toHaveAttribute('aria-invalid', 'true');
+  expect(saveRecord).not.toHaveBeenCalled();
+  await user.type(minutes, '7');
+  await user.click(preview);
+  expect(await screen.findByRole('button', { name: 'Apply suggested price' })).toBeVisible();
+  expect(saveRecord).toHaveBeenCalledWith('quick-sales/estimate', expect.objectContaining({
+    cost: expect.objectContaining({ minutes_per_unit: 7 }),
+  }));
+});
+
+it('allows overriding saved print time without changing the model', async () => {
+  const user = await start();
+  await user.click(screen.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }));
+  await user.click(await screen.findByText('Adjust cost assumptions'));
+  await user.type(screen.getByLabelText('Print minutes per unit'), '30');
+  expect(screen.getByText(/30 min per unit for this sale/)).toBeVisible();
+  await user.selectOptions(screen.getByLabelText('Pricing method'), 'markup');
+  await user.type(screen.getByLabelText('Target (%)'), '40');
+  await user.click(screen.getByRole('button', { name: 'Calculate estimate' }));
+  expect(await screen.findByText(/Suggested price €7.00 per unit/)).toBeVisible();
+  expect(saveRecord).toHaveBeenCalledWith('quick-sales/estimate', expect.objectContaining({
+    cost: expect.objectContaining({ minutes_per_unit: 30, target: { mode: 'markup', value: 4000 } }),
+  }));
 });
 
 it('uses a manual fallback for stock and requires a new lot and estimate after a quantity change', async () => {

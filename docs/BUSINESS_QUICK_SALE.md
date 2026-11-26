@@ -21,13 +21,18 @@ available quantity. Select the lot again after changing the model or quantity.
 ## Optional cost and price suggestion
 
 Open **Estimate cost and price** after choosing the model, quantity and
-fulfilment. For made-to-order sales, enter estimated print minutes and labor
-hours for one unit and choose a printer profile or the app cost settings.
-Quick Sale uses the same filament suggestions as production planning and uses
-the budget cost engine for material, waste, power, wear and labor. Enter time
-for one unit even when ordering multiple units. The estimate multiplies that
-rounded unit cost by quantity. Enter a manual unit cost for batch economics
-or when model requirements, a compatible filament mapping or prices are missing.
+fulfilment. For made-to-order sales, Quick Sale starts with the model’s material
+requirements, saved per-unit print time and app cost settings. Choose **Margin**
+or **Markup**, enter the target and calculate the estimate. If print time is
+missing, enter the minutes needed to print one unit. Open **Adjust cost
+assumptions** to override the saved time, add labor hours or select a printer
+profile.
+
+Quick Sale uses the same filament suggestions as production planning and the
+budget cost engine for material, waste, power, wear and labor. The estimate
+multiplies the rounded unit cost by quantity. Enter a manual unit cost for batch
+economics or when model requirements, a compatible filament mapping or prices
+are missing.
 Use the manual cost to account for additional expenses.
 
 Current finished stock lots provide verified accepted quantities. The production

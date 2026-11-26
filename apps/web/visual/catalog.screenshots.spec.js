@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
-import { installApiFixtures } from './catalog-fixtures';
+import { installApiFixtures, models } from './catalog-fixtures';
 
 async function expandScrollableAppForScreenshot(page) {
   await page.addStyleTag({
@@ -382,6 +382,33 @@ const scenarios = [
       await expect(page.getByText('Sale total €16.66', { exact: true })).toBeVisible();
       await expect(page.getByText(/Estimated profit at final price €6.66/)).toBeVisible();
       await expect(confirm).toBeEnabled();
+    },
+  },
+  {
+    slug: 'business-quick-sale-model-pricing', route: 'business/orders/quick-sale', fullPage: true,
+    prepare: async (page) => {
+      await page.route('**/api/models/m1', route => route.fulfill({ json: models[0] }));
+      await page.route('**/api/v2/business/quick-sales/estimate', async route => {
+        expect(route.request().postDataJSON()).toMatchObject({
+          model_id: 'm1', quantity: 1, cost: {
+            source: 'model', minutes_per_unit: 245, filament_mapping: { req1: 'f1', req2: 'f2' },
+            target: { mode: 'markup', value: 4000 },
+          },
+        });
+        await route.fulfill({ json: { token: 'sample-model-estimate', source: 'model', unit_cost_cents: 294,
+          total_cost_cents: 294, suggested_unit_price_cents: 412 } });
+      });
+      await page.getByLabel('Sale reference').fill('Workshop enclosure');
+      await page.getByRole('combobox', { name: 'Model', exact: true }).fill('enclosure');
+      await page.getByRole('option', { name: 'Modular Enclosure' }).click();
+      await page.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }).check();
+      await expect(page.getByText(/saved print time of 245 min per unit/)).toBeVisible();
+      await expect(page.getByLabel('Print minutes per unit')).toBeHidden();
+      await page.getByLabel('Pricing method').selectOption('markup');
+      await page.getByLabel('Target (%)').fill('40');
+      await page.getByRole('button', { name: 'Calculate estimate' }).click();
+      await page.getByRole('button', { name: 'Apply suggested price' }).click();
+      await expect(page.getByText('Sale total €4.12', { exact: true })).toBeVisible();
     },
   },
   {
