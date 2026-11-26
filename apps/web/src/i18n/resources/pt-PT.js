@@ -60,6 +60,7 @@ export default {
     help: "Introduza o total contado na prateleira e o motivo da correção.",
   },
   materialEstimates: {
+    loading: "A carregar o catálogo de filamentos…",
     source: "{{model}} × {{quantity}} · {{material}}",
     legacy: "{{model}} × {{quantity}} · Estimativa agregada antiga. Material e cor desconhecidos.",
     unmapped: "Selecione um filamento do catálogo para este requisito.",

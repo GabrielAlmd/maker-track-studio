@@ -60,6 +60,7 @@ export default {
     help: "Enter the total counted on the shelf and the reason for the correction.",
   },
   materialEstimates: {
+    loading: "Loading filament catalogue…",
     source: "{{model}} × {{quantity}} · {{material}}",
     legacy: "{{model}} × {{quantity}} · Legacy aggregate estimate. Material and color are unknown.",
     unmapped: "Select a catalogue filament for this requirement.",

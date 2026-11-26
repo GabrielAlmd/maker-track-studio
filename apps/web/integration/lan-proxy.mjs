@@ -65,15 +65,25 @@ async function exerciseProductionEstimate(page) {
     body: JSON.stringify({ brand: 'Synthetic', type: 'PETG', color: 'Blue', avg_price: 20 }),
   })).status);
   expect(created).toBe(201);
+  let releaseCatalogue;
+  const catalogue = new Promise(resolve => { releaseCatalogue = resolve; });
+  const delayCatalogue = async route => {
+    await catalogue;
+    await route.continue();
+  };
+  await page.route('**/api/filaments', delayCatalogue);
   await page.getByRole('link', { name: 'Print Jobs', exact: true }).click();
   await page.getByRole('button', { name: 'Plan production' }).click();
   const dialog = page.getByRole('dialog', { name: 'Plan production' });
+  await expect(dialog.getByLabel('Model', { exact: true })).toBeDisabled();
+  releaseCatalogue();
   await dialog.getByLabel('Printer', { exact: true }).fill('Browser fixture');
   await dialog.getByRole('option', { name: 'Browser fixture' }).click();
   await dialog.getByLabel('Model', { exact: true }).fill('Synthetic housing shell');
   await dialog.getByRole('option', { name: 'Synthetic housing shell' }).click();
   await dialog.getByLabel('planned', { exact: true }).fill('2');
   await expect(dialog.getByLabel('Filament', { exact: true })).toHaveValue('Synthetic PETG — Blue');
+  await page.unroute('**/api/filaments', delayCatalogue);
   await expect(dialog.getByLabel('Total grams')).toHaveValue('43');
   const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v2/production/jobs'
     && response.request().method() === 'POST');

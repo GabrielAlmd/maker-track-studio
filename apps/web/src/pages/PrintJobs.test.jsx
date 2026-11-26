@@ -127,6 +127,28 @@ describe('PrintJobs page', () => {
     })));
   });
 
+  it('waits for a delayed filament catalogue before calculating a model mapping', async () => {
+    printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
+    modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', material_requirements: [
+      { id: 'r1', material_type: 'PLA', color: 'Black', part_weight_g: 12 },
+    ] }]);
+    let loadFilaments;
+    filamentService.getFilaments.mockReturnValueOnce(new Promise(resolve => { loadFilaments = resolve; }));
+    const user = userEvent.setup();
+    render(<PrintJobs />);
+
+    const plan = screen.getByRole('button', { name: 'Plan production' });
+    await waitFor(() => expect(plan).toBeEnabled());
+    await user.click(plan);
+    const model = screen.getByRole('combobox', { name: 'Model', exact: true });
+    expect(model).toBeDisabled();
+    expect(screen.getByText('Loading filament catalogue…')).toBeVisible();
+    loadFilaments([{ id: 'f1', brand: 'Generic', type: 'PLA', color: 'Black' }]);
+    await waitFor(() => expect(model).toBeEnabled());
+    await chooseModel(user);
+    expect(screen.getByRole('combobox', { name: 'Filament' })).toHaveValue('Generic PLA — Black');
+  });
+
   it('preloads a structured model and preserves edited estimates across quantity changes', async () => {
     printJobService.getPrintJobs.mockResolvedValue(apiPage([]));
     modelService.getModels.mockResolvedValue([{ id: 'm1', name: 'Gear', print_time: 60, material_requirements: [

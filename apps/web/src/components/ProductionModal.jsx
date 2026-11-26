@@ -37,7 +37,7 @@ const newItem = () => ({ planned: 1, attempted: 0, accepted: 0, rejected: 0, mod
 const newRun = () => ({ status: 'planned', labor_hours: 0, print_time_minutes: null, estimated_time_minutes: null, items: [newItem()], materials: [] });
 const fieldClass = 'mt-1 w-full rounded-lg border ui-border-subtle ui-surface-input ui-text-primary p-2';
 
-function RunFields({ index, control, register, watch, getValues, setValue, errors, models, filaments, stock, initial, onRemove }) {
+function RunFields({ index, control, register, watch, getValues, setValue, errors, models, filaments, filamentsLoading, stock, initial, onRemove }) {
   const { t } = useTranslation();
   const base = `runs.${index}`;
   const items = useFieldArray({ control, name: `${base}.items`, keyName: 'formKey' });
@@ -68,7 +68,7 @@ function RunFields({ index, control, register, watch, getValues, setValue, error
     {terminal && <p className="text-sm ui-text-muted">{t('production.terminal')}</p>}
     {items.fields.map((item, n) => <div key={item.formKey} className="grid grid-cols-2 gap-3">
       {item.source_model && <p className="col-span-2 text-sm ui-text-muted">{t('slicer.imported')}: {item.source_model}</p>}
-      <div className="col-span-2"><FormSelect label={t('production.model')} control={control} disabled={terminal} name={`${base}.items.${n}.model_id`}
+      <div className="col-span-2"><FormSelect label={t('production.model')} control={control} disabled={terminal || filamentsLoading} name={`${base}.items.${n}.model_id`}
         options={models} onSelect={() => updateEstimates()} clearLabel={t('production.uncatalogued')} /></div>
       {['planned', 'attempted', 'accepted', 'rejected'].map(name => <label key={name} className="capitalize">{t(`production.${name}`)}<input className={fieldClass} type="number" min={name === 'planned' ? 1 : 0} max={1000000000} step="1" {...register(`${base}.items.${n}.${name}`, name === 'planned' ? { onChange: () => updateEstimates() } : undefined)} /></label>)}
     </div>)}
@@ -125,7 +125,7 @@ function RunFields({ index, control, register, watch, getValues, setValue, error
   </fieldset>;
 }
 
-export default function ProductionModal({ job, models = [], filaments = [], printers = [], onClose, onSaved }) {
+export default function ProductionModal({ job, models = [], filaments = [], filamentsLoading = false, printers = [], onClose, onSaved }) {
   const { t } = useTranslation();
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
@@ -213,7 +213,8 @@ export default function ProductionModal({ job, models = [], filaments = [], prin
       <div className="block"><FormSelect label={t('production.printer')} control={control} name={'printer_id'}
         options={printers} clearLabel={t('production.selectPrinter')} required /></div>
       <label className="block">{t('production.date')}<input className={fieldClass} type="date" {...register('print_date')} /></label>
-      {runs.fields.map((run, index) => <RunFields key={run.formKey} index={index} control={control} register={register} watch={watch} getValues={getValues} setValue={setValue} stock={stock} errors={errors.runs?.[index]} models={models} filaments={filaments} initial={initial[index]} onRemove={index >= initial.length && runs.fields.length > 1 ? () => runs.remove(index) : undefined} />)}
+      {filamentsLoading && <p role="status" className="text-sm ui-text-muted">{t('materialEstimates.loading')}</p>}
+      {runs.fields.map((run, index) => <RunFields key={run.formKey} index={index} control={control} register={register} watch={watch} getValues={getValues} setValue={setValue} stock={stock} errors={errors.runs?.[index]} models={models} filaments={filaments} filamentsLoading={filamentsLoading} initial={initial[index]} onRemove={index >= initial.length && runs.fields.length > 1 ? () => runs.remove(index) : undefined} />)}
       <button type="button" className="page-action page-action-secondary" onClick={() => runs.append(newRun())}>{t('production.addRun')}</button>
       {Object.keys(errors).length > 0 && <p role="alert" className="text-red-600">{t('production.validation')}</p>}
       <div className="flex justify-end gap-3"><button type="button" className="page-action page-action-secondary" onClick={onClose}>{t('common.cancel')}</button><button className="page-action" disabled={isSubmitting || importing}>{t(isSubmitting ? 'common.saving' : 'production.save')}</button></div>

@@ -61,7 +61,7 @@ const printJobSchema = (t) => yup.object({
     .transform((v, orig) => (orig === '' ? null : v)),
 });
 
-function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved, onModelCreated }) {
+function PrintJobModal({ printJob, models, filaments, filamentsLoading, printers, onClose, onSaved, onModelCreated }) {
   const { t } = useTranslation();
   const requiredLabel = (label) => <>{label} <span aria-hidden="true" className="text-xs capitalize ui-text-muted">({t('required')})</span></>;
   const isEdit = !!printJob;
@@ -254,11 +254,13 @@ function PrintJobModal({ printJob, models, filaments, printers, onClose, onSaved
             aria-label={t('dashboard.model')}
             value={watch('model_id') ?? ''}
             models={availableModels}
+            disabled={filamentsLoading}
             onChange={(modelId) => {
               setValue('model_id', modelId, { shouldDirty: true, shouldValidate: true });
               applyModelDefaults(modelId, getValues('units_printed'), true);
             }}
           />
+          {filamentsLoading && <p role="status" className="mt-1 text-xs ui-text-muted">{t('materialEstimates.loading')}</p>}
         </div>
         <div>
           <label htmlFor="print-job-date" className="block text-sm font-medium ui-text-secondary mb-1">{requiredLabel(t('printJobs.printDate'))}</label>
@@ -447,7 +449,7 @@ function PrintJobs() {
   const { data: jobPage, loading, error, refetch } = list;
   const printJobs = jobPage?.items;
   const { data: models, refetch: refetchModels } = useApi(fetchModels);
-  const { data: filaments } = useApi(fetchFilaments);
+  const { data: filaments, loading: filamentsLoading } = useApi(fetchFilaments);
   const { data: printers, loading: printersLoading, error: printersError, refetch: refetchPrinters } = useApi(fetchPrinters);
   const activePrinters = (printers ?? []).filter((printer) => !printer.is_archived);
   const visibleJobs = jobPage?.legacy
@@ -503,12 +505,13 @@ function PrintJobs() {
 
   return (
     <div>
-      {productionOpen && <ProductionModal job={editingJob} models={models ?? []} filaments={filaments ?? []} printers={editingJob ? (printers ?? []) : activePrinters} onClose={handleModalClose} onSaved={handleSaved} />}
+      {productionOpen && <ProductionModal job={editingJob} models={models ?? []} filaments={filaments ?? []} filamentsLoading={filamentsLoading} printers={editingJob ? (printers ?? []) : activePrinters} onClose={handleModalClose} onSaved={handleSaved} />}
       {modalOpen && (
         <PrintJobModal
           printJob={editingJob}
           models={models}
-          filaments={filaments}
+          filaments={filaments ?? []}
+          filamentsLoading={filamentsLoading}
           printers={activePrinters}
           onClose={handleModalClose}
           onSaved={handleSaved}
