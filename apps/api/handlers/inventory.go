@@ -150,27 +150,6 @@ func deleteInventoryItem(c *gin.Context, db *gorm.DB, typ string, item any) {
 	c.Status(204)
 }
 
-// InventoryMaterials returns ledger projections without purchase/usage counters.
-func InventoryMaterials(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var items []models.Filament
-		if err := db.Order("brand, type, color").Find(&items).Error; err != nil {
-			inventoryError(c, err)
-			return
-		}
-		rows := make([]gin.H, 0, len(items))
-		for _, item := range items {
-			balance, err := inventory.Availability(db, "filament", item.ID)
-			if err != nil {
-				inventoryError(c, err)
-				return
-			}
-			rows = append(rows, gin.H{"id": item.ID, "brand": item.Brand, "type": item.Type, "color": item.Color, "archived": item.Archived, "warnings_enabled": !item.WarningsDisabled, "tracking_enabled": !balance.TrackingPaused, "threshold_mg": item.StockThresholdMG, "balance": balance})
-		}
-		c.JSON(200, rows)
-	}
-}
-
 func UpdateInventoryThreshold(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := uuid.Parse(c.Param("id"))
