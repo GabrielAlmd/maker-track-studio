@@ -67,13 +67,21 @@ On a lost response, repeat the identical request to retrieve its original receip
 ## Inventory screen and thresholds (INV-07)
 
 Inventory is always available in the core navigation, including with Business disabled.
-Search by brand, type or color. Balances and warnings come from physical ledger
-movements, never purchase or usage counters. Unknown historical stock shows
-recorded changes separately until a physical count verifies the balance.
-Choose **Count and audit** to enter total counted grams, a reason and an operator.
-Counts use the displayed ledger revision; concurrent movements require reloading
-and recounting. Identical retries retain operation identifiers. Movement history
-retains the original entries and loads in sequence in batches of 100.
+Open **Inventory → Materials** for a paginated catalogue. Search the material
+name or filter by brand, type, color and stock status. Sort by any of the three
+catalogue fields. Physical ledger movements determine the on-hand, reserved and
+available amounts. An unverified material shows its recorded changes in
+**Details** until a physical count verifies the balance. Paused materials show
+that tracking is off and retain their history.
+
+Open **Details** to change lifecycle settings or the warning threshold, record
+the total counted grams with a reason and an operator, and review movement
+history. Counts use the displayed ledger revision. Concurrent movements require
+reloading and recounting, and an identical retry keeps its operation identifiers.
+History shows the local date and time, signed quantity, source, reason and
+operator in ledger order. **Load more movements** continues after the last shown
+entry, and retry resumes from the same entry. Use **Finished goods** in the same
+workspace to see on-hand, reserved and available pieces and record shelf counts.
 
 Set a per-material warning threshold in grams (zero by default). Verified stock
 at or below the threshold warns on Inventory and Dashboard. Print planning also
@@ -81,7 +89,17 @@ compares selected material estimates with available stock, without blocking or
 posting deductions. Finished-goods reservations use the Inventory contract below.
 
 `GET /v2/inventory/materials` returns material identity, `threshold_mg` and the
-existing balance projection. `PUT /v2/inventory/thresholds/:id` accepts
+existing balance projection. A request without query parameters returns the
+original array. List requests use `page`, `pageSize` (1–100), `sort`
+(`brand`, `type`, `color`), and `direction` (`asc`, `desc`). Optional
+`search`, `brand`, `type` and `color` match literal substrings.
+`status` accepts `tracked`, `untracked`, `archived`, `unverified` or
+`low_stock`. The low-stock filter includes verified, tracked and unarchived
+materials with warnings enabled and available stock at or below their threshold.
+List requests return `{items, total, page, page_size}`. This read path requires
+no SQLite or backup format migration, and rolling back the UI needs no data conversion.
+
+`PUT /v2/inventory/thresholds/:id` accepts
 `{"threshold_mg": 100000}`: a required nonnegative safe integer in milligrams.
 It returns 204, 400 for invalid input, or 404 for an unknown identity.
 

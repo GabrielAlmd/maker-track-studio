@@ -42,27 +42,44 @@ const scenarios = [
   ...[false, true].map(mobile => ({
     slug: mobile ? 'inventory-mobile' : 'inventory',
     route: 'inventory',
-    ...(mobile ? { viewport: { width: 390, height: 844 } } : {}),
-    fullPage: true,
+    ...(mobile ? { locale: 'pt-PT', viewport: { width: 390, height: 844 } } : {}),
+    fullPage: !mobile,
     setup: async page => {
       await page.route('**/api/v2/inventory/movements/filament/f2*', route => route.fulfill({ json: [
-        { sequence: 2, created_at: '2026-09-18T09:00:00Z', kind: 'tracking_paused', quantity: 0, actor: 'Workshop operator' },
+        { sequence: 1, created_at: '2026-09-18T08:00:00Z', kind: 'count', quantity: 125500, reason: 'Contagem de prateleira', actor: 'Operador de teste' },
+        { sequence: 2, created_at: '2026-09-18T09:00:00Z', kind: 'tracking_paused', quantity: 0, reason: 'tracking_paused', actor: 'local operator' },
       ] }));
-      await page.route('**/api/v2/inventory/materials', route => route.fulfill({ json: [
-        { id: 'f1', brand: 'Bambu Lab', type: 'PLA', color: 'Matte Black', threshold_mg: 100000, balance: { verified: true, on_hand: 45000, available: 45000, revision: 1 } },
-        { id: 'f2', brand: 'Prusament', type: 'PLA', color: 'Galaxy Silver', tracking_enabled: false, archived: true, threshold_mg: 0, balance: { verified: false, revision: 2 } },
-      ] }));
+      await page.route('**/api/v2/inventory/materials?*', route => route.fulfill({ json: {
+        items: [
+          { id: 'f1', brand: 'Bambu Lab', type: 'PLA', color: 'Matte Black', threshold_mg: 100000, balance: { verified: true, on_hand: 45000, reserved: 0, available: 45000, revision: 1 } },
+          { id: 'f2', brand: 'Prusament', type: 'PLA', color: 'Galaxy Silver', tracking_enabled: false, archived: true, threshold_mg: 0, balance: { verified: false, revision: 2 } },
+          { id: 'f3', brand: 'Polymaker', type: 'PETG', color: 'Forest Green', warnings_enabled: false, threshold_mg: 20000, balance: { verified: false, on_hand: 17000, revision: 0 } },
+        ],
+        total: 3, page: 1, page_size: 25,
+      } }));
       await page.route('**/api/features', (route) => route.fulfill({ json: { sales_orders: false } }));
     },
     prepare: async page => {
-      await expect(page.getByText('Low stock').first()).toBeVisible();
-      await expect(page.getByText('Stock not tracked')).toBeVisible();
-      await page.getByRole('button', { name: /Settings and history for Prusament/ }).click();
-      await expect(page.getByRole('button', { name: 'Resume tracking' })).toBeVisible();
-      await expect(page.getByText(/Tracking paused · Workshop operator/)).toBeVisible();
-      await expect(page.getByText('Cable bracket', { exact: true })).toBeVisible();
+      await expect(page.getByText(mobile ? 'Stock baixo' : 'Low stock', { exact: true })).toBeVisible();
+      if (mobile) {
+        await page.getByRole('button', { name: 'Detalhes de Prusament PLA — Galaxy Silver' }).click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.getByRole('button', { name: 'Retomar controlo' })).toBeVisible();
+        await expect(dialog.getByText('Operador local', { exact: true })).toBeVisible();
+      } else {
+        await expect(page.getByText('Stock not tracked', { exact: true }).first()).toBeVisible();
+        await expect(page.getByText('Unverified', { exact: true })).toBeVisible();
+      }
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(mobile ? 390 : 1440);
     },
   })),
+  {
+    slug: 'inventory-finished-goods', route: 'inventory', fullPage: true,
+    prepare: async page => {
+      await page.getByRole('button', { name: 'Finished goods', exact: true }).click();
+      await expect(page.getByRole('row', { name: /Cable bracket 10 3 7/ })).toBeVisible();
+    },
+  },
   ...['empty', 'pending', 'error'].map((state) => ({
     slug: `purchases-first-run-${state}`, route: 'purchases',
     setup: async (page) => {

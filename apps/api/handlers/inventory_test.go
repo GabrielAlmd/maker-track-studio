@@ -512,3 +512,86 @@ func TestSchema20FilamentLifecycleDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestInventoryMaterialsPaginatedList(t *testing.T) {
+	r, db := setupTestRouter(t)
+	const path = "/v2/inventory/materials"
+	low := models.Filament{Brand: "Synthetic Alpha", Type: "PLA", Color: "Copper", StockThresholdMG: 5000}
+	muted := models.Filament{Brand: "Synthetic Beta", Type: "PLA", Color: "Blue", WarningsDisabled: true, StockThresholdMG: 5000}
+	paused := models.Filament{Brand: "Synthetic Gamma", Type: "PLA", Color: "Green"}
+	unknown := models.Filament{Brand: "Synthetic Delta", Type: "PETG", Color: "Sea Blue"}
+	archived := models.Filament{Brand: "Synthetic Echo", Type: "PLA", Color: "Purple", Archived: true, StockThresholdMG: 5000}
+	for _, item := range []*models.Filament{&low, &muted, &paused, &unknown, &archived} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, item := range []models.Filament{low, muted, archived} {
+		opening := posting("filament", item.ID, 4001)
+		opening.Kind = "opening"
+		if res := performRequest(t, r, "POST", adjustments, opening); res.Code != 201 {
+			t.Fatal(res.Body.String())
+		}
+	}
+	if res := performRequest(t, r, "PATCH", path+"/"+paused.ID.String(), map[string]any{
+		"tracking_enabled": false, "expected_revision": 0,
+	}); res.Code != 204 {
+		t.Fatal(res.Body.String())
+	}
+
+	type material struct {
+		ID       uuid.UUID         `json:"id"`
+		Tracked  bool              `json:"tracking_enabled"`
+		Warnings bool              `json:"warnings_enabled"`
+		Balance  inventory.Balance `json:"balance"`
+	}
+	var legacy []material
+	decodeBody(t, performRequest(t, r, "GET", path, nil), &legacy)
+	if len(legacy) != 5 {
+		t.Fatalf("legacy list: %+v", legacy)
+	}
+	for _, row := range legacy {
+		var balance inventory.Balance
+		decodeBody(t, performRequest(t, r, "GET", "/v2/inventory/balances/filament/"+row.ID.String(), nil), &balance)
+		if row.Balance != balance || row.Tracked == balance.TrackingPaused || row.Warnings == (row.ID == muted.ID) {
+			t.Fatalf("inconsistent projection: %+v, balance %+v", row, balance)
+		}
+	}
+
+	for _, tc := range []struct {
+		query string
+		id    uuid.UUID
+		total int
+	}{
+		{"?page=2&pageSize=1&sort=brand&direction=desc", archived.ID, 5},
+		{"?search=alpha+pla&brand=SYNTHETIC&type=pla&color=COP", low.ID, 1},
+		{"?color=blue&sort=color&page=1&pageSize=1", muted.ID, 2},
+		{"?status=tracked&pageSize=1", low.ID, 4},
+		{"?status=low_stock", low.ID, 1},
+		{"?status=unverified", unknown.ID, 1},
+		{"?status=untracked", paused.ID, 1},
+		{"?status=archived", archived.ID, 1},
+		{"?search=%25", uuid.Nil, 0},
+		{"?page=2147483647&pageSize=100", uuid.Nil, 5},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			res := performRequest(t, r, "GET", path+tc.query, nil)
+			var result struct {
+				Items []material `json:"items"`
+				Total int        `json:"total"`
+			}
+			decodeBody(t, res, &result)
+			if res.Code != 200 || result.Total != tc.total || result.Items == nil {
+				t.Fatal(res.Code, res.Body.String())
+			}
+			if tc.id == uuid.Nil && len(result.Items) != 0 || tc.id != uuid.Nil && (len(result.Items) != 1 || result.Items[0].ID != tc.id) {
+				t.Fatal(res.Body.String())
+			}
+		})
+	}
+	for _, query := range []string{"?sort=wrong", "?direction=no", "?pageSize=101", "?status=wrong"} {
+		if res := performRequest(t, r, "GET", path+query, nil); res.Code != 400 {
+			t.Fatal(res.Code, res.Body.String())
+		}
+	}
+}

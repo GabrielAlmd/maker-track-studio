@@ -16,6 +16,7 @@ The catalogue covers:
 - every Settings section, including Features, the language selector and Simple and Advanced calculation modes;
 - the Portuguese (Portugal) Settings screen and calculation-defaults guidance in both themes;
 - create forms, filters (including Print Jobs model search), filament type management and inline cost details;
+- the paginated material inventory, finished-goods balances, and Portuguese lifecycle and movement history on a narrow viewport;
 - the low-stock filter using verified physical balances, excluding unknown stock;
 - Inventory lifecycle controls for an archived filament with tracking paused on desktop and narrow screens;
 - physical printer profiles, default/archive states and printer-specific costs;

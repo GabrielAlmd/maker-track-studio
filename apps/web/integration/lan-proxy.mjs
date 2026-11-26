@@ -26,13 +26,27 @@ async function exerciseMaterialLifecycle(page) {
   })).status);
   expect(status).toBe(201);
   await page.goto(`${origin}/#/inventory`);
-  await page.getByRole('button', { name: 'Count and audit Synthetic Copper' }).click();
+  await page.getByRole('button', { name: 'Details for Synthetic PLA — Copper' }).click();
   await page.getByRole('button', { name: 'Pause tracking' }).click();
   await page.getByRole('button', { name: 'Confirm tracking change' }).click();
-  await expect(page.getByText('Stock not tracked', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Synthetic PLA.*Copper/ }).getByText('Stock not tracked', { exact: true }).first()).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Settings and history for Synthetic Copper' }).click();
-  await expect(page.getByRole('button', { name: 'Resume tracking' })).toBeVisible();
+  await page.getByRole('button', { name: 'Details for Synthetic PLA — Copper' }).click();
+  await expect(page.getByText('Tracking paused', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Resume tracking' }).click();
+  await page.getByRole('button', { name: 'Confirm tracking change' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Details for Synthetic PLA — Copper' }).click();
+  const details = page.getByRole('dialog');
+  await expect(details.getByText('Tracking resumed', { exact: true })).toBeVisible();
+  await details.getByLabel('Counted grams').fill('12.5');
+  await details.getByLabel('Reason', { exact: true }).fill('Synthetic shelf count');
+  await details.getByLabel('Operator', { exact: true }).fill('Test operator');
+  await details.getByRole('button', { name: 'Record count' }).click();
+  await expect(details).toHaveCount(0);
+  await page.getByRole('button', { name: 'Details for Synthetic PLA — Copper' }).click();
+  await expect(page.getByRole('dialog').getByText('Synthetic shelf count')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
 }
 
 async function exerciseModelMaterials(page) {
@@ -260,7 +274,7 @@ try {
   await exerciseBusinessOperations(page);
   expect(errors).toEqual([]);
   await context.close();
-  console.log('PASS: Chromium authenticated UI, readiness, API writes, Model materials, production estimates and Business Operations');
+  console.log('PASS: Chromium authenticated UI, readiness, API writes, Inventory reconciliation, Model materials, production estimates and Business Operations');
 } finally {
   await browser.close();
 }

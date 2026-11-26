@@ -133,6 +133,18 @@ const balanceColumns = `
     COALESCE(MAX(kind = 'tracking_paused'), 0) AS tracking_gap,
 	COALESCE(MAX(sequence), 0) AS revision`
 
+// MaterialBalances projects the same ledger state as Availability for catalogue reads.
+func MaterialBalances(db *gorm.DB) *gorm.DB {
+	return db.Model(&Movement{}).Select("item_id, "+balanceColumns).
+		Where("item_type = ?", "filament").Group("item_id")
+}
+
+// SetAvailability derives display fields from the projected physical and reserved stock.
+func (b *Balance) SetAvailability() {
+	b.Available = b.OnHand - b.Reserved
+	b.Negative = b.OnHand < 0
+}
+
 func projection(db *gorm.DB, typ string, id uuid.UUID, through int64) (Balance, error) {
 	var b Balance
 	q := db.Model(&Movement{}).Where("item_type = ? AND item_id = ?", typ, id)
@@ -140,8 +152,7 @@ func projection(db *gorm.DB, typ string, id uuid.UUID, through int64) (Balance, 
 		q = q.Where("sequence <= ?", through)
 	}
 	err := q.Select(balanceColumns).Scan(&b).Error
-	b.Available = b.OnHand - b.Reserved
-	b.Negative = b.OnHand < 0
+	b.SetAvailability()
 	return b, err
 }
 

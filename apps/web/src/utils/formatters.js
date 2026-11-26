@@ -30,11 +30,11 @@ function fallbackFor(value, fallback) {
   return toFiniteNumber(value) === null ? fallback : null;
 }
 
-export function formatNumber(value, { maximumFractionDigits = 0, minimumFractionDigits, fallback = VALUE_FALLBACKS.dataUnavailable } = {}) {
+export function formatNumber(value, { maximumFractionDigits = 0, minimumFractionDigits, signDisplay, fallback = VALUE_FALLBACKS.dataUnavailable } = {}) {
   const missing = fallbackFor(value, fallback);
   if (missing) return missing;
 
-  return new Intl.NumberFormat(activeIntlLocale(), { maximumFractionDigits, minimumFractionDigits }).format(toFiniteNumber(value));
+  return new Intl.NumberFormat(activeIntlLocale(), { maximumFractionDigits, minimumFractionDigits, signDisplay }).format(toFiniteNumber(value));
 }
 
 export function formatCurrency(value, { fractionDigits = 2, fallback = VALUE_FALLBACKS.dataUnavailable } = {}) {
@@ -86,8 +86,8 @@ export function formatDuration(value, { fallback = VALUE_FALLBACKS.notRecorded }
   return `${Math.floor(wholeMinutes / 60)}h${wholeMinutes % 60 ? ` ${wholeMinutes % 60}m` : ''}`;
 }
 
-export function formatDate(value, { fallback = VALUE_FALLBACKS.dataUnavailable } = {}) {
+export function formatDate(value, { includeTime = false, fallback = VALUE_FALLBACKS.dataUnavailable } = {}) {
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return fallback;
-  return new Intl.DateTimeFormat(activeIntlLocale(), { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat(activeIntlLocale(), { year: 'numeric', month: 'short', day: 'numeric', ...(includeTime && { hour: '2-digit', minute: '2-digit' }) }).format(date);
 }
