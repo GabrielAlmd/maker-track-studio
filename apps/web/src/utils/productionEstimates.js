@@ -1,10 +1,14 @@
 const normalize = value => (value ?? '').trim().toLowerCase();
 const grams = (value, precision) => Number(value.toFixed(precision));
 
-function suggestFilament(requirement, filaments, stock, weight) {
-  const matches = filaments.filter(filament => !filament.archived && !stock.get(filament.id)?.archived
+export function matchingFilaments(requirement, filaments, stock, allowOtherColors = false) {
+  return filaments.filter(filament => !filament.archived && !stock.get(filament.id)?.archived
     && normalize(filament.type) === normalize(requirement.material_type)
-    && (!normalize(requirement.color) || normalize(filament.color) === normalize(requirement.color)));
+    && (allowOtherColors || !normalize(requirement.color) || normalize(filament.color) === normalize(requirement.color)));
+}
+
+function suggestFilament(requirement, filaments, stock, weight) {
+  const matches = matchingFilaments(requirement, filaments, stock);
   const preferred = matches.find(filament => filament.id === requirement.preferred_filament_id);
   const available = matches.filter(filament => {
     const balance = stock.get(filament.id);

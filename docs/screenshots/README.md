@@ -25,7 +25,7 @@ The catalogue covers:
 - the Orders list at wide and compact desktop widths, its active-filter menu, the new Order form at wide, compact and narrow widths, active production allocations, completed locked history and inline Sales Channel creation;
 - the Dashboard and Print Jobs list at 390px width, plus the narrow Add Print Job dialog;
 - the Portuguese (Portugal) new Order workflow, including the optional Sales Channel state;
-- Quick Sale model-based markup using saved materials and print time;
+- Quick Sale model-based markup with an explicitly selected filament color;
 - Quick Sale stock dispatch with a manual cost, margin suggestion and applied unit price;
 - a confirmed proposal order with accepted terms, a customer PO and discounted revenue;
 - backup file selection;

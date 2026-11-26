@@ -28,7 +28,7 @@ beforeEach(() => {
   allCustomers.mockResolvedValue([]);
   getModels.mockResolvedValue({ items: [{ id: model, name: 'Synthetic bracket' }], page_size: 25, total: 1 });
   getModel.mockResolvedValue(product);
-  getFilaments.mockResolvedValue([{ id: filament, type: 'PLA', color: 'Blue' }]);
+  getFilaments.mockResolvedValue([{ id: filament, brand: 'Vendor A', type: 'PLA', color: 'Blue', avg_price: 50 }]);
   getMaterials.mockResolvedValue([]);
   getPrinters.mockResolvedValue([]);
   listQuickSaleStock.mockResolvedValue({ items: [{ print_run_item_id: lot, print_date: '2026-01-02', units_available: 5 }] });
@@ -119,6 +119,59 @@ it('allows overriding saved print time without changing the model', async () => 
   expect(saveRecord).toHaveBeenCalledWith('quick-sales/estimate', expect.objectContaining({
     cost: expect.objectContaining({ minutes_per_unit: 30, target: { mode: 'markup', value: 4000 } }),
   }));
+});
+
+it('lets the operator resolve ambiguous priced filaments without changing the model', async () => {
+  const other = '55555555-5555-4555-8555-555555555555';
+  getFilaments.mockResolvedValue([
+    { id: filament, brand: 'Vendor A', type: 'PLA', color: 'Blue', avg_price: 50 },
+    { id: other, brand: 'Vendor B', type: 'PLA', color: 'Blue', avg_price: 40 },
+    { id: 'unpriced', brand: 'Unpriced', type: 'PLA', color: 'Blue', avg_price: 0 },
+    { id: 'archived', brand: 'Archived', type: 'PLA', color: 'Blue', avg_price: 20, archived: true },
+    { id: 'petg', brand: 'Different', type: 'PETG', color: 'Blue', avg_price: 20 },
+  ]);
+  const user = await start();
+  await user.click(screen.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }));
+  const picker = await screen.findByRole('combobox', { name: 'Filament for PLA — Blue' });
+  const calculate = screen.getByRole('button', { name: 'Calculate estimate' });
+  expect(calculate).toBeDisabled();
+  await user.click(picker);
+  expect(screen.queryByRole('option', { name: /Unpriced|Archived|Different/ })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('option', { name: /Vendor B.*€40.00/ }));
+  await user.type(screen.getByLabelText('Target (%)'), '40');
+  await user.click(calculate);
+  expect(await screen.findByRole('button', { name: 'Apply suggested price' })).toBeVisible();
+  expect(saveRecord).toHaveBeenCalledWith('quick-sales/estimate', expect.objectContaining({
+    cost: expect.objectContaining({ filament_mapping: { [material]: other }, minutes_per_unit: 15 }),
+  }));
+});
+
+it('requires an explicit filament choice before pricing an older model’s total weight', async () => {
+  getModel.mockResolvedValue({ ...product, material_requirements: [], material_weight: 12, waste_material: 2 });
+  const user = await start();
+  await user.click(screen.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }));
+  expect(await screen.findByText(/price all 14 g per unit/)).toBeVisible();
+  const calculate = screen.getByRole('button', { name: 'Calculate estimate' });
+  expect(calculate).toBeDisabled();
+  await user.click(screen.getByRole('combobox', { name: 'Filament for the full weight' }));
+  await user.click(screen.getByRole('option', { name: /Vendor A.*€50.00/ }));
+  await user.type(screen.getByLabelText('Target (%)'), '40');
+  await user.click(calculate);
+  expect(await screen.findByRole('button', { name: 'Apply suggested price' })).toBeVisible();
+  expect(saveRecord).toHaveBeenCalledWith('quick-sales/estimate', expect.objectContaining({
+    cost: expect.objectContaining({ legacy_filament_id: filament, minutes_per_unit: 15 }),
+  }));
+});
+
+it('explains when an older model has no priced filament choices', async () => {
+  getModel.mockResolvedValue({ ...product, material_requirements: [], material_weight: 12 });
+  getFilaments.mockResolvedValue([{ id: filament, type: 'PLA', avg_price: 0 }]);
+  const user = await start();
+  await user.click(screen.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }));
+  expect(await screen.findByText(/No active filaments have a price/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Calculate estimate' })).toBeDisabled();
+  await user.selectOptions(screen.getByLabelText('Cost source'), 'manual');
+  expect(screen.getByLabelText('Cost per unit (EUR)')).toBeVisible();
 });
 
 it('uses a manual fallback for stock and requires a new lot and estimate after a quantity change', async () => {

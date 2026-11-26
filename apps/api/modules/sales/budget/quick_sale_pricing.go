@@ -13,13 +13,15 @@ import (
 )
 
 type QuickSaleEstimateInput struct {
-	Source          string                  `json:"source"`
-	ManualUnitCents int64                   `json:"manual_unit_cents,omitempty"`
-	PrinterID       *uuid.UUID              `json:"printer_id,omitempty"`
-	MinutesPerUnit  int                     `json:"minutes_per_unit,omitempty"`
-	LaborPerUnit    float32                 `json:"labor_hours_per_unit,omitempty"`
-	FilamentMapping map[uuid.UUID]uuid.UUID `json:"filament_mapping,omitempty"`
-	Target          *PriceSelection         `json:"target,omitempty"`
+	Source                 string                  `json:"source"`
+	ManualUnitCents        int64                   `json:"manual_unit_cents,omitempty"`
+	PrinterID              *uuid.UUID              `json:"printer_id,omitempty"`
+	MinutesPerUnit         int                     `json:"minutes_per_unit,omitempty"`
+	LaborPerUnit           float32                 `json:"labor_hours_per_unit,omitempty"`
+	FilamentMapping        map[uuid.UUID]uuid.UUID `json:"filament_mapping,omitempty"`
+	LegacyFilamentID       *uuid.UUID              `json:"legacy_filament_id,omitempty"`
+	AllowColorSubstitution bool                    `json:"allow_color_substitution,omitempty"`
+	Target                 *PriceSelection         `json:"target,omitempty"`
 }
 
 type QuickSaleEstimateRequest struct {
@@ -86,7 +88,7 @@ func calculateQuickSalePricing(tx *gorm.DB, input QuickSaleEstimateRequest) (Qui
 	result.Source, result.Quantity, result.Target = cost.Source, input.Quantity, cost.Target
 	switch cost.Source {
 	case "manual":
-		if cost.PrinterID != nil || cost.MinutesPerUnit != 0 || cost.LaborPerUnit != 0 || len(cost.FilamentMapping) != 0 {
+		if cost.PrinterID != nil || cost.MinutesPerUnit != 0 || cost.LaborPerUnit != 0 || len(cost.FilamentMapping) != 0 || cost.LegacyFilamentID != nil || cost.AllowColorSubstitution {
 			return result, invalid("cost", "Provide only a manual unit cost for manual estimation")
 		}
 		result.UnitCostCents = cost.ManualUnitCents
@@ -146,20 +148,71 @@ func quickSaleSuggestedPrice(cost, quantity int64, target *PriceSelection) (*int
 
 func quickSaleProductionEstimate(tx *gorm.DB, model models.Model, quantity int64, cost QuickSaleEstimateInput) (Item, error) {
 	var result Item
-	var requirements []models.ModelMaterialRequirement
-	if err := tx.Where("model_id = ?", model.ID).Order("position").Find(&requirements).Error; err != nil {
+	materials, err := quickSaleMaterials(tx, model, cost)
+	if err != nil {
 		return result, err
 	}
-	missingCost := conflict("cost_unavailable", "Matching priced filaments and model material requirements are needed for an estimate")
-	if len(requirements) == 0 || len(cost.FilamentMapping) > models.MaxModelMaterialRequirements {
-		return result, missingCost
+	assumptions := Assumptions{
+		PrinterID: cost.PrinterID, PrintTimeMinutes: cost.MinutesPerUnit,
+		LaborHours: cost.LaborPerUnit, Materials: materials,
+	}
+	item := ItemInput{ModelID: &model.ID, Name: model.Name, Quantity: quantity, Assumptions: assumptions}
+	if !validItem(item) || cost.MinutesPerUnit < 1 {
+		return result, invalid("cost", "Enter a positive print time and valid production assumptions")
+	}
+	sources, err := captureSources(tx, assumptions)
+	if err != nil {
+		return result, err
+	}
+	estimate, err := calculate(item, sources)
+	return Item{ItemInput: item, Estimate: estimate, Sources: sources}, err
+}
+
+func unavailableQuickSaleMaterial() error {
+	return conflict("cost_unavailable", "Select a priced active filament for each model material")
+}
+
+func quickSaleFilament(tx *gorm.DB, id uuid.UUID) (models.Filament, error) {
+	var filament models.Filament
+	err := tx.Take(&filament, "id = ? AND archived = ? AND avg_price > ?", id, false, 0).Error
+	if err == gorm.ErrRecordNotFound {
+		err = unavailableQuickSaleMaterial()
+	}
+	return filament, err
+}
+
+func legacyQuickSaleMaterials(tx *gorm.DB, model models.Model, cost QuickSaleEstimateInput) ([]MaterialInput, error) {
+	if model.IsMulticolor || !models.ValidModelMaterialGrams(model.MaterialWeight) || model.MaterialWeight <= 0 ||
+		!models.ValidModelMaterialGrams(model.WasteMaterial) || len(cost.FilamentMapping) != 0 ||
+		cost.LegacyFilamentID == nil || *cost.LegacyFilamentID == uuid.Nil || cost.AllowColorSubstitution {
+		return nil, conflict("cost_unavailable", "Choose a priced filament for the saved weight or add a model material breakdown")
+	}
+	filament, err := quickSaleFilament(tx, *cost.LegacyFilamentID)
+	if err != nil {
+		return nil, err
+	}
+	return []MaterialInput{{
+		FilamentID: filament.ID, WeightG: model.MaterialWeight + model.WasteMaterial, WasteG: &model.WasteMaterial,
+	}}, nil
+}
+
+func quickSaleMaterials(tx *gorm.DB, model models.Model, cost QuickSaleEstimateInput) ([]MaterialInput, error) {
+	var requirements []models.ModelMaterialRequirement
+	if err := tx.Where("model_id = ?", model.ID).Order("position").Find(&requirements).Error; err != nil {
+		return nil, err
+	}
+	if len(requirements) == 0 {
+		return legacyQuickSaleMaterials(tx, model, cost)
+	}
+	if cost.LegacyFilamentID != nil || len(cost.FilamentMapping) > models.MaxModelMaterialRequirements {
+		return nil, invalid("cost", "Use the model material breakdown for this model")
 	}
 	summary, err := models.SummarizeModelMaterials(requirements)
 	if err != nil || summary.PartWeightG <= 0 {
-		return result, missingCost
+		return nil, unavailableQuickSaleMaterial()
 	}
 
-	assumptions := Assumptions{PrinterID: cost.PrinterID, PrintTimeMinutes: cost.MinutesPerUnit, LaborHours: cost.LaborPerUnit}
+	var materials []MaterialInput
 	positions := map[uuid.UUID]int{}
 	filaments := map[uuid.UUID]models.Filament{}
 	mapped := 0
@@ -174,30 +227,27 @@ func quickSaleProductionEstimate(tx *gorm.DB, model models.Model, quantity int64
 		mapped++
 		id := cost.FilamentMapping[requirement.ID]
 		if id == uuid.Nil {
-			return result, missingCost
+			return nil, unavailableQuickSaleMaterial()
 		}
 		filament, found := filaments[id]
 		if !found {
-			err := tx.Take(&filament, "id = ? AND archived = ?", id, false).Error
+			filament, err = quickSaleFilament(tx, id)
 			if err != nil {
-				if err == gorm.ErrRecordNotFound {
-					return result, missingCost
-				}
-				return result, err
+				return nil, err
 			}
 			filaments[id] = filament
 		}
 		if !strings.EqualFold(strings.TrimSpace(filament.Type), strings.TrimSpace(requirement.MaterialType)) ||
-			(requirement.Color != "" && !strings.EqualFold(strings.TrimSpace(filament.Color), strings.TrimSpace(requirement.Color))) {
-			return result, missingCost
+			(!cost.AllowColorSubstitution && requirement.Color != "" && !strings.EqualFold(strings.TrimSpace(filament.Color), strings.TrimSpace(requirement.Color))) {
+			return nil, unavailableQuickSaleMaterial()
 		}
 		position, exists := positions[id]
 		if !exists {
-			positions[id] = len(assumptions.Materials)
-			assumptions.Materials = append(assumptions.Materials, MaterialInput{FilamentID: id, WeightG: weight, WasteG: requirement.WasteWeightG})
+			positions[id] = len(materials)
+			materials = append(materials, MaterialInput{FilamentID: id, WeightG: weight, WasteG: requirement.WasteWeightG})
 			continue
 		}
-		material := &assumptions.Materials[position]
+		material := &materials[position]
 		material.WeightG += weight
 		if material.WasteG != nil || requirement.WasteWeightG != nil {
 			material.WasteG = addQuickSaleWaste(material.WasteG, requirement.WasteWeightG)
@@ -205,23 +255,9 @@ func quickSaleProductionEstimate(tx *gorm.DB, model models.Model, quantity int64
 	}
 
 	if mapped != len(cost.FilamentMapping) {
-		return result, missingCost
+		return nil, unavailableQuickSaleMaterial()
 	}
-	item := ItemInput{ModelID: &model.ID, Name: model.Name, Quantity: quantity, Assumptions: assumptions}
-	if !validItem(item) || cost.MinutesPerUnit < 1 {
-		return result, invalid("cost", "Enter a positive print time and valid production assumptions")
-	}
-	sources, err := captureSources(tx, assumptions)
-	if err != nil {
-		return result, err
-	}
-	for _, filament := range sources.Materials {
-		if filament.PricePerKg <= 0 {
-			return result, missingCost
-		}
-	}
-	estimate, err := calculate(item, sources)
-	return Item{ItemInput: item, Estimate: estimate, Sources: sources}, err
+	return materials, nil
 }
 
 func addQuickSaleWaste(a, b *float64) *float64 {

@@ -382,3 +382,80 @@ func TestQuickSaleRestoresSchema21WithoutPricing(t *testing.T) {
 		t.Fatal(finance)
 	}
 }
+
+func TestQuickSalePricesExplicitFilamentChoices(t *testing.T) {
+	router, db := setupDesktopTestRouter(t)
+	legacyOrderRequest[map[string]bool](t, router, "PUT", "/features", map[string]bool{"sales_orders": true}, 200)
+	red := models.Filament{Brand: "Synthetic", Type: "PLA", Color: "Red", AvgPrice: 50}
+	badType := models.Filament{Brand: "Synthetic", Type: "PETG", Color: "Blue", AvgPrice: 50}
+	unpriced := models.Filament{Brand: "Synthetic", Type: "PLA", Color: "Blue"}
+	archived := models.Filament{Brand: "Former", Type: "PLA", Color: "Blue", AvgPrice: 50, Archived: true}
+	for _, filament := range []*models.Filament{&red, &badType, &unpriced, &archived} {
+		if err := db.Create(filament).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	structured := requestModel(t, router, "POST", "/models", gin.H{
+		"name": "Structured model", "print_time": 15,
+		"material_requirements": []gin.H{{"material_type": "PLA", "color": "Blue", "part_weight_g": 100, "waste_weight_g": 0}},
+	}, 201)
+	legacy := requestModel(t, router, "POST", "/models", gin.H{
+		"name": "Older model", "print_time": 15, "material_weight": 100, "waste_material": 5,
+	}, 201)
+	multi := requestModel(t, router, "POST", "/models", gin.H{
+		"name": "Older multicolor model", "print_time": 15, "material_weight": 100, "is_multicolor": true,
+	}, 201)
+
+	path := quickSales + "/estimate"
+	structuredInput := budget.QuickSaleEstimateRequest{ModelID: structured.ID, Quantity: 1, Cost: budget.QuickSaleEstimateInput{
+		Source: "model", MinutesPerUnit: 15, FilamentMapping: map[uuid.UUID]uuid.UUID{structured.MaterialRequirements[0].ID: red.ID},
+	}}
+	businessRequest[apiResponse](t, router, "POST", path, structuredInput, 409)
+	structuredInput.Cost.AllowColorSubstitution = true
+	quote := businessRequest[budget.QuickSaleEstimateResult](t, router, "POST", path, structuredInput, 200)
+	if quote.Production.Assumptions.Materials[0].FilamentID != red.ID {
+		t.Fatal("the estimate did not use the chosen color")
+	}
+	for _, rejected := range []uuid.UUID{badType.ID, unpriced.ID, archived.ID} {
+		structuredInput.Cost.FilamentMapping[structured.MaterialRequirements[0].ID] = rejected
+		businessRequest[apiResponse](t, router, "POST", path, structuredInput, 409)
+	}
+
+	input := budget.QuickSaleEstimateRequest{ModelID: legacy.ID, Quantity: 2, Cost: budget.QuickSaleEstimateInput{
+		Source: "model", MinutesPerUnit: 15,
+	}}
+	businessRequest[apiResponse](t, router, "POST", path, input, 409)
+	input.Cost.LegacyFilamentID = &red.ID
+	preview := businessRequest[budget.QuickSaleEstimateResult](t, router, "POST", path, input, 200)
+	assumptions := preview.Production.Assumptions.Materials
+	if len(assumptions) != 1 || assumptions[0].FilamentID != red.ID ||
+		assumptions[0].WeightG != 105 || assumptions[0].WasteG == nil || *assumptions[0].WasteG != 5 {
+		t.Fatalf("legacy cost did not use the full saved weight: %+v", assumptions)
+	}
+	input.ModelID = multi.ID
+	businessRequest[apiResponse](t, router, "POST", path, input, 409)
+
+	command := budget.QuickSaleCommand{
+		Command: budget.Command{OperationID: uuid.New()}, Reference: "Chosen filament sale", ModelID: legacy.ID,
+		Quantity: input.Quantity, UnitPriceCents: 1000, Cost: &input.Cost, EstimateToken: preview.Token,
+	}
+	sale := businessRequest[budget.OrderRevision](t, router, "POST", quickSales, command, 201)
+	if sale.QuickSalePricing == nil || !reflect.DeepEqual(sale.QuickSalePricing.Production.Assumptions.Materials, assumptions) {
+		t.Fatal("confirmation did not retain the chosen material cost")
+	}
+	unchanged := requestModel(t, router, "GET", "/models/"+legacy.ID.String(), nil, 200)
+	if len(unchanged.MaterialRequirements) != 0 || unchanged.MaterialWeight != 100 || unchanged.WasteMaterial != 5 {
+		t.Fatal("pricing changed the saved model materials")
+	}
+	archive := performRequest(t, router, "GET", "/desktop-data/export", nil)
+	target, _ := setupDesktopTestRouter(t)
+	if archive.Code != 200 {
+		t.Fatal(archive.Body.String())
+	}
+	if restored := performMultipartFileRequest(t, target, "POST", "/desktop-data/import", "file", "sample.zip", archive.Body.Bytes()); restored.Code != 200 {
+		t.Fatal(restored.Body.String())
+	}
+	if replay := businessRequest[budget.OrderRevision](t, target, "POST", quickSales, command, 201); !reflect.DeepEqual(sale, replay) {
+		t.Fatal("restore changed the chosen material or retry identity")
+	}
+}

@@ -122,7 +122,7 @@ async function exerciseQuickSale(page) {
       ...options,
       body: JSON.stringify({
         name: 'Synthetic clamp', print_time: 30,
-        material_requirements: [{ material_type: 'PLA', color: 'Forest', part_weight_g: 100, waste_weight_g: 0 }],
+        material_requirements: [{ material_type: 'PLA', color: 'Deep Green', part_weight_g: 100, waste_weight_g: 0 }],
       }),
     });
     return { filament: filament.status, model: model.status };
@@ -141,13 +141,16 @@ async function exerciseQuickSale(page) {
   await page.getByRole('checkbox', { name: 'Estimate cost and price (optional)' }).check();
   await expect(page.getByText(/saved print time of 30 min per unit/)).toBeVisible();
   await expect(page.getByLabel('Print minutes per unit')).toBeHidden();
+  const picker = page.getByRole('combobox', { name: 'Filament for PLA — Deep Green' });
+  await picker.fill('Forest');
+  await page.getByRole('option', { name: /Forest.*€50.00/ }).click();
   await page.getByLabel('Target (%)').fill('40');
   const preview = page.waitForResponse(response => response.url().endsWith('/quick-sales/estimate'));
   await page.getByRole('button', { name: 'Calculate estimate' }).click();
   const response = await preview;
   expect(response.status()).toBe(200);
   expect(response.request().postDataJSON().cost).toMatchObject({
-    source: 'model', minutes_per_unit: 30, target: { mode: 'margin', value: 4000 },
+    source: 'model', minutes_per_unit: 30, target: { mode: 'margin', value: 4000 }, allow_color_substitution: true,
   });
   const quote = await response.json();
   expect(quote.unit_cost_cents).toBeGreaterThanOrEqual(500);

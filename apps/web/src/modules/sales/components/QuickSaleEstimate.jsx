@@ -9,11 +9,12 @@ import { getMaterials } from '../../../services/inventoryService';
 import { getModel } from '../../../services/modelService';
 import { getPrinters } from '../../../services/printerService';
 import { formatCurrencyFromCents, formatPercentage } from '../../../utils/formatters';
-import { estimateRunMaterials } from '../../../utils/productionEstimates';
 import { saveRecord } from '../services/businessService';
 import { parseHundredths } from '../utils/moneyInput';
 import { numberField } from '../utils/businessValidation';
 import { EntityField, Field } from './BusinessFields';
+import { quickSaleFilamentChoices, quickSaleFilamentInputs } from '../utils/quickSaleFilaments';
+import QuickSaleFilaments from './QuickSaleFilaments';
 
 const maxMinutes = 1_000_000;
 
@@ -45,7 +46,7 @@ const schema = yup.object({
   printer: yup.string().transform(value => value || undefined).uuid(),
 });
 
-function ModelAssumptions({ model, control, register, errors, timeOverride, onMapping, invalidate }) {
+function ModelAssumptions({ model, quantity, control, register, errors, timeOverride, onMapping, invalidate }) {
   const { t } = useTranslation();
   const load = useCallback(async () => {
     const [product, filaments, materials, printers] = await Promise.all([
@@ -55,6 +56,15 @@ function ModelAssumptions({ model, control, register, errors, timeOverride, onMa
     return { product, filaments, stock, printers };
   }, [model]);
   const { data, loading, error, refetch } = useApi(load);
+  const [selections, setSelections] = useState({});
+  const choices = data ? quickSaleFilamentChoices(data, quantity, selections) : [];
+  const requiredChoices = choices.filter(choice => !choice.suggested);
+  const optionalChoices = choices.filter(choice => choice.suggested && choice.options.length > 1);
+  const canEstimate = choices.length > 0 && choices.every(choice => choice.value);
+  function selectFilament(key, value) {
+    setSelections(previous => ({ ...previous, [key]: value }));
+    invalidate();
+  }
 
   const minutes = validPrintMinutes(data?.product.print_time);
   const overriddenMinutes = validPrintMinutes(Number(timeOverride));
@@ -64,7 +74,9 @@ function ModelAssumptions({ model, control, register, errors, timeOverride, onMa
   return <>
     {loading && <p role="status" className="text-sm sm:col-span-2">{t('business.quickLoadingCost')}</p>}
     {error && <button type="button" className="page-action page-action-secondary sm:col-span-2" onClick={() => { invalidate(); refetch(); }}>{t('business.quickRetryCost')}</button>}
-    {data && <>
+    {data && !loading && !error && <>
+      {choices.length === 0 && <p className="text-sm ui-text-secondary sm:col-span-2">{t('business.quickMissingBreakdown')}</p>}
+      <QuickSaleFilaments choices={requiredChoices} onSelect={selectFilament} />
       <p className="text-sm ui-text-secondary sm:col-span-2">
         {overriddenMinutes ? t('business.quickOverrideMinutes', { minutes: overriddenMinutes })
           : minutes ? t('business.quickSavedMinutes', { minutes }) : t('business.quickMissingMinutes')}
@@ -73,6 +85,7 @@ function ModelAssumptions({ model, control, register, errors, timeOverride, onMa
       <details className="text-sm sm:col-span-2" open={errors.minutes || errors.labor || errors.printer ? true : undefined}>
         <summary className="cursor-pointer ui-text-secondary">{t('business.quickCostSettings')}</summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <QuickSaleFilaments choices={optionalChoices} onSelect={selectFilament} />
           {minutes && minutesField}
           <EntityField control={control} label="quickPrinter" name="printer" onSelect={invalidate} error={errors.printer} options={[
             ['', t('business.quickAppCosts')], ...data.printers.map(printer => [printer.id, printer.name]),
@@ -81,7 +94,7 @@ function ModelAssumptions({ model, control, register, errors, timeOverride, onMa
           <p className="ui-text-secondary sm:col-span-2">{t('business.quickModelAssumptions')}</p>
         </div>
       </details>
-      <button type="button" className="page-action page-action-secondary justify-self-start" onClick={() => onMapping(data)}>
+      <button type="button" className="page-action page-action-secondary justify-self-start" disabled={!canEstimate} onClick={() => onMapping(data.product, quickSaleFilamentInputs(choices))}>
         {t('business.quickPreview')}
       </button>
     </>}
@@ -110,20 +123,17 @@ export default function QuickSaleEstimate({ context, quote, onQuote, onApply, fi
   }
 
   const field = name => register(name, { onChange: invalidate });
-  const preview = data => handleSubmit(async values => {
+  const preview = (product, materialInputs) => handleSubmit(async values => {
     const cost = { source: values.source };
     if (values.target) cost.target = { mode: values.target, value: values.rate };
     if (values.source === 'manual') cost.manual_unit_cents = values.manual;
     else {
-      const minutes = values.minutes ?? validPrintMinutes(data.product.print_time);
+      const minutes = values.minutes ?? validPrintMinutes(product.print_time);
       if (minutes === undefined) {
         setFieldError('minutes', { type: 'required' }, { shouldFocus: true });
         return;
       }
-      const rows = estimateRunMaterials([{ model_id: model, planned: quantity }], [data.product], data.filaments, data.stock);
-      cost.filament_mapping = Object.fromEntries(rows.flatMap(row => row.filament_id
-        ? row._sources.filter(item => item.requirementID).map(item => [item.requirementID, row.filament_id]) : []));
-      Object.assign(cost, { minutes_per_unit: minutes, labor_hours_per_unit: values.labor, printer_id: values.printer });
+      Object.assign(cost, materialInputs, { minutes_per_unit: minutes, labor_hours_per_unit: values.labor, printer_id: values.printer });
     }
     const request = ++attempt.current;
     onQuote(null);
@@ -159,8 +169,8 @@ export default function QuickSaleEstimate({ context, quote, onQuote, onApply, fi
         ['margin', t('business.quickMargin')], ['markup', t('business.quickMarkup')], ['', t('business.quickCostOnly')],
       ]} />
       {target && <Field label="quickTargetRate" error={errors.rate} inputMode="decimal" {...field('rate')} />}
-      {source === 'model' ? <ModelAssumptions model={model} control={control} register={field} errors={errors}
-        timeOverride={timeOverride} invalidate={invalidate} onMapping={data => preview(data)()} /> :
+      {source === 'model' ? <ModelAssumptions model={model} quantity={quantity} control={control} register={field} errors={errors}
+        timeOverride={timeOverride} invalidate={invalidate} onMapping={(product, choices) => preview(product, choices)()} /> :
         <button type="button" className="page-action page-action-secondary self-end justify-self-start" onClick={() => preview()()}>
           {t('business.quickPreview')}
         </button>}

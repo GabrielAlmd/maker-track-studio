@@ -29,11 +29,18 @@ assumptions** to override the saved time, add labor hours or select a printer
 profile.
 
 Quick Sale uses the same filament suggestions as production planning and the
-budget cost engine for material, waste, power, wear and labor. The estimate
-multiplies the rounded unit cost by quantity. Enter a manual unit cost for batch
-economics or when model requirements, a compatible filament mapping or prices
-are missing.
-Use the manual cost to account for additional expenses.
+budget cost engine for material, waste, power, wear and labor. When there is no
+clear match, choose an active filament with a price for each material. The
+picker shows price per kilogram and allows another color of the same material.
+Automatic suggestions still use the model’s saved color when one is specified.
+
+An older model with a saved total weight can use one explicitly selected filament
+to price that full weight for the sale. This choice keeps the saved model as it
+is. Older models marked multicolor still need a structured material breakdown
+or manual cost. Choose **Manual cost** when no priced filament is available,
+or to account for batch economics or additional expenses.
+
+The estimate multiplies the rounded unit cost by quantity.
 
 Current finished stock lots provide verified accepted quantities. The production
 records lack an immutable total cost attributed to each lot. Live filament
@@ -71,9 +78,12 @@ and a `cost` object. Provide one of:
 - `source: "model"` for made-to-order, integer `minutes_per_unit`,
   optional `labor_hours_per_unit` and `printer_id`, and a `filament_mapping`
   object keyed by material requirement UUID with the selected filament UUID
-  as its value. Each nonzero weight must map to an active compatible filament
-  with a positive price. Budget estimate limits apply, including 1,000,000
-  units and 20 distinct filaments for a model estimate.
+  as its value. Each nonzero weight must map to an active filament of the same
+  material type with a positive price. Set `allow_color_substitution: true` to
+  use the price of a selected alternative color. For older models with only
+  aggregate weights and no multicolor flag, pass an explicit `legacy_filament_id`
+  instead of a mapping. Budget estimate limits apply, including 1,000,000 units
+  and 20 distinct filaments for a model estimate.
 
 An optional `cost.target` object contains `mode` (`margin` or `markup`)
 and nonnegative basis-point `value` (4000 represents 40%). Margin must be
