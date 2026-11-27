@@ -1,3 +1,6 @@
+import PurchaseDetailsFields from '../components/PurchaseDetailsFields';
+import ReorderLink from '../components/ReorderLink';
+import { purchaseDetailsSchema } from '../utils/purchaseDetails';
 import PageHeader from '../components/ui/PageHeader';
 import { EmptyState, InlineError, TableSkeleton } from '../components/ui/PageState';
 import { useCallback, useState } from 'react';
@@ -26,6 +29,7 @@ import { VALUE_FALLBACKS, formatCurrency, formatDate, formatNumber } from '../ut
 import FilamentSelect from '../components/FilamentSelect';
 
 const purchaseSchema = (t) => yup.object({
+  ...purchaseDetailsSchema(t),
   filament_id: yup.string().required(t('validation.filamentRequired')),
   price: yup
     .number()
@@ -55,6 +59,9 @@ function PurchaseModal({ purchase, filaments, onClose, onSaved }) {
       ? {
           filament_id: purchase.filament_id,
           price: purchase.price,
+          supplier: purchase.supplier ?? '',
+          supplier_reference: purchase.supplier_reference ?? '',
+          purchase_url: purchase.purchase_url ?? '',
           amount: purchase.amount,
           purchase_date: format(new Date(purchase.purchase_date), 'yyyy-MM-dd'),
         }
@@ -84,7 +91,7 @@ function PurchaseModal({ purchase, filaments, onClose, onSaved }) {
   };
 
   return (
-    <Modal title={t(isEdit ? 'purchases.edit' : 'purchases.new')} onClose={onClose}>
+    <Modal title={t(isEdit ? 'purchases.edit' : 'purchases.new')} onClose={onClose} size="wide">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {submitError && <p className="page-form-error" role="alert">{submitError}</p>}
           <div>
@@ -106,31 +113,40 @@ function PurchaseModal({ purchase, filaments, onClose, onSaved }) {
               <p className="ui-text-danger text-xs mt-1">{errors.filament_id.message}</p>
             )}
           </div>
-          <div>
-            <label className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.price')}</label>
-            <input
-              type="number"
-              step="0.01"
-              {...register('price')}
-              className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
-              placeholder="e.g. 24.99"
-            />
-            {errors.price && <p className="ui-text-danger text-xs mt-1">{errors.price.message}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="purchase-price" className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.price')}</label>
+              <input
+                type="number"
+                step="0.01"
+                id="purchase-price"
+                min="0.01"
+                max={Number.MAX_SAFE_INTEGER}
+                {...register('price')}
+                className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
+                placeholder="e.g. 24.99"
+              />
+              {errors.price && <p className="ui-text-danger text-xs mt-1">{errors.price.message}</p>}
+            </div>
+            <div>
+              <label htmlFor="purchase-amount" className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.amount')}</label>
+              <input
+                type="number"
+                step="0.001"
+                id="purchase-amount"
+                min="0.001"
+                max={Number.MAX_SAFE_INTEGER}
+                {...register('amount')}
+                className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
+                placeholder="e.g. 1"
+              />
+              {errors.amount && <p className="ui-text-danger text-xs mt-1">{errors.amount.message}</p>}
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.amount')}</label>
+            <label htmlFor="purchase-date" className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.purchaseDate')}</label>
             <input
-              type="number"
-              step="0.001"
-              {...register('amount')}
-              className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
-              placeholder="e.g. 1"
-            />
-            {errors.amount && <p className="ui-text-danger text-xs mt-1">{errors.amount.message}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium ui-text-secondary mb-1">{t('purchases.purchaseDate')}</label>
-            <input
+              id="purchase-date"
               type="date"
               {...register('purchase_date')}
               className="w-full border ui-border-default rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ui-focus-ring"
@@ -139,6 +155,7 @@ function PurchaseModal({ purchase, filaments, onClose, onSaved }) {
               <p className="ui-text-danger text-xs mt-1">{errors.purchase_date.message}</p>
             )}
           </div>
+          <PurchaseDetailsFields register={register} errors={errors} />
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -288,7 +305,7 @@ function Purchases() {
                   return (
                     <tr key={p.id} className="hover:ui-surface-hover">
                       <td className="w-12 px-6 py-4"><RowSelectionCheckbox bulk={bulk} id={p.id} label={fil ? `${fil.brand} ${fil.type} — ${fil.color}` : p.id} /></td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm ui-text-primary">
+                      <td className="px-6 py-4 text-sm ui-text-primary">
                         {fil ? (
                           <span>
                             {fil.brand}{' '}
@@ -299,6 +316,10 @@ function Purchases() {
                         ) : (
                           <span className="ui-text-muted italic">{t('common.unknown')}</span>
                         )}
+                        {(p.supplier || p.supplier_reference) && <div className="text-xs ui-text-muted break-words">
+                          {[p.supplier, p.supplier_reference].filter(Boolean).join(' · ')}
+                        </div>}
+                        <ReorderLink url={p.purchase_url} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm ui-text-secondary">
                         {formatCurrency(p.price)}

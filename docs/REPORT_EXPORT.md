@@ -46,3 +46,9 @@ Catalogues without an event date (`models`, `model_material_requirements`, `fila
 ## Compatibility
 
 Consumers should select files by name and columns by header. Future incompatible CSV changes require a new `schema_version`; archive structure changes require a new `format_version`. Full export never runs reporting calculations and does not modify the source database. The implementation reads a consistent SQLite snapshot and writes a temporary ZIP before presenting the file.
+
+
+The full CSV archive appends `product_url` to `filaments.csv` and
+`supplier`, `supplier_reference` and `purchase_url` to
+`filament_purchases.csv`. Other columns keep their existing positions. Supplier
+text uses the same spreadsheet formula escaping as other exported text.

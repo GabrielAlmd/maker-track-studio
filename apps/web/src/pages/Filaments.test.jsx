@@ -110,6 +110,7 @@ describe('Filaments page', () => {
     const personalScoreInput = spinButtons[1];
     await user.clear(personalScoreInput);
     await user.type(personalScoreInput, '4');
+    await user.type(screen.getByLabelText('Product URL (optional)'), ' https://catalog.example.test/green ');
 
     await user.click(screen.getByRole('button', { name: /create filament/i }));
 
@@ -120,6 +121,7 @@ describe('Filaments page', () => {
         color: 'Green',
         avg_price: 24.5,
         personal_score: 4,
+        product_url: 'https://catalog.example.test/green',
       });
     });
   });

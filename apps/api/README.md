@@ -113,3 +113,21 @@ See [INV-03 production lifecycle](../../docs/PRODUCTION_LIFECYCLE.md) for the
 versioned aggregate endpoints, retry/revision contract and schema 6 migration.
 
 Core Inventory exposes adjustment, audit history and availability endpoints in both runtimes. See the [Inventory API and quantity contract](../../docs/INVENTORY_LEDGER.md).
+
+
+## Filament purchasing metadata
+
+The existing Filaments endpoints accept optional `product_url`. The Inventory
+Materials response also includes a saved catalog URL. Single purchase create
+and update and each batch item accept optional `supplier`,
+`supplier_reference` and `purchase_url`. A batch item's `new_filament`
+accepts `product_url` as well. Batch inline creation returns HTTP 409 when the
+trimmed brand, type and color match a catalog row. Select that row by UUID and
+keep the purchase metadata on the purchase item.
+
+Text fields are trimmed and limited to 200 characters. URLs must be absolute
+HTTP or HTTPS URLs without embedded credentials and are limited to 2,048
+characters. Omitted or null fields on updates keep their saved values; an empty
+string clears the field. Responses omit empty metadata. The existing batch
+transaction commits purchase metadata and stock movements together. SQLite
+backup schema 23 carries these fields in the core tables.

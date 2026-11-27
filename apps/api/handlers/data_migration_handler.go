@@ -56,12 +56,16 @@ var migrationSections = []migrationSectionDefinition{
 		{Key: "avg_price", Label: "Average price per kg", Required: true, Aliases: []string{"average_price", "price_per_kg", "price"}, Example: "24.99"},
 		{Key: "personal_score", Label: "Personal score", Aliases: []string{"rating", "score"}, Example: "4"},
 		{Key: "times_used", Label: "Times used", Aliases: []string{"uses"}, Example: "0"},
+		{Key: "product_url", Label: "Product URL"},
 		{Key: "times_purchased", Label: "Times purchased", Aliases: []string{"purchases"}, Example: "1"},
 	}},
 	{Key: "purchases", Label: "Purchases", Fields: []migrationField{
 		{Key: "filament", Label: "Filament", Required: true, Aliases: []string{"filament_name", "material"}, Example: "Bambu Lab | PLA | Black"},
 		{Key: "price", Label: "Price", Required: true, Aliases: []string{"total_price", "cost"}, Example: "24.99"},
 		{Key: "amount", Label: "Amount (kg)", Required: true, Aliases: []string{"amount_kg", "weight_kg", "quantity"}, Example: "1"},
+		{Key: "supplier", Label: "Supplier"},
+		{Key: "supplier_reference", Label: "Supplier reference"},
+		{Key: "purchase_url", Label: "Purchase URL"},
 		{Key: "purchase_date", Label: "Purchase date", Required: true, Aliases: []string{"date", "bought_at"}, Example: "2026-10-02"},
 	}},
 	{Key: "models", Label: "Models", Fields: []migrationField{
@@ -149,6 +153,7 @@ type migrationPreviewResponse struct {
 }
 
 type preparedPurchase struct {
+	Details    purchaseDetailsInput
 	ID         uuid.UUID
 	FilamentID uuid.UUID
 	Price      float64
@@ -640,7 +645,11 @@ func validateMigrationRow(section string, rowNumber int, values map[string]strin
 			}
 		}
 		used, purchased := integer("times_used", 0, true), integer("times_purchased", 0, true)
-		filament := models.Filament{ID: uuid.New(), Brand: brand, Type: filamentType, Color: color, AvgPrice: price, PersonalScore: score, TimesUsed: used, TimesPurchased: purchased}
+		productURL := values["product_url"]
+		if !optionalPurchaseURL(&productURL) {
+			issue("product_url", "url", "Enter a valid HTTP or HTTPS product URL")
+		}
+		filament := models.Filament{ProductURL: productURL, ID: uuid.New(), Brand: brand, Type: filamentType, Color: color, AvgPrice: price, PersonalScore: score, TimesUsed: used, TimesPurchased: purchased}
 		key := filamentLookupKey(brand, filamentType, color)
 		row.prepared, duplicate = filament, lookups.filaments[key]
 		if len(row.Issues) == 0 {
@@ -678,7 +687,17 @@ func validateMigrationRow(section string, rowNumber int, values map[string]strin
 		if err != nil {
 			issue("purchase_date", "date", "Enter a valid date")
 		}
-		prepared := preparedPurchase{ID: uuid.New(), Price: price, Amount: amount, Date: date}
+		supplier, supplierRef, purchaseURL := values["supplier"], values["supplier_reference"], values["purchase_url"]
+		for field, value := range map[string]*string{"supplier": &supplier, "supplier_reference": &supplierRef} {
+			if !optionalText(value, 200) {
+				issue(field, "text", "Enter up to 200 characters without control characters")
+			}
+		}
+		if !optionalPurchaseURL(&purchaseURL) {
+			issue("purchase_url", "url", "Enter a valid HTTP or HTTPS purchase URL")
+		}
+		details := purchaseDetailsInput{Supplier: &supplier, SupplierRef: &supplierRef, PurchaseURL: &purchaseURL}
+		prepared := preparedPurchase{Details: details, ID: uuid.New(), Price: price, Amount: amount, Date: date}
 		if len(filamentIDs) == 1 {
 			prepared.FilamentID = filamentIDs[0]
 		}
@@ -877,7 +896,7 @@ func commitMigration(db *gorm.DB, preview migrationPreviewResponse) (map[string]
 					if row.Action == "update" {
 						value.ID = row.existing
 						updates := map[string]any{"brand": value.Brand, "type": value.Type, "color": value.Color, "avg_price": value.AvgPrice}
-						for key, fieldValue := range map[string]any{"personal_score": value.PersonalScore, "times_used": value.TimesUsed, "times_purchased": value.TimesPurchased} {
+						for key, fieldValue := range map[string]any{"personal_score": value.PersonalScore, "times_used": value.TimesUsed, "times_purchased": value.TimesPurchased, "product_url": value.ProductURL} {
 							if row.provided[key] {
 								updates[key] = fieldValue
 							}
@@ -916,12 +935,19 @@ func commitMigration(db *gorm.DB, preview migrationPreviewResponse) (map[string]
 					}
 				case preparedPurchase:
 					purchase := models.FilamentPurchase{ID: value.ID, FilamentID: value.FilamentID, Price: value.Price, Amount: value.Amount, PurchaseDate: value.Date}
+					value.Details.apply(&purchase)
 					if row.Action == "update" {
 						var previous models.FilamentPurchase
 						if err := tx.First(&previous, "id = ?", row.existing).Error; err != nil {
 							return err
 						}
-						if err := tx.Model(&models.FilamentPurchase{}).Where("id = ?", row.existing).Updates(map[string]any{"filament_id": value.FilamentID, "price": value.Price, "amount": value.Amount, "purchase_date": value.Date}).Error; err != nil {
+						updates := map[string]any{"filament_id": value.FilamentID, "price": value.Price, "amount": value.Amount, "purchase_date": value.Date}
+						for key, fieldValue := range map[string]string{"supplier": purchase.Supplier, "supplier_reference": purchase.SupplierReference, "purchase_url": purchase.PurchaseURL} {
+							if row.provided[key] {
+								updates[key] = fieldValue
+							}
+						}
+						if err := tx.Model(&models.FilamentPurchase{}).Where("id = ?", row.existing).Updates(updates).Error; err != nil {
 							return err
 						}
 						purchase.ID = row.existing

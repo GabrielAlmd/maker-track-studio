@@ -16,6 +16,7 @@ import (
 )
 
 type FilamentPurchaseInput struct {
+	purchaseDetailsInput
 	FilamentID   uuid.UUID `json:"filament_id" binding:"required"`
 	Price        float64   `json:"price" binding:"required,gt=0"`
 	Amount       float64   `json:"amount" binding:"required,gt=0"`
@@ -88,16 +89,9 @@ func GetFilamentPurchases(db *gorm.DB) gin.HandlerFunc {
 		}
 		dtoList := make([]dto.FilamentPurchaseDTO, 0)
 		for _, p := range purchases {
-			dtoList = append(dtoList, dto.FilamentPurchaseDTO{
-				ID:           p.ID,
-				FilamentID:   p.FilamentID,
-				Price:        p.Price,
-				Amount:       p.Amount,
-				PurchaseDate: p.PurchaseDate,
-				CreatedAt:    p.CreatedAt,
-				UpdatedAt:    p.UpdatedAt,
-				Filament:     &dto.FilamentDTO{Archived: p.Filament.Archived, ID: p.Filament.ID, Brand: p.Filament.Brand, Type: p.Filament.Type, Color: p.Filament.Color},
-			})
+			item := purchaseDTO(p)
+			item.Filament = &dto.FilamentDTO{Archived: p.Filament.Archived, ID: p.Filament.ID, Brand: p.Filament.Brand, Type: p.Filament.Type, Color: p.Filament.Color}
+			dtoList = append(dtoList, item)
 		}
 		if params.Enabled {
 			c.JSON(200, PageResponse[dto.FilamentPurchaseDTO]{Items: dtoList, Total: total, Page: params.Page, PageSize: params.PageSize})
@@ -127,16 +121,7 @@ func GetFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(404, gin.H{"error": "Filament purchase not found"})
 			return
 		}
-		dtoObj := dto.FilamentPurchaseDTO{
-			ID:           p.ID,
-			FilamentID:   p.FilamentID,
-			Price:        p.Price,
-			Amount:       p.Amount,
-			PurchaseDate: p.PurchaseDate,
-			CreatedAt:    p.CreatedAt,
-			UpdatedAt:    p.UpdatedAt,
-		}
-		c.JSON(200, dtoObj)
+		c.JSON(200, purchaseDTO(p))
 	}
 }
 
@@ -151,7 +136,7 @@ func GetFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 func CreateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input FilamentPurchaseInput
-		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) || !validPurchaseAmount(input.Amount) {
+		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) || !validPurchaseAmount(input.Amount) || !input.valid() {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
@@ -163,6 +148,7 @@ func CreateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
 		}
+		input.apply(&purchase)
 		if err := printerTransaction(db, func(tx *gorm.DB) error {
 			var filament models.Filament
 			if err := tx.First(&filament, "id = ?", input.FilamentID).Error; err != nil {
@@ -180,16 +166,7 @@ func CreateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(500, gin.H{"error": "Failed to create filament purchase"})
 			return
 		}
-		dtoObj := dto.FilamentPurchaseDTO{
-			ID:           purchase.ID,
-			FilamentID:   purchase.FilamentID,
-			Price:        purchase.Price,
-			Amount:       purchase.Amount,
-			PurchaseDate: purchase.PurchaseDate,
-			CreatedAt:    purchase.CreatedAt,
-			UpdatedAt:    purchase.UpdatedAt,
-		}
-		c.JSON(201, dtoObj)
+		c.JSON(201, purchaseDTO(purchase))
 	}
 }
 
@@ -215,7 +192,7 @@ func UpdateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		var input FilamentPurchaseInput
-		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) || !validPurchaseAmount(input.Amount) {
+		if err := c.ShouldBindJSON(&input); err != nil || math.IsInf(input.Price/input.Amount, 0) || math.IsNaN(input.Price/input.Amount) || !validPurchaseAmount(input.Amount) || !input.valid() {
 			c.JSON(400, gin.H{"error": "Invalid input"})
 			return
 		}
@@ -228,6 +205,7 @@ func UpdateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 				return err
 			}
 			previous := purchase
+			input.apply(&purchase)
 			purchase.FilamentID = input.FilamentID
 			purchase.Price = input.Price
 			purchase.Amount = input.Amount
@@ -243,16 +221,7 @@ func UpdateFilamentPurchase(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		dtoObj := dto.FilamentPurchaseDTO{
-			ID:           purchase.ID,
-			FilamentID:   purchase.FilamentID,
-			Price:        purchase.Price,
-			Amount:       purchase.Amount,
-			PurchaseDate: purchase.PurchaseDate,
-			CreatedAt:    purchase.CreatedAt,
-			UpdatedAt:    purchase.UpdatedAt,
-		}
-		c.JSON(200, dtoObj)
+		c.JSON(200, purchaseDTO(purchase))
 	}
 }
 

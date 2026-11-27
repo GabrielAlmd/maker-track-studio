@@ -13,13 +13,17 @@ import (
 	"gorm.io/gorm"
 )
 
+var errDuplicatePurchaseFilament = errors.New("filament already exists")
+
 type PurchaseFilamentInput struct {
-	Brand string `json:"brand" binding:"required,max=200"`
-	Type  string `json:"type" binding:"required,max=200"`
-	Color string `json:"color" binding:"required,max=200"`
+	ProductURL string `json:"product_url"`
+	Brand      string `json:"brand" binding:"required,max=200"`
+	Type       string `json:"type" binding:"required,max=200"`
+	Color      string `json:"color" binding:"required,max=200"`
 }
 
 type PurchaseLineInput struct {
+	purchaseDetailsInput
 	FilamentID  uuid.UUID              `json:"filament_id"`
 	NewFilament *PurchaseFilamentInput `json:"new_filament"`
 	Price       float64                `json:"price" binding:"required,gt=0"`
@@ -41,14 +45,14 @@ func CreateFilamentPurchaseBatch(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		for _, item := range input.Items {
-			if (item.FilamentID == uuid.Nil) == (item.NewFilament == nil) || math.IsInf(item.Price/item.Amount, 0) || !validPurchaseAmount(item.Amount) {
+			if (item.FilamentID == uuid.Nil) == (item.NewFilament == nil) || math.IsInf(item.Price/item.Amount, 0) || !validPurchaseAmount(item.Amount) || !item.valid() {
 				c.JSON(400, gin.H{"error": "Each line requires an existing or new filament and valid costs"})
 				return
 			}
 			if f := item.NewFilament; f != nil {
 				f.Brand, f.Type, f.Color = strings.TrimSpace(f.Brand), strings.TrimSpace(f.Type), strings.TrimSpace(f.Color)
-				if f.Brand == "" || f.Type == "" || f.Color == "" {
-					c.JSON(400, gin.H{"error": "Brand, type and color are required"})
+				if f.Brand == "" || f.Type == "" || f.Color == "" || !optionalPurchaseURL(&f.ProductURL) {
+					c.JSON(400, gin.H{"error": "New filament requires brand, type, color and a valid optional product URL"})
 					return
 				}
 			}
@@ -62,7 +66,17 @@ func CreateFilamentPurchaseBatch(db *gorm.DB) gin.HandlerFunc {
 					if err != nil {
 						return err
 					}
-					filament := models.Filament{Brand: brand, Type: f.Type, Color: f.Color, AvgPrice: item.Price / item.Amount, PersonalScore: 3}
+					var matches int64
+					if err := tx.Model(&models.Filament{}).Where(
+						"LOWER(TRIM(brand)) = LOWER(?) AND LOWER(TRIM(type)) = LOWER(?) AND LOWER(TRIM(color)) = LOWER(?)",
+						brand, f.Type, f.Color,
+					).Count(&matches).Error; err != nil {
+						return err
+					}
+					if matches > 0 {
+						return errDuplicatePurchaseFilament
+					}
+					filament := models.Filament{ProductURL: f.ProductURL, Brand: brand, Type: f.Type, Color: f.Color, AvgPrice: item.Price / item.Amount, PersonalScore: 3}
 					if err := tx.Create(&filament).Error; err != nil {
 						return err
 					}
@@ -74,16 +88,21 @@ func CreateFilamentPurchaseBatch(db *gorm.DB) gin.HandlerFunc {
 					}
 				}
 				p := models.FilamentPurchase{FilamentID: id, Price: item.Price, Amount: item.Amount, PurchaseDate: input.PurchaseDate}
+				item.apply(&p)
 				if err := tx.Create(&p).Error; err != nil {
 					return err
 				}
 				if err := syncPurchaseStock(tx, p, nil); err != nil {
 					return err
 				}
-				result = append(result, dto.FilamentPurchaseDTO{ID: p.ID, FilamentID: p.FilamentID, Price: p.Price, Amount: p.Amount, PurchaseDate: p.PurchaseDate, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt})
+				result = append(result, purchaseDTO(p))
 			}
 			return nil
 		})
+		if errors.Is(err, errDuplicatePurchaseFilament) {
+			c.JSON(409, gin.H{"error": "Select the existing filament for this brand, type and color"})
+			return
+		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(404, gin.H{"error": "Filament not found"})
 			return

@@ -1,3 +1,5 @@
+import PurchaseDetailsFields, { PurchaseDetailField } from './PurchaseDetailsFields';
+import { purchaseDetailsSchema, purchaseURLSchema } from '../utils/purchaseDetails';
 import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { getFilamentTypes } from '../services/filamentTypeService';
@@ -26,6 +28,8 @@ const newField = (label, t) => yup.string().when('is_new', {
 const batchSchema = (t) => yup.object({
   purchase_date: yup.string().required(t('validation.purchaseDateRequired')),
   items: yup.array().of(yup.object({
+    ...purchaseDetailsSchema(t),
+    product_url: purchaseURLSchema(t).when('is_new', { is: false, then: (field) => field.strip() }),
     filament_id: yup.string().when('is_new', {
       is: true,
       then: (field) => field.strip(),
@@ -60,9 +64,9 @@ export default function PurchaseBatchModal({ filaments, filamentsLoading, filame
     try {
       await createFilamentPurchaseBatch({
         purchase_date: new Date(data.purchase_date).toISOString(),
-        items: data.items.map(({ filament_id, is_new, brand, type, color, price, amount }) => ({
-          ...(is_new ? { new_filament: { brand, type, color } } : { filament_id }),
-          price, amount,
+        items: data.items.map(({ filament_id, is_new, brand, type, color, product_url, price, amount, ...details }) => ({
+          ...(is_new ? { new_filament: { brand, type, color, product_url } } : { filament_id }),
+          price, amount, ...details,
         })),
       });
       toast.success(t('purchases.saved'));
@@ -75,80 +79,87 @@ export default function PurchaseBatchModal({ filaments, filamentsLoading, filame
   if (managingTypes) return <FilamentTypesManager types={types || []} onClose={() => setManagingTypes(false)} onSaved={() => { setManagingTypes(false); refetchTypes(); }} />;
 
   return (
-    <Modal title={t('purchases.new')} onClose={close}>
+    <Modal title={t('purchases.new')} onClose={close} size="wide">
       <form onSubmit={handleSubmit(submit)} className="space-y-4">
         {filamentsLoading && <p role="status">{t('filaments.loading')}</p>}
         {filamentsError && <InlineError title={t('filaments.loadError')} message={filamentsError} onRetry={onRetryFilaments} />}
         <fieldset disabled={isSubmitting} className="space-y-4">
-          <p className="text-sm ui-text-secondary">{t('purchaseBatch.help')}</p>
+          {!items.some((item) => item.is_new) && <p className="text-sm ui-text-secondary">{t('purchaseBatch.help')}</p>}
           <label className="block text-sm font-medium ui-text-secondary">
-            {t('purchases.purchaseDate')}
+            <span className="mb-1 block">{t('purchases.purchaseDate')}</span>
             <input type="date" {...register('purchase_date')} className={inputClass} />
           </label>
           {errors.purchase_date && <p className="ui-text-danger text-xs">{errors.purchase_date.message}</p>}
           {fields.map((field, index) => (
-            <fieldset key={field.id} className="border ui-border-subtle rounded-md p-3 space-y-3">
+            <fieldset key={field.id} className="min-w-0 border ui-border-subtle rounded-md p-3 space-y-3">
               <legend className="text-sm font-medium px-1">{t('purchaseBatch.filamentNumber', { number: index + 1 })}</legend>
-              <div>
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <label htmlFor={`purchase-filament-${field.id}`} className="block text-sm font-medium ui-text-secondary">{t('purchases.filament')}</label>
+              {items[index]?.is_new ? (
+                <>
                   <button
                     type="button"
-                    onClick={() => {
-                      setValue(`items.${index}.filament_id`, '', { shouldDirty: true });
-                      setValue(`items.${index}.is_new`, true, { shouldDirty: true, shouldValidate: true });
-                    }}
-                    className="flex items-center gap-1 text-xs ui-text-primary-action hover:underline"
+                    onClick={() => setValue(`items.${index}.is_new`, false, { shouldDirty: true })}
+                    className="text-xs ui-text-primary-action hover:underline"
                   >
-                    <Plus className="h-3 w-3" /> {t('purchaseBatch.createFilament')}
+                    {t('purchaseBatch.selectExisting')}
                   </button>
-                </div>
-                <Controller
-                  name={`items.${index}.filament_id`}
-                  control={control}
-                  render={({ field: filamentField }) => (
-                    <FilamentSelect
-                      id={`purchase-filament-${field.id}`}
-                      {...filamentField} required={!items[index]?.is_new}
-                      onChange={(filamentId) => {
-                        filamentField.onChange(filamentId);
-                        setValue(`items.${index}.is_new`, false, { shouldDirty: true, shouldValidate: true });
-                      }}
-                      filaments={filaments}
-                      invalid={!!errors.items?.[index]?.filament_id}
-                    />
-                  )}
-                />
-              </div>
-              {items[index]?.is_new && (
-                <>
-                  <div>
-                    <label htmlFor={`purchase-brand-${field.id}`} className="block text-sm font-medium ui-text-secondary">{t('filaments.brand')}</label>
-                    <Controller name={`items.${index}.brand`} control={control} render={({ field: brandField }) => (
-                      <BrandSelect required id={`purchase-brand-${field.id}`} {...brandField} brands={brands || []} invalid={!!errors.items?.[index]?.brand} />
-                    )} />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor={`purchase-brand-${field.id}`} className="mb-1 block text-sm font-medium ui-text-secondary">{t('filaments.brand')}</label>
+                      <Controller name={`items.${index}.brand`} control={control} render={({ field: brandField }) => (
+                        <BrandSelect required id={`purchase-brand-${field.id}`} {...brandField} brands={brands || []} invalid={!!errors.items?.[index]?.brand} />
+                      )} />
+                    </div>
+                    <label className="block text-sm font-medium ui-text-secondary">
+                      <span className="mb-1 block">{t('filaments.color')}</span>
+                      <input {...register(`items.${index}.color`)} maxLength={200} className={inputClass} />
+                    </label>
                   </div>
-                  <label className="block text-sm font-medium ui-text-secondary">
-                    {t('filaments.color')}
-                    <input {...register(`items.${index}.color`)} maxLength={200} className={inputClass} />
-                  </label>
                   <div className="block text-sm font-medium ui-text-secondary">
                     <FilamentTypeSelect label={t('filaments.type')} control={control} name={`items.${index}.type`} types={types}
                       disabled={typesLoading || !!typesError} />
                   </div>
                   <FilamentTypeCatalog loading={typesLoading} error={typesError} onRetry={refetchTypes} onManage={() => setManagingTypes(true)} />
+                  <PurchaseDetailField name={`items.${index}.product_url`} label="productURL" register={register}
+                    error={errors.items?.[index]?.product_url} url />
                   <p className="text-xs ui-text-muted">{t('purchaseBatch.averageHelp')}</p>
                 </>
+              ) : (
+                <div>
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <label htmlFor={`purchase-filament-${field.id}`} className="block text-sm font-medium ui-text-secondary">{t('purchases.filament')}</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValue(`items.${index}.filament_id`, '', { shouldDirty: true });
+                        setValue(`items.${index}.is_new`, true, { shouldDirty: true });
+                      }}
+                      className="flex items-center gap-1 text-xs ui-text-primary-action hover:underline"
+                    >
+                      <Plus className="h-3 w-3" /> {t('purchaseBatch.createFilament')}
+                    </button>
+                  </div>
+                  <Controller
+                    name={`items.${index}.filament_id`}
+                    control={control}
+                    render={({ field: filamentField }) => (
+                      <FilamentSelect id={`purchase-filament-${field.id}`} {...filamentField} required
+                        filaments={filaments} invalid={!!errors.items?.[index]?.filament_id} />
+                    )}
+                  />
+                </div>
               )}
-              <label className="block text-sm font-medium ui-text-secondary">
-                {t('purchases.price')}
-                <input type="number" min="0.01" max={Number.MAX_SAFE_INTEGER} step="0.01" placeholder="e.g. 24.99" {...register(`items.${index}.price`)} className={inputClass} />
-              </label>
-              <label className="block text-sm font-medium ui-text-secondary">
-                {t('purchases.amount')}
-                <input type="number" min="0.001" max={Number.MAX_SAFE_INTEGER} step="0.001" placeholder="e.g. 1" {...register(`items.${index}.amount`)} className={inputClass} />
-              </label>
-              {Object.entries(errors.items?.[index] || {}).map(([name, error]) => <p key={name} role="alert" className="ui-text-danger text-xs">{error.message}</p>)}
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-sm font-medium ui-text-secondary">
+                  <span className="mb-1 block">{t('purchases.price')}</span>
+                  <input type="number" min="0.01" max={Number.MAX_SAFE_INTEGER} step="0.01" placeholder="e.g. 24.99" {...register(`items.${index}.price`)} className={inputClass} />
+                </label>
+                <label className="block text-sm font-medium ui-text-secondary">
+                  <span className="mb-1 block">{t('purchases.amount')}</span>
+                  <input type="number" min="0.001" max={Number.MAX_SAFE_INTEGER} step="0.001" placeholder="e.g. 1" {...register(`items.${index}.amount`)} className={inputClass} />
+                </label>
+              </div>
+              <PurchaseDetailsFields register={register} errors={errors.items?.[index]} prefix={`items.${index}.`} />
+              {Object.entries(errors.items?.[index] || {}).filter(([name]) => !['supplier', 'supplier_reference', 'purchase_url', 'product_url'].includes(name)).map(([name, error]) => <p key={name} role="alert" className="ui-text-danger text-xs">{error.message}</p>)}
               {fields.length > 1 && <button type="button" onClick={() => remove(index)} className="text-sm ui-text-danger">{t('purchaseBatch.removeFilament', { number: index + 1 })}</button>}
             </fieldset>
           ))}

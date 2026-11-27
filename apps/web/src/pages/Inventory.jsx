@@ -1,3 +1,4 @@
+import ReorderLink from '../components/ReorderLink';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -276,6 +277,7 @@ function MaterialDetails({ item, onClose, onSaved }) {
   return <Modal title={materialName(item)} onClose={onClose} size="wide">
     <div className="space-y-5">
       <MaterialStatus item={item} />
+      <ReorderLink url={item.product_url} />
       {tracked && !item.balance.verified && <p className="text-sm ui-text-muted">{t('inventory.recordedChanges', { weight: grams(item.balance.on_hand) })}</p>}
       <LifecycleControls item={item} onSaved={onSaved} />
       <ThresholdForm item={item} onSaved={onSaved} />

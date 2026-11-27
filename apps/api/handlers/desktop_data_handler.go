@@ -26,7 +26,7 @@ const (
 	desktopDataFormatVersion = 1
 	// RecoveryBackupDirectoryKey is supplied only by the owning runtime.
 	RecoveryBackupDirectoryKey = "maker-track-recovery-backup-directory"
-	desktopDataSchemaVersion   = 22
+	desktopDataSchemaVersion   = 23
 	desktopDataMaxImportSize   = 64 << 20
 )
 
@@ -159,6 +159,13 @@ func ImportDesktopData(db *gorm.DB, installed *modules.Registry) gin.HandlerFunc
 		}
 		if manifest.SchemaVersion >= 19 && !sourceDB.Migrator().HasColumn(&models.PrintRun{}, "estimated_time_minutes") {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Backup is missing production estimates"})
+			return
+		}
+		if manifest.SchemaVersion >= 23 && (!sourceDB.Migrator().HasColumn(&models.Filament{}, "product_url") ||
+			!sourceDB.Migrator().HasColumn(&models.FilamentPurchase{}, "purchase_url") ||
+			!sourceDB.Migrator().HasColumn(&models.FilamentPurchase{}, "supplier") ||
+			!sourceDB.Migrator().HasColumn(&models.FilamentPurchase{}, "supplier_reference")) {
+			c.JSON(400, gin.H{"error": "Backup is missing filament supplier fields"})
 			return
 		}
 		if manifest.SchemaVersion >= 21 && (!sourceDB.Migrator().HasColumn(&models.Filament{}, "warnings_disabled") || !sourceDB.Migrator().HasColumn(&models.Filament{}, "archived")) {
@@ -490,7 +497,11 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 	if err := sourceDB.Order("created_at asc").Find(&filaments).Error; err != nil {
 		return err
 	}
-	for _, filament := range filaments {
+	for i := range filaments {
+		filament := &filaments[i]
+		if !optionalPurchaseURL(&filament.ProductURL) {
+			return errors.New("Backup contains an invalid filament product URL")
+		}
 		if filament.StockThresholdMG < 0 || filament.StockThresholdMG > inventory.MaxQuantity {
 			return fmt.Errorf("invalid inventory threshold")
 		}
@@ -505,6 +516,13 @@ func importDesktopDataSnapshot(targetDB, sourceDB *gorm.DB, installed *modules.R
 	}
 	if err := sourceDB.Order("created_at asc").Find(&filamentPurchases).Error; err != nil {
 		return err
+	}
+	for i := range filamentPurchases {
+		purchase := &filamentPurchases[i]
+		details := purchaseDetailsInput{Supplier: &purchase.Supplier, SupplierRef: &purchase.SupplierReference, PurchaseURL: &purchase.PurchaseURL}
+		if !details.valid() {
+			return errors.New("Backup contains invalid purchase details")
+		}
 	}
 	if err := sourceDB.Order("created_at asc").Find(&printJobs).Error; err != nil {
 		return err
