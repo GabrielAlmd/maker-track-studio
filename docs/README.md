@@ -32,6 +32,9 @@ read for setting up and changing the code.
 
 ## Architecture and implementation contracts
 
+- [v1.1.0 canonical architecture and costing contracts](architecture/CANONICAL_CONTRACTS_V1_1.md)
+  covers cross-module ownership, cost and printer provenance, reference costs,
+  overrides, drafts and recovery.
 - [v1.1.0 production architecture](architecture/PRODUCTION_V1_1.md) — INV-01
   proposal, quantity examples and BUS-01 integration gate (not shipped behavior).
 - [v1.1.0 Business Operations architecture](architecture/BUSINESS_V1_1.md) —
